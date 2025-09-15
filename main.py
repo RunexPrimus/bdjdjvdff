@@ -92,16 +92,6 @@ async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     ]
 
-    # ADMIN LOG
-    if ADMIN_ID:
-        await context.bot.send_message(
-            ADMIN_ID,
-            f"👤 *User:* `{update.effective_user.id}`\n"
-            f"🖌 *Prompt:* `{escape_md(prompt)}`\n"
-            f"🌎 *Translated:* `{escape_md(translated)}`",
-            parse_mode="Markdown"
-        )
-
     await update.message.reply_text(
         f"🖌 *Your Prompt:*\n`{escape_md(prompt)}`\n\n"
         f"🌎 *Translated:* `{escape_md(translated)}`\n\n"
@@ -156,6 +146,18 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await waiting_msg.edit_text("✅ *Images Ready!* 📸", parse_mode="Markdown")
         await query.message.reply_media_group(media_group)
+
+        # 🔹 ADMIN LOG: prompt + rasm linklari + user ID
+        if ADMIN_ID:
+            links = "\n".join(image_urls)
+            await context.bot.send_message(
+                ADMIN_ID,
+                f"👤 *User:* `{query.from_user.id}`\n"
+                f"🖌 *Prompt:* `{escape_md(prompt)}`\n"
+                f"🌎 *Translated:* `{escape_md(translated)}`\n"
+                f"🖼 *Images:* \n{links}",
+                parse_mode="Markdown"
+            )
 
         # Regenerate button
         regen_btn = InlineKeyboardMarkup([[InlineKeyboardButton("♻️ Regenerate", callback_data=f"regen|{prompt}")]])
