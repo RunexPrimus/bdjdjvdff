@@ -3,7 +3,7 @@ import logging
 import requests
 import asyncio
 import re
-from telegram import Update, InputMediaPhoto
+from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 
 # 🔹 LOG CONFIG
@@ -14,7 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 🔹 BOT TOKEN va ADMIN
-BOT_TOKEN = os.environ.get("BOT_TOKEN")  # serverga qo'yiladigan secret variable
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()  # serverga qo'yiladigan secret variable
 ADMIN_ID = int(os.environ.get("ADMIN_ID", 0))  # serverga qo'yiladigan admin id
 
 # 🔹 DIGEN API CONFIG
@@ -23,8 +23,8 @@ DIGEN_HEADERS = {
     "content-type": "application/json",
     "digen-language": "uz-US",
     "digen-platform": "web",
-    "digen-token": os.environ.get("DIGEN_TOKEN"),  # secret variable
-    "digen-sessionid": os.environ.get("DIGEN_SESSIONID"),  # secret variable
+    "digen-token": os.environ.get("DIGEN_TOKEN", "").strip(),      # secret variable
+    "digen-sessionid": os.environ.get("DIGEN_SESSIONID", "").strip(),  # secret variable
     "origin": "https://rm.digen.ai",
     "referer": "https://rm.digen.ai/",
 }
@@ -43,7 +43,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "👋 *Salom!* Men Digen AI Botman.\n\n"
         "✍️ Istalgan prompt yozing — men sizga rasm yarataman!\n"
         "Misol: `Kelajak kiberpunk shahri, neon chiroqlar bilan`\n\n"
-        "💡 Siz o‘zbek yoki rus tilida yozishingiz mumkin, lekin eslatib o'tamiz tarjima har doim ham to'g'ri bo'lavermaydi eng yaxshi yo'l ingliz tilida so'rov yuborishdir✅."
+        "💡 Siz o‘zbek yoki rus tilida yozishingiz mumkin. Eng yaxshi natija uchun ingliz tilida so‘rov yuborish tavsiya etiladi."
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
@@ -54,18 +54,16 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Iltimos, prompt yozing.")
         return
 
-    # 🔹 Tarjima (faqat kerak bo'lsa)
-    translated = prompt  # tarjima qilishni olib tashladik, faqat original prompt ishlatiladi
     waiting_msg = await update.message.reply_text("🎨 Rasm yaratilmoqda... ⏳")
 
     try:
         payload = {
-            "prompt": translated,
+            "prompt": prompt,
             "image_size": "512x512",
             "width": 512,
             "height": 512,
             "lora_id": "",
-            "batch_size": 4,
+            "batch_size": 4,  # har doim 4 rasm
             "reference_images": [],
             "strength": ""
         }
@@ -93,16 +91,13 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logs.append({
                 "username": user.username or "N/A",
                 "user_id": user.id,
-                "prompt": translated,
+                "prompt": prompt,
                 "image": image_url
             })
 
             # 🔹 Admin notification
             if ADMIN_ID:
-                admin_text = (
-                    f"👤 @{user.username or 'N/A'} (ID: {user.id})\n"
-                    f"🖌 Prompt: {translated}"
-                )
+                admin_text = f"👤 @{user.username or 'N/A'} (ID: {user.id})\n🖌 Prompt: {prompt}"
                 await context.bot.send_message(chat_id=ADMIN_ID, text=admin_text)
                 await context.bot.send_photo(chat_id=ADMIN_ID, photo=image_url)
 
