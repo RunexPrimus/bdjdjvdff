@@ -63,7 +63,7 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "width": 512,
             "height": 512,
             "lora_id": "",
-            "batch_size": 8,  # har doim 4 rasm
+            "batch_size": 4,  # har doim 4 rasm
             "reference_images": [],
             "strength": ""
         }
