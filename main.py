@@ -1,14 +1,16 @@
-import os
 import logging
 import requests
 import asyncio
 import re
-from telegram import Update, InputMediaPhoto
-from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
-from googletrans import Translator
-
-# 🔹 TRANSLATOR
-translator = Translator()
+import os
+from deep_translator import GoogleTranslator
+from telegram import (
+    Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
+)
+from telegram.ext import (
+    Application, CommandHandler, MessageHandler, CallbackQueryHandler,
+    ContextTypes, filters
+)
 
 # 🔹 LOG CONFIG
 logging.basicConfig(
@@ -17,130 +19,169 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# 🔹 BOT TOKEN va ADMIN
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
-ADMIN_ID = int(os.environ.get("ADMIN_ID", 0))
+# 🔹 ENV VARIABLES
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "7440949683"))
+DIGEN_TOKEN = os.getenv("DIGEN_TOKEN")
+DIGEN_SESSIONID = os.getenv("DIGEN_SESSIONID")
 
-# 🔹 DIGEN API CONFIG
 DIGEN_HEADERS = {
     "accept": "application/json, text/plain, */*",
     "content-type": "application/json",
     "digen-language": "uz-US",
     "digen-platform": "web",
-    "digen-token": os.environ.get("DIGEN_TOKEN", "").strip(),
-    "digen-sessionid": os.environ.get("DIGEN_SESSIONID", "").strip(),
+    "digen-token": DIGEN_TOKEN,
+    "digen-sessionid": DIGEN_SESSIONID,
     "origin": "https://rm.digen.ai",
     "referer": "https://rm.digen.ai/",
 }
 DIGEN_URL = "https://api.digen.ai/v2/tools/text_to_image"
 
-# 🔹 Loglar
-logs = []
 
 # 🔹 Markdown xavfsiz qilish
-def escape_markdown(text: str) -> str:
+def escape_md(text: str) -> str:
     return re.sub(r'([_*\[\]()~`>#+\-=|{}.!])', r'\\\1', text)
 
-# 🔹 START
+
+# 🔹 Deep Translator
+def translate_prompt(prompt: str) -> str:
+    try:
+        translated = GoogleTranslator(source="auto", target="en").translate(prompt)
+        return translated
+    except Exception as e:
+        logger.error(f"Tarjima xatolik: {e}")
+        return prompt
+
+
+# 🔹 START command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome_text = (
-        "👋 *Salom!* Men Digen AI Botman.\n\n"
-        "✍️ Istalgan prompt yozing — men sizga rasm yarataman!\n"
-        "Misol: `Kelajak kiberpunk shahri, neon chiroqlar bilan`\n\n"
-        "💡 Siz o‘zbek yoki rus tilida yozishingiz mumkin. Eng yaxshi natija uchun ingliz tilida so‘rov yuborish tavsiya etiladi."
+    kb = [[InlineKeyboardButton("🎨 Start Generating", callback_data="start_gen")]]
+    await update.message.reply_text(
+        "👋 *Welcome!*\n\n"
+        "I'm your AI Image Generator bot. ✨\n\n"
+        "✍️ Write *anything* in *any language*, I will auto-translate it into English "
+        "and create up to 8 images for you.\n\n"
+        "_Example:_ `Trump burger yemoqda` → `Trump eating a burger`",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(kb)
     )
-    await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
-# 🔹 GENERATE IMAGE
-async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    prompt = update.message.text.strip()
-    if not prompt:
-        await update.message.reply_text("❌ Iltimos, prompt yozing.")
-        return
 
-    waiting_msg = await update.message.reply_text("🎨 Rasm yaratilmoqda... ⏳")
+# 🔹 Prompt so‘rash
+async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.message.edit_text(
+        "✍️ Send me your prompt now.\n\n_Example:_ `Futuristic cyberpunk city with neon lights`",
+        parse_mode="Markdown"
+    )
+
+
+# 🔹 Prompt kelganda so‘rovchi
+async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    prompt = update.message.text
+    translated = translate_prompt(prompt)
+
+    context.user_data["prompt"] = prompt
+    context.user_data["translated"] = translated
+
+    kb = [
+        [
+            InlineKeyboardButton("1️⃣", callback_data="count_1"),
+            InlineKeyboardButton("2️⃣", callback_data="count_2"),
+            InlineKeyboardButton("3️⃣", callback_data="count_3"),
+            InlineKeyboardButton("4️⃣", callback_data="count_4"),
+        ],
+        [
+            InlineKeyboardButton("5️⃣", callback_data="count_5"),
+            InlineKeyboardButton("6️⃣", callback_data="count_6"),
+            InlineKeyboardButton("7️⃣", callback_data="count_7"),
+            InlineKeyboardButton("8️⃣", callback_data="count_8"),
+        ]
+    ]
+    await update.message.reply_text(
+        f"🖌 *Your Prompt:*\n`{escape_md(prompt)}`\n\n"
+        f"🌎 *Translated:* `{escape_md(translated)}`\n\n"
+        "🔢 Select how many images you want to generate:",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
+
+# 🔹 Tasvir yaratish
+async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    count = int(query.data.split("_")[1])
+    prompt = context.user_data["prompt"]
+    translated = context.user_data["translated"]
+
+    waiting_msg = await query.edit_message_text(
+        f"🎨 *Generating {count} image(s)...* ⏳",
+        parse_mode="Markdown"
+    )
 
     try:
-        # 🔹 Real-time tarjima
-        translated_prompt = translator.translate(prompt, src='auto', dest='en').text
-
-        batch_size = 8  # 8 ta rasm yaratish
         payload = {
-            "prompt": translated_prompt,
+            "prompt": translated,
             "image_size": "512x512",
             "width": 512,
             "height": 512,
             "lora_id": "",
-            "batch_size": batch_size,
+            "batch_size": count,
             "reference_images": [],
             "strength": ""
         }
 
         r = requests.post(DIGEN_URL, headers=DIGEN_HEADERS, json=payload)
         logger.info("STATUS: %s", r.status_code)
-        logger.info("RESPONSE: %s", r.text)
 
-        if r.status_code == 200:
-            data = r.json()
-            image_id = data.get("data", {}).get("id")
+        if r.status_code != 200:
+            await waiting_msg.edit_text(f"❌ API Error: {r.status_code}")
+            return
 
-            if not image_id:
-                await waiting_msg.edit_text("❌ Xato: image ID topilmadi.")
-                return
+        data = r.json()
+        image_id = data.get("data", {}).get("id")
+        if not image_id:
+            await waiting_msg.edit_text("❌ No image ID received.")
+            return
 
-            await asyncio.sleep(5)
+        await asyncio.sleep(5)
+        image_urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
+        media_group = [InputMediaPhoto(url) for url in image_urls]
 
-            # 🔹 Media group (album) yaratish
-            image_urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(batch_size)]
-            media_group = [InputMediaPhoto(url) for url in image_urls]
+        await waiting_msg.edit_text("✅ *Images Ready!* 📸", parse_mode="Markdown")
+        await query.message.reply_media_group(media_group)
 
-            await context.bot.send_media_group(chat_id=update.effective_chat.id, media=media_group)
-            await waiting_msg.edit_text("✅ Rasmlar tayyor! 📸")
-
-            # 🔹 Log
-            user = update.effective_user
-            logs.append({
-                "username": user.username or "N/A",
-                "user_id": user.id,
-                "prompt": prompt,
-                "images": image_urls
-            })
-
-            # 🔹 Adminga ham media group yuborish
-            if ADMIN_ID:
-                admin_text = f"👤 @{user.username or 'N/A'} (ID: {user.id})\n🖌 Prompt: {prompt}"
-                await context.bot.send_message(chat_id=ADMIN_ID, text=admin_text)
-                await context.bot.send_media_group(chat_id=ADMIN_ID, media=media_group)
-
-        else:
-            await waiting_msg.edit_text(f"❌ API xato: {r.status_code}")
+        regen_btn = InlineKeyboardMarkup([[InlineKeyboardButton("♻️ Regenerate", callback_data=f"regen|{prompt}")]])
+        await query.message.reply_text(
+            f"🖌 Prompt: `{escape_md(prompt)}`\n🌎 EN: `{escape_md(translated)}`",
+            parse_mode="Markdown",
+            reply_markup=regen_btn
+        )
 
     except Exception as e:
-        logger.error("Xatolik: %s", str(e))
-        await waiting_msg.edit_text("⚠️ Noma'lum xato yuz berdi. Keyinroq qayta urinib ko‘ring.")
+        logger.error(f"Xatolik: {e}")
+        await waiting_msg.edit_text("⚠️ Unknown error occurred. Please try again.")
+
 
 # 🔹 ADMIN PANEL
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("⛔ Siz admin emassiz.")
-        return
-    if not logs:
-        await update.message.reply_text("📭 Hali loglar yo‘q.")
-        return
+        return await update.message.reply_text("⛔ Access denied.")
+    await update.message.reply_text("📊 Logs currently disabled in this version.")
 
-    text = "📑 So‘nggi 5 log:\n\n"
-    for entry in logs[-5:]:
-        text += f"👤 @{entry['username']} (ID: {entry['user_id']})\n🖌 {escape_markdown(entry['prompt'])}\n\n"
-
-    await update.message.reply_text(text, parse_mode="MarkdownV2")
 
 # 🔹 MAIN
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, generate_image))
+    app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
+    app.add_handler(CallbackQueryHandler(generate, pattern="count_"))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ask_image_count))
     app.run_polling()
+
 
 if __name__ == "__main__":
     main()
