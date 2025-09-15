@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # 🔹 ENV
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "7440949683"))
-FORCE_CHANNEL = os.getenv("FORCE_CHANNEL", "@BattleGiftUz")  # Majburiy kanal
+FORCE_CHANNEL = os.getenv("FORCE_CHANNEL", "@Digen_Ai")  # Majburiy kanal
 
 # 🔹 DIGEN KEYS
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
