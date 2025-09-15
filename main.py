@@ -6,6 +6,7 @@ import os
 import json
 import itertools
 from deep_translator import GoogleTranslator
+from googletrans import Translator as GT_Translator
 from telegram import (
     Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 )
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "7440949683"))
 
-# 🔹 DIGEN KEYS (Railway secretsdan JSON ko‘rinishida)
+# 🔹 DIGEN KEYS
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
 _key_cycle = itertools.cycle(DIGEN_KEYS)
 
@@ -48,18 +49,19 @@ def get_digen_headers():
 def escape_md(text: str) -> str:
     return re.sub(r'([_*\[\]()~`>#+\-=|{}.!])', r'\\\1', text)
 
-# 🔹 Prompt tarjima
-def translate_prompt(prompt: str) -> str:
-    try:
-        return GoogleTranslator(source="auto", target="en").translate(prompt)
-    except Exception as e:
-        logger.error(f"Tarjima xatolik: {e}")
-        return prompt
+# 🔹 Prompt tarjima (fallback bilan)
 def translate_prompt(prompt: str) -> str:
     try:
         translated = GoogleTranslator(source="auto", target="en").translate(prompt)
-        logger.info(f"TARJIMA: '{prompt}' -> '{translated}'")
-        return translated if translated else prompt
+        if translated and translated.strip().lower() != prompt.strip().lower():
+            logger.info(f"TARJIMA (deep-translator): '{prompt}' -> '{translated}'")
+            return translated
+        else:
+            # fallback: googletrans
+            gt = GT_Translator()
+            alt = gt.translate(prompt, src="auto", dest="en").text
+            logger.info(f"TARJIMA (googletrans): '{prompt}' -> '{alt}'")
+            return alt
     except Exception as e:
         logger.error(f"Tarjima xatolik: {e}")
         return prompt
@@ -75,7 +77,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
-# 🔹 Boshlanish
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     await update.callback_query.message.edit_text(
@@ -91,14 +92,12 @@ async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["prompt"] = prompt
     context.user_data["translated"] = translated
 
-    kb = [
-        [
-            InlineKeyboardButton("1️⃣", callback_data="count_1"),
-            InlineKeyboardButton("2️⃣", callback_data="count_2"),
-            InlineKeyboardButton("4️⃣", callback_data="count_4"),
-            InlineKeyboardButton("8️⃣", callback_data="count_8"),
-        ]
-    ]
+    kb = [[
+        InlineKeyboardButton("1️⃣", callback_data="count_1"),
+        InlineKeyboardButton("2️⃣", callback_data="count_2"),
+        InlineKeyboardButton("4️⃣", callback_data="count_4"),
+        InlineKeyboardButton("8️⃣", callback_data="count_8"),
+    ]]
 
     await update.message.reply_text(
         f"🖌 *Your Prompt:*\n`{escape_md(prompt)}`\n\n"
@@ -155,21 +154,24 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await waiting_msg.edit_text("✅ *Images Ready!* 📸", parse_mode="Markdown")
         await query.message.reply_media_group(media_group)
 
-        # 🔹 ADMIN LOG: rasm + user + prompt
+        # 🔹 ADMIN LOG (rasm + user + prompt)
         if ADMIN_ID:
-            # Avval admin uchun rasmlarni yuboramiz
-            await context.bot.send_media_group(ADMIN_ID, media_group)
-            # Keyin prompt va user haqida ma'lumot yuboramiz
-            await context.bot.send_message(
-                ADMIN_ID,
-                f"👤 *User:* `{query.from_user.id}`\n"
-                f"🖌 *Prompt:* `{escape_md(prompt)}`\n"
-                f"🌎 *Translated:* `{escape_md(translated)}`",
-                parse_mode="Markdown"
-            )
+            try:
+                await context.bot.send_media_group(ADMIN_ID, media_group)
+                await context.bot.send_message(
+                    ADMIN_ID,
+                    f"👤 *User:* `{query.from_user.full_name}` (ID: `{query.from_user.id}`)\n"
+                    f"🖌 *Prompt:* `{escape_md(prompt)}`\n"
+                    f"🌎 *Translated:* `{escape_md(translated)}`",
+                    parse_mode="Markdown"
+                )
+            except Exception as e:
+                logger.error(f"Admin log yuborishda xatolik: {e}")
 
-        # Regenerate button
-        regen_btn = InlineKeyboardMarkup([[InlineKeyboardButton("♻️ Regenerate", callback_data=f"regen|{prompt}")]])
+        # 🔹 Regenerate button
+        regen_btn = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("♻️ Regenerate", callback_data=f"regen|{prompt}")]]
+        )
         await query.message.reply_text(
             f"🖌 Prompt: `{escape_md(prompt)}`\n🌎 EN: `{escape_md(translated)}`",
             parse_mode="Markdown",
@@ -192,6 +194,7 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # 🔹 MAIN
 def main():
+    logger.info("🚀 Bot starting... Faqat bitta instance ishlayotganiga ishonch hosil qiling.")
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin))
