@@ -43,7 +43,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "👋 *Salom!* Men Digen AI Botman.\n\n"
         "✍️ Istalgan prompt yozing — men sizga rasm yarataman!\n"
         "Misol: `Kelajak kiberpunk shahri, neon chiroqlar bilan`\n\n"
-        "💡 Siz o‘zbek yoki rus tilida yozishingiz mumkin."
+        "💡 Siz o‘zbek yoki rus tilida yozishingiz mumkin, lekin eslatib o'tamiz tarjima har doim ham to'g'ri bo'lavermaydi eng yaxshi yo'l ingliz tilida so'rov yuborishdir✅."
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
