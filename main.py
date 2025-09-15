@@ -44,9 +44,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "👋 *Salom!* Men Digen AI Botman.\n\n"
         "✍️ Istalgan prompt yozing — men sizga rasm yasab beraman!\n"
         "Misol: `Futuristic cyberpunk city with neon lights`\n"
-        "Murojaat uchun @Rune_13"
+        "Murojaat uchun @Rune\\_13"
     )
-    await update.message.reply_text(welcome_text, parse_mode="Markdown")
+    await update.message.reply_text(welcome_text, parse_mode="MarkdownV2")
 
 
 # 🔹 PROMPT -> DIGEN
