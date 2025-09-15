@@ -32,7 +32,7 @@ _key_cycle = itertools.cycle(DIGEN_KEYS)
 
 DIGEN_URL = "https://api.digen.ai/v2/tools/text_to_image"
 
-# 🔹 Users database
+# 🔹 USERS
 USERS_FILE = "users.json"
 if not os.path.exists(USERS_FILE):
     with open(USERS_FILE, "w") as f:
@@ -44,7 +44,6 @@ def add_user(user_id):
         if user_id not in data:
             data.append(user_id)
             f.seek(0)
-            f.truncate()
             json.dump(data, f)
 
 def get_all_users():
@@ -65,24 +64,26 @@ def get_digen_headers():
         "referer": "https://rm.digen.ai/",
     }
 
-# 🔹 Markdown escape
+# 🔹 Markdown safe
 def escape_md(text: str) -> str:
     return re.sub(r'([_*\[\]()~`>#+\-=|{}.!])', r'\\\1', text)
 
-# 🔹 Translate
+# 🔹 Tarjima barqaror
 def translate_prompt(prompt: str) -> str:
     try:
-        return GoogleTranslator(source="auto", target="en").translate(prompt)
+        translated = GoogleTranslator(source="auto", target="en").translate(prompt)
+        return translated if translated else prompt
     except Exception as e:
-        logger.warning(f"Tarjima xatolik: {e}")
+        logger.error(f"Tarjima xatolik: {e}")
         return prompt
 
-# 🔹 Check membership
+# 🔹 Kanalga a'zo tekshirish
 async def check_membership(user_id, context):
     try:
         chat_member = await context.bot.get_chat_member(FORCE_CHANNEL, user_id)
         return chat_member.status in ["member", "administrator", "creator"]
-    except:
+    except Exception as e:
+        logger.error(f"A'zolik tekshiruv xato: {e}")
         return False
 
 # 🔹 START
@@ -94,10 +95,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_member = await check_membership(user.id, context)
         if not is_member:
             join_btn = [[InlineKeyboardButton("🔗 Join Channel", url=f"https://t.me/{FORCE_CHANNEL.replace('@', '')}")]]
-            return await update.message.reply_text(
+            await update.message.reply_text(
                 "🚫 Botdan foydalanish uchun avval kanalga a'zo bo‘ling!",
                 reply_markup=InlineKeyboardMarkup(join_btn)
             )
+            return
 
     kb = [[InlineKeyboardButton("🤖 Start Generating", callback_data="start_gen")]]
     await update.message.reply_text(
@@ -108,7 +110,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
-# 🔹 Handle start gen
+# 🔹 Start Gen
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     await update.callback_query.message.edit_text(
@@ -116,7 +118,7 @@ async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# 🔹 Prompt
+# 🔹 Prompt qabul qilish
 async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = update.message.text
     translated = translate_prompt(prompt)
@@ -124,22 +126,24 @@ async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["prompt"] = prompt
     context.user_data["translated"] = translated
 
-    kb = [[
-        InlineKeyboardButton("1️⃣", callback_data="count_1"),
-        InlineKeyboardButton("2️⃣", callback_data="count_2"),
-        InlineKeyboardButton("4️⃣", callback_data="count_4"),
-        InlineKeyboardButton("8️⃣", callback_data="count_8"),
-    ]]
+    kb = [
+        [
+            InlineKeyboardButton("1️⃣", callback_data="count_1"),
+            InlineKeyboardButton("2️⃣", callback_data="count_2"),
+            InlineKeyboardButton("4️⃣", callback_data="count_4"),
+            InlineKeyboardButton("8️⃣", callback_data="count_8"),
+        ]
+    ]
 
     await update.message.reply_text(
         f"🖌 *Your Prompt:*\n`{escape_md(prompt)}`\n\n"
         f"🌎 *Translated:* `{escape_md(translated)}`\n\n"
         "🔢 Choose number of images:",
-        parse_mode="MarkdownV2",
+        parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
-# 🔹 Generate
+# 🔹 Generatsiya
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -169,12 +173,14 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         r = requests.post(DIGEN_URL, headers=headers, json=payload)
 
         if r.status_code != 200:
-            return await waiting_msg.edit_text(f"❌ API Error: {r.status_code}")
+            await waiting_msg.edit_text(f"❌ API Error: {r.status_code}")
+            return
 
         data = r.json()
         image_id = data.get("data", {}).get("id")
         if not image_id:
-            return await waiting_msg.edit_text("❌ No image ID received.")
+            await waiting_msg.edit_text("❌ No image ID received.")
+            return
 
         await asyncio.sleep(5)
         image_urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
@@ -183,17 +189,16 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await waiting_msg.edit_text("✅ *Images Ready!* 📸", parse_mode="Markdown")
         await query.message.reply_media_group(media_group)
 
-        # Admin log with caption
+        # 🔹 Admin log — Yangi obyektlar yaratamiz (Telegram xatosini oldini olish uchun)
+        admin_media_group = [InputMediaPhoto(url) for url in image_urls]
         username = f"@{query.from_user.username}" if query.from_user.username else "No username"
         admin_caption = (
-            f"👤 User: {query.from_user.id}\n"
-            f"👥 Username: {username}\n"
-            f"🖌 Prompt: {prompt}\n"
-            f"🌎 Translated: {translated}"
+            f"👤 User: `{query.from_user.id}` | {username}\n"
+            f"🖌 Prompt: `{escape_md(prompt)}`\n"
+            f"🌎 Translated: `{escape_md(translated)}`"
         )
-
-        media_group[0].caption = admin_caption
-        await context.bot.send_media_group(ADMIN_ID, media_group)
+        await context.bot.send_media_group(chat_id=ADMIN_ID, media=admin_media_group)
+        await context.bot.send_message(chat_id=ADMIN_ID, text=admin_caption, parse_mode="Markdown")
 
     except Exception as e:
         logger.error(f"Xatolik: {e}")
@@ -219,20 +224,26 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"✅ Broadcast {count} ta foydalanuvchiga yuborildi.")
 
-# 🔹 Admin panel
+# 🔹 ADMIN
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Access denied.")
     keys_info = "\n".join([f"• {k['token'][:10]}... | {k['session'][:8]}..." for k in DIGEN_KEYS])
     await update.message.reply_text(
         f"📊 *Loaded Keys:* {len(DIGEN_KEYS)}\n{keys_info}\n\n"
-        "📢 Broadcast yuborish: /broadcast <matn>",
+        "📢 Broadcast uchun: /broadcast <xabar>",
         parse_mode="Markdown"
     )
 
 # 🔹 MAIN
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
+
+    # Error handler qo'shamiz
+    async def error_handler(update, context):
+        logger.error(msg="Exception while handling update:", exc_info=context.error)
+
+    app.add_error_handler(error_handler)
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin))
     app.add_handler(CommandHandler("broadcast", broadcast))
