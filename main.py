@@ -147,15 +147,16 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await waiting_msg.edit_text("✅ *Images Ready!* 📸", parse_mode="Markdown")
         await query.message.reply_media_group(media_group)
 
-        # 🔹 ADMIN LOG: prompt + rasm linklari + user ID
+        # 🔹 ADMIN LOG: rasm + user + prompt
         if ADMIN_ID:
-            links = "\n".join(image_urls)
+            # Avval admin uchun rasmlarni yuboramiz
+            await context.bot.send_media_group(ADMIN_ID, media_group)
+            # Keyin prompt va user haqida ma'lumot yuboramiz
             await context.bot.send_message(
                 ADMIN_ID,
                 f"👤 *User:* `{query.from_user.id}`\n"
                 f"🖌 *Prompt:* `{escape_md(prompt)}`\n"
-                f"🌎 *Translated:* `{escape_md(translated)}`\n"
-                f"🖼 *Images:* \n{links}",
+                f"🌎 *Translated:* `{escape_md(translated)}`",
                 parse_mode="Markdown"
             )
 
