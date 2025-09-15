@@ -74,10 +74,11 @@ def translate_prompt(prompt: str) -> str:
 # 🔹 START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
-        "👋 *Welcome!* I am Digen AI Bot.\n\n"
-        "✍️ Send me any idea and I will turn it into images!\n"
-        "Example: `Futuristic cyberpunk city with neon lights`\n\n"
-        "💡 You can write in Uzbek/Russian — I will auto-translate to English!"
+        "👋 *Assalomu Alaykum!* Men Digen AI botman.\n\n"
+        "✍️ Menga oʻz Ideyangizni yuboring va men uni rasmga aylantiraman!\n\n"
+        "Misol uchun: `Futuristic cyberpunk city with neon lights`\n\n"
+        "💡 Siz Matnni istalgan tilda kiritishingiz mumkin, lekin Tarjima xatolari tufayli muammlar boʻlishi mumkin, Ingliz tilida soʻrov yuborish natijaning aniqligiga katta taʼsir qiladi.!\n"
+        "🪪 Ega: @Rune//_13 \n"
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
