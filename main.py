@@ -23,8 +23,8 @@ DIGEN_HEADERS = {
     "content-type": "application/json",
     "digen-language": "uz-US",
     "digen-platform": "web",
-    "digen-token": os.environ.get("DIGEN_TOKEN", "").strip(),      # secret variable
-    "digen-sessionid": os.environ.get("DIGEN_SESSIONID", "").strip(),  # secret variable
+    "digen-token": os.environ.get("DIGEN_TOKEN", "").strip(),
+    "digen-sessionid": os.environ.get("DIGEN_SESSIONID", "").strip(),
     "origin": "https://rm.digen.ai",
     "referer": "https://rm.digen.ai/",
 }
@@ -57,13 +57,14 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     waiting_msg = await update.message.reply_text("🎨 Rasm yaratilmoqda... ⏳")
 
     try:
+        batch_size = 4  # Har doim 4 rasm
         payload = {
             "prompt": prompt,
             "image_size": "512x512",
             "width": 512,
             "height": 512,
             "lora_id": "",
-            "batch_size": 4,  # har doim 4 rasm
+            "batch_size": batch_size,
             "reference_images": [],
             "strength": ""
         }
@@ -72,39 +73,60 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.info("STATUS: %s", r.status_code)
         logger.info("RESPONSE: %s", r.text)
 
-     if r.status_code == 200:
-    data = r.json()
-    image_id = data.get("data", {}).get("id")
+        if r.status_code == 200:
+            data = r.json()
+            image_id = data.get("data", {}).get("id")
 
-    if not image_id:
-        await waiting_msg.edit_text("❌ Xato: image ID topilmadi.")
+            if not image_id:
+                await waiting_msg.edit_text("❌ Xato: image ID topilmadi.")
+                return
+
+            await asyncio.sleep(5)
+
+            # 🔹 Foydalanuvchiga barcha rasmni yuborish
+            image_urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(batch_size)]
+            for url in image_urls:
+                await context.bot.send_photo(chat_id=update.effective_chat.id, photo=url)
+
+            await waiting_msg.edit_text("✅ Rasmlar tayyor! 📸")
+
+            # 🔹 Log
+            user = update.effective_user
+            logs.append({
+                "username": user.username or "N/A",
+                "user_id": user.id,
+                "prompt": prompt,
+                "images": image_urls
+            })
+
+            # 🔹 Admin notification
+            if ADMIN_ID:
+                admin_text = f"👤 @{user.username or 'N/A'} (ID: {user.id})\n🖌 Prompt: {prompt}"
+                await context.bot.send_message(chat_id=ADMIN_ID, text=admin_text)
+                for url in image_urls:
+                    await context.bot.send_photo(chat_id=ADMIN_ID, photo=url)
+
+        else:
+            await waiting_msg.edit_text(f"❌ API xato: {r.status_code}")
+
+    except Exception as e:
+        logger.error("Xatolik: %s", str(e))
+        await waiting_msg.edit_text("⚠️ Noma'lum xato yuz berdi. Keyinroq qayta urinib ko‘ring.")
+
+# 🔹 ADMIN PANEL
+async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        await update.message.reply_text("⛔ Siz admin emassiz.")
+        return
+    if not logs:
+        await update.message.reply_text("📭 Hali loglar yo‘q.")
         return
 
-    await asyncio.sleep(5)
-    
-    # 🔹 batch_size = 4 bo'yicha barcha rasm URLlarini yaratish va yuborish
-    for i in range(4):
-        image_url = f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg"
-        await context.bot.send_photo(chat_id=update.effective_chat.id, photo=image_url)
+    text = "📑 So‘nggi 5 log:\n\n"
+    for entry in logs[-5:]:
+        text += f"👤 @{entry['username']} (ID: {entry['user_id']})\n🖌 {escape_markdown(entry['prompt'])}\n\n"
 
-    await waiting_msg.edit_text("✅ Rasm(lar) tayyor! 📸")
-
-    # 🔹 Log
-    user = update.effective_user
-    logs.append({
-        "username": user.username or "N/A",
-        "user_id": user.id,
-        "prompt": prompt,
-        "images": [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(4)]
-    })
-
-    # 🔹 Admin notification
-    if ADMIN_ID:
-        admin_text = f"👤 @{user.username or 'N/A'} (ID: {user.id})\n🖌 Prompt: {prompt}"
-        await context.bot.send_message(chat_id=ADMIN_ID, text=admin_text)
-        for i in range(4):
-            await context.bot.send_photo(chat_id=ADMIN_ID, photo=f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg")
-
+    await update.message.reply_text(text, parse_mode="MarkdownV2")
 
 # 🔹 MAIN
 def main():
