@@ -42,7 +42,7 @@ def escape_markdown(text: str) -> str:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
         "👋 *Salom!* Men Digen AI Botman.\n\n"
-        "✍️ Istalgan prompt yozing — men sizga 4 ta rasm yasab beraman!\n"
+        "✍️ Istalgan prompt yozing — men sizga rasm yasab beraman!\n"
         "Misol: `Futuristic cyberpunk city with neon lights`"
         "Murojaat uchun @Rune_13"
     )
