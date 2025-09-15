@@ -143,6 +143,7 @@ async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # 🔹 Generatsiya
+# 🔹 Generatsiya
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -188,19 +189,22 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await waiting_msg.edit_text("✅ *Images Ready!* 📸", parse_mode="Markdown")
         await query.message.reply_media_group(media_group)
 
-        # 🔹 Admin log
+        # 🔹 Admin log (rasmlar + ma'lumot alohida)
         username = f"@{query.from_user.username}" if query.from_user.username else "No username"
         admin_caption = (
-            f"👤 User: `{query.from_user.id}` | {username}\n"
+            f"👤 User: `{query.from_user.id}` ({username})\n"
             f"🖌 Prompt: `{escape_md(prompt)}`\n"
             f"🌎 Translated: `{escape_md(translated)}`"
         )
+        # avval rasmlar
         await context.bot.send_media_group(ADMIN_ID, media_group)
+        # keyin caption
         await context.bot.send_message(ADMIN_ID, admin_caption, parse_mode="Markdown")
 
     except Exception as e:
         logger.error(f"Xatolik: {e}")
         await waiting_msg.edit_text("⚠️ Unknown error occurred. Please try again.")
+
 
 # 🔹 Broadcast
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
