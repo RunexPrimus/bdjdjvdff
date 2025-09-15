@@ -3,6 +3,8 @@ import requests
 import asyncio
 import re
 import os
+import json
+import itertools
 from deep_translator import GoogleTranslator
 from telegram import (
     Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
@@ -12,62 +14,60 @@ from telegram.ext import (
     ContextTypes, filters
 )
 
-# 🔹 LOG CONFIG
+# 🔹 LOG
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# 🔹 ENV VARIABLES
+# 🔹 ENV
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "7440949683"))
-DIGEN_TOKEN = os.getenv("DIGEN_TOKEN")
-DIGEN_SESSIONID = os.getenv("DIGEN_SESSIONID")
 
-DIGEN_HEADERS = {
-    "accept": "application/json, text/plain, */*",
-    "content-type": "application/json",
-    "digen-language": "uz-US",
-    "digen-platform": "web",
-    "digen-token": DIGEN_TOKEN,
-    "digen-sessionid": DIGEN_SESSIONID,
-    "origin": "https://rm.digen.ai",
-    "referer": "https://rm.digen.ai/",
-}
+# 🔹 DIGEN KEYS (Railway secretsdan JSON ko‘rinishida)
+DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
+_key_cycle = itertools.cycle(DIGEN_KEYS)
+
 DIGEN_URL = "https://api.digen.ai/v2/tools/text_to_image"
 
+def get_digen_headers():
+    key = next(_key_cycle)
+    return {
+        "accept": "application/json, text/plain, */*",
+        "content-type": "application/json",
+        "digen-language": "uz-US",
+        "digen-platform": "web",
+        "digen-token": key["token"],
+        "digen-sessionid": key["session"],
+        "origin": "https://rm.digen.ai",
+        "referer": "https://rm.digen.ai/",
+    }
 
 # 🔹 Markdown xavfsiz qilish
 def escape_md(text: str) -> str:
     return re.sub(r'([_*\[\]()~`>#+\-=|{}.!])', r'\\\1', text)
 
-
-# 🔹 Deep Translator
+# 🔹 Prompt tarjima
 def translate_prompt(prompt: str) -> str:
     try:
-        translated = GoogleTranslator(source="auto", target="en").translate(prompt)
-        return translated
+        return GoogleTranslator(source="auto", target="en").translate(prompt)
     except Exception as e:
         logger.error(f"Tarjima xatolik: {e}")
         return prompt
 
-
-# 🔹 START command
+# 🔹 START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    kb = [[InlineKeyboardButton("🎨 Start Generating", callback_data="start_gen")]]
+    kb = [[InlineKeyboardButton("🤖 Start Generating", callback_data="start_gen")]]
     await update.message.reply_text(
-        "👋 *Welcome!*\n\n"
-        "I'm your AI Image Generator bot. ✨\n\n"
-        "✍️ Write *anything* in *any language*, I will auto-translate it into English "
-        "and create up to 8 images for you.\n\n"
+        "👋 *Welcome!* I'm your AI Image Generator.\n\n"
+        "✍️ Write anything in any language — I'll translate it and create beautiful images.\n\n"
         "_Example:_ `Trump burger yemoqda` → `Trump eating a burger`",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
-
-# 🔹 Prompt so‘rash
+# 🔹 Boshlanish
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     await update.callback_query.message.edit_text(
@@ -75,8 +75,7 @@ async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-
-# 🔹 Prompt kelganda so‘rovchi
+# 🔹 Prompt qabul qilish
 async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = update.message.text
     translated = translate_prompt(prompt)
@@ -88,24 +87,28 @@ async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [
             InlineKeyboardButton("1️⃣", callback_data="count_1"),
             InlineKeyboardButton("2️⃣", callback_data="count_2"),
-            InlineKeyboardButton("3️⃣", callback_data="count_3"),
             InlineKeyboardButton("4️⃣", callback_data="count_4"),
-        ],
-        [
-            InlineKeyboardButton("5️⃣", callback_data="count_5"),
-            InlineKeyboardButton("6️⃣", callback_data="count_6"),
-            InlineKeyboardButton("7️⃣", callback_data="count_7"),
             InlineKeyboardButton("8️⃣", callback_data="count_8"),
         ]
     ]
+
+    # ADMIN LOG
+    if ADMIN_ID:
+        await context.bot.send_message(
+            ADMIN_ID,
+            f"👤 *User:* `{update.effective_user.id}`\n"
+            f"🖌 *Prompt:* `{escape_md(prompt)}`\n"
+            f"🌎 *Translated:* `{escape_md(translated)}`",
+            parse_mode="Markdown"
+        )
+
     await update.message.reply_text(
         f"🖌 *Your Prompt:*\n`{escape_md(prompt)}`\n\n"
         f"🌎 *Translated:* `{escape_md(translated)}`\n\n"
-        "🔢 Select how many images you want to generate:",
+        "🔢 Choose number of images:",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
     )
-
 
 # 🔹 Tasvir yaratish
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -113,25 +116,13 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     count = int(query.data.split("_")[1])
-    prompt = context.user_data["prompt"]
-    translated = context.user_data["translated"]
+    prompt = context.user_data.get("prompt", "")
+    translated = context.user_data.get("translated", "")
 
     waiting_msg = await query.edit_message_text(
         f"🎨 *Generating {count} image(s)...* ⏳",
         parse_mode="Markdown"
     )
-
-    key = get_next_key()
-    headers = {
-        "accept": "application/json, text/plain, */*",
-        "content-type": "application/json",
-        "digen-language": "uz-US",
-        "digen-platform": "web",
-        "digen-token": key["token"],
-        "digen-sessionid": key["session"],
-        "origin": "https://rm.digen.ai",
-        "referer": "https://rm.digen.ai/",
-    }
 
     try:
         payload = {
@@ -145,13 +136,13 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "strength": ""
         }
 
+        headers = get_digen_headers()
         r = requests.post(DIGEN_URL, headers=headers, json=payload)
-        logger.info("STATUS: %s", r.status_code)
+        logger.info("DIGEN STATUS: %s", r.status_code)
 
         if r.status_code != 200:
-            await waiting_msg.edit_text(f"❌ API Error: {r.status_code} — Retrying with next key...")
-            await asyncio.sleep(1)
-            return await generate(update, context)
+            await waiting_msg.edit_text(f"❌ API Error: {r.status_code}")
+            return
 
         data = r.json()
         image_id = data.get("data", {}).get("id")
@@ -159,35 +150,34 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await waiting_msg.edit_text("❌ No image ID received.")
             return
 
-        # 🔄 Poll images until ready
+        await asyncio.sleep(5)
         image_urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
-        ready = False
-        for _ in range(6):  # 6x2s = max 12s
-            all_ok = all(requests.head(url).status_code == 200 for url in image_urls)
-            if all_ok:
-                ready = True
-                break
-            await asyncio.sleep(2)
-
-        if not ready:
-            await waiting_msg.edit_text("⚠️ Images not ready yet, try again later.")
-            return
-
         media_group = [InputMediaPhoto(url) for url in image_urls]
+
         await waiting_msg.edit_text("✅ *Images Ready!* 📸", parse_mode="Markdown")
         await query.message.reply_media_group(media_group)
+
+        # Regenerate button
+        regen_btn = InlineKeyboardMarkup([[InlineKeyboardButton("♻️ Regenerate", callback_data=f"regen|{prompt}")]])
+        await query.message.reply_text(
+            f"🖌 Prompt: `{escape_md(prompt)}`\n🌎 EN: `{escape_md(translated)}`",
+            parse_mode="Markdown",
+            reply_markup=regen_btn
+        )
 
     except Exception as e:
         logger.error(f"Xatolik: {e}")
         await waiting_msg.edit_text("⚠️ Unknown error occurred. Please try again.")
 
-
 # 🔹 ADMIN PANEL
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Access denied.")
-    await update.message.reply_text("📊 Logs currently disabled in this version.")
-
+    keys_info = "\n".join([f"• {k['token'][:10]}... | {k['session'][:8]}..." for k in DIGEN_KEYS])
+    await update.message.reply_text(
+        f"📊 *Loaded Keys:* {len(DIGEN_KEYS)}\n{keys_info}",
+        parse_mode="Markdown"
+    )
 
 # 🔹 MAIN
 def main():
@@ -198,7 +188,6 @@ def main():
     app.add_handler(CallbackQueryHandler(generate, pattern="count_"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ask_image_count))
     app.run_polling()
-
 
 if __name__ == "__main__":
     main()
