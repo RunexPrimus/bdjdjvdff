@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # -------------------------
 # You can override these by setting env vars before run if you prefer.
 import os
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8327134580:AAFjXWF9YUA4dFcZenhEYbnbj6q5tdHyptY")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8327134580:AAEGrC6yCDRDbLFalfc7vQZkk5KtH3UPfvc")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "7440949683"))
 
 # Digen headers - recommended: move token/session to env or db
