@@ -26,7 +26,7 @@ from deep_translator import GoogleTranslator
 # =========================
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "123456789"))  # admin id (o'zingizni ID yozing)
-CHANNEL_ID = os.getenv("CHANNEL_ID", "@YourChannelUsername")
+CHANNEL_ID = os.getenv("CHANNEL_ID", "@BattleGiftUz")
 
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))  # ["key1:session1", "key2:session2"]
 KEY_INDEX = 0
