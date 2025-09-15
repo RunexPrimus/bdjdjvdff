@@ -44,6 +44,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "👋 *Salom!* Men Digen AI Botman.\n\n"
         "✍️ Istalgan prompt yozing — men sizga 4 ta rasm yasab beraman!\n"
         "Misol: `Futuristic cyberpunk city with neon lights`"
+        "Murojaat uchun @Rune_13"
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
