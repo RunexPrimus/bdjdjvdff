@@ -3,7 +3,7 @@ import logging
 import requests
 import asyncio
 import re
-from telegram import Update
+from telegram import Update, InputMediaPhoto
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 
 # 🔹 LOG CONFIG
@@ -83,11 +83,11 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             await asyncio.sleep(5)
 
-            # 🔹 Foydalanuvchiga barcha rasmni yuborish
+            # 🔹 Media group (album) yaratish
             image_urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(batch_size)]
-            for url in image_urls:
-                await context.bot.send_photo(chat_id=update.effective_chat.id, photo=url)
+            media_group = [InputMediaPhoto(url) for url in image_urls]
 
+            await context.bot.send_media_group(chat_id=update.effective_chat.id, media=media_group)
             await waiting_msg.edit_text("✅ Rasmlar tayyor! 📸")
 
             # 🔹 Log
@@ -99,12 +99,11 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "images": image_urls
             })
 
-            # 🔹 Admin notification
+            # 🔹 Adminga ham media group yuborish
             if ADMIN_ID:
                 admin_text = f"👤 @{user.username or 'N/A'} (ID: {user.id})\n🖌 Prompt: {prompt}"
                 await context.bot.send_message(chat_id=ADMIN_ID, text=admin_text)
-                for url in image_urls:
-                    await context.bot.send_photo(chat_id=ADMIN_ID, photo=url)
+                await context.bot.send_media_group(chat_id=ADMIN_ID, media=media_group)
 
         else:
             await waiting_msg.edit_text(f"❌ API xato: {r.status_code}")
