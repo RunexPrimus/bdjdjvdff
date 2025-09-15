@@ -57,7 +57,7 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     waiting_msg = await update.message.reply_text("🎨 Rasm yaratilmoqda... ⏳")
 
     try:
-        batch_size = 8  # Har doim 4 rasm
+        batch_size = 4  # Har doim 4 rasm
         payload = {
             "prompt": prompt,
             "image_size": "512x512",
