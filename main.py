@@ -16,6 +16,11 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
+from dotenv import load_dotenv
+import os
+
+# 🔹 Load environment variables from .env file
+load_dotenv()
 
 # 🔹 LOG CONFIG
 logging.basicConfig(
@@ -24,20 +29,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# 🔹 BOT TOKEN
-BOT_TOKEN = "8315992324:AAF3EZP6RseV7npuVxOo53x8938q085QIFY"
+# 🔹 BOT TOKEN and other sensitive data from environment variables
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID"))
+DIGEN_TOKEN = os.getenv("DIGEN_TOKEN")
+DIGEN_SESSION_ID = os.getenv("DIGEN_SESSION_ID")
 
-# 🔹 ADMIN ID
-ADMIN_ID = 7440949683
-
-# 🔹 DIGEN API CONFIG (sening token va sessioning bilan)
+# 🔹 DIGEN API CONFIG
 DIGEN_HEADERS = {
     "accept": "application/json, text/plain, */*",
     "content-type": "application/json",
     "digen-language": "uz-US",
     "digen-platform": "web",
-    "digen-token": "4d6574614147492e47656e49585acf31b622a6e6b1cdd757b8c8db654c:1511428:1757701959",
-    "digen-sessionid": "aa02e1d8-20c7-4432-bb08-959171099b97",
+    "digen-token": DIGEN_TOKEN,
+    "digen-sessionid": DIGEN_SESSION_ID,
     "origin": "https://rm.digen.ai",
     "referer": "https://rm.digen.ai/",
 }
@@ -82,35 +87,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
-# 🔹 IMAGE COUNT SELECTOR
-async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    prompt = update.message.text
-    translated = translate_prompt(prompt)
-    context.user_data["prompt"] = translated
-
-    keyboard = [
-        [
-            InlineKeyboardButton("1️⃣", callback_data="count|1"),
-            InlineKeyboardButton("2️⃣", callback_data="count|2"),
-            InlineKeyboardButton("3️⃣", callback_data="count|3"),
-            InlineKeyboardButton("4️⃣", callback_data="count|4"),
-        ]
-    ]
-    await update.message.reply_text(
-        f"🖌 Prompt: *{escape_markdown(translated)}*\n\n"
-        "📸 How many images do you want?",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="Markdown"
-    )
-
-# 🔹 GENERATE IMAGE
-async def generate_images(update: Update, context: ContextTypes.DEFAULT_TYPE, count: int):
+# 🔹 IMAGE GENERATION (default 4 images)
+async def generate_images(update: Update, context: ContextTypes.DEFAULT_TYPE, count: int = 4):
     prompt = context.user_data.get("prompt")
     if not prompt:
-        await update.callback_query.edit_message_text("❌ Prompt not found.")
+        await update.message.reply_text("❌ Prompt not found.")
         return
 
-    waiting_msg = await update.callback_query.edit_message_text("🎨 Generating images... ⏳")
+    waiting_msg = await update.message.reply_text("🎨 Generating images... ⏳")
 
     try:
         payload = {
@@ -169,37 +153,11 @@ async def generate_images(update: Update, context: ContextTypes.DEFAULT_TYPE, co
         logger.error("Xatolik: %s", str(e))
         await waiting_msg.edit_text("⚠️ Unknown error. Please try again later.")
 
-# 🔹 CALLBACK HANDLER
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    if query.data.startswith("count"):
-        _, count = query.data.split("|")
-        await generate_images(update, context, int(count))
-
-# 🔹 ADMIN PANEL
-async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("⛔ You are not admin.")
-        return
-    if not logs:
-        await update.message.reply_text("📭 No logs yet.")
-        return
-
-    text = "📑 Last 5 logs:\n\n"
-    for entry in logs[-5:]:
-        text += f"👤 @{entry['username']} (ID: {entry['user_id']})\n🖌 {escape_markdown(entry['prompt'])}\n\n"
-
-    await update.message.reply_text(text, parse_mode="MarkdownV2")
-
 # 🔹 MAIN
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("admin", admin))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ask_image_count))
-    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, generate_images))  # Automatically triggers image generation
     app.run_polling()
 
 if __name__ == "__main__":
