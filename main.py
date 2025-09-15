@@ -65,7 +65,7 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "width": 512,
             "height": 512,
             "lora_id": "",
-            "batch_size": 1,
+            "batch_size": 4,
             "reference_images": [],
             "strength": ""
         }
