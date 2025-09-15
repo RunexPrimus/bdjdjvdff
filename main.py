@@ -55,6 +55,14 @@ def translate_prompt(prompt: str) -> str:
     except Exception as e:
         logger.error(f"Tarjima xatolik: {e}")
         return prompt
+def translate_prompt(prompt: str) -> str:
+    try:
+        translated = GoogleTranslator(source="auto", target="en").translate(prompt)
+        logger.info(f"TARJIMA: '{prompt}' -> '{translated}'")
+        return translated if translated else prompt
+    except Exception as e:
+        logger.error(f"Tarjima xatolik: {e}")
+        return prompt
 
 # 🔹 START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
