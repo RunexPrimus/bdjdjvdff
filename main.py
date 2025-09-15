@@ -121,6 +121,18 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+    key = get_next_key()
+    headers = {
+        "accept": "application/json, text/plain, */*",
+        "content-type": "application/json",
+        "digen-language": "uz-US",
+        "digen-platform": "web",
+        "digen-token": key["token"],
+        "digen-sessionid": key["session"],
+        "origin": "https://rm.digen.ai",
+        "referer": "https://rm.digen.ai/",
+    }
+
     try:
         payload = {
             "prompt": translated,
@@ -133,12 +145,13 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "strength": ""
         }
 
-        r = requests.post(DIGEN_URL, headers=DIGEN_HEADERS, json=payload)
+        r = requests.post(DIGEN_URL, headers=headers, json=payload)
         logger.info("STATUS: %s", r.status_code)
 
         if r.status_code != 200:
-            await waiting_msg.edit_text(f"❌ API Error: {r.status_code}")
-            return
+            await waiting_msg.edit_text(f"❌ API Error: {r.status_code} — Retrying with next key...")
+            await asyncio.sleep(1)
+            return await generate(update, context)
 
         data = r.json()
         image_id = data.get("data", {}).get("id")
@@ -146,19 +159,23 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await waiting_msg.edit_text("❌ No image ID received.")
             return
 
-        await asyncio.sleep(5)
+        # 🔄 Poll images until ready
         image_urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
-        media_group = [InputMediaPhoto(url) for url in image_urls]
+        ready = False
+        for _ in range(6):  # 6x2s = max 12s
+            all_ok = all(requests.head(url).status_code == 200 for url in image_urls)
+            if all_ok:
+                ready = True
+                break
+            await asyncio.sleep(2)
 
+        if not ready:
+            await waiting_msg.edit_text("⚠️ Images not ready yet, try again later.")
+            return
+
+        media_group = [InputMediaPhoto(url) for url in image_urls]
         await waiting_msg.edit_text("✅ *Images Ready!* 📸", parse_mode="Markdown")
         await query.message.reply_media_group(media_group)
-
-        regen_btn = InlineKeyboardMarkup([[InlineKeyboardButton("♻️ Regenerate", callback_data=f"regen|{prompt}")]])
-        await query.message.reply_text(
-            f"🖌 Prompt: `{escape_md(prompt)}`\n🌎 EN: `{escape_md(translated)}`",
-            parse_mode="Markdown",
-            reply_markup=regen_btn
-        )
 
     except Exception as e:
         logger.error(f"Xatolik: {e}")
