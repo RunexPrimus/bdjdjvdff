@@ -5,6 +5,10 @@ import asyncio
 import re
 from telegram import Update, InputMediaPhoto
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+from googletrans import Translator
+
+# 🔹 TRANSLATOR
+translator = Translator()
 
 # 🔹 LOG CONFIG
 logging.basicConfig(
@@ -14,8 +18,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 🔹 BOT TOKEN va ADMIN
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()  # serverga qo'yiladigan secret variable
-ADMIN_ID = int(os.environ.get("ADMIN_ID", 0))  # serverga qo'yiladigan admin id
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "").strip()
+ADMIN_ID = int(os.environ.get("ADMIN_ID", 0))
 
 # 🔹 DIGEN API CONFIG
 DIGEN_HEADERS = {
@@ -57,9 +61,12 @@ async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     waiting_msg = await update.message.reply_text("🎨 Rasm yaratilmoqda... ⏳")
 
     try:
-        batch_size = 4  # Har doim 4 rasm
+        # 🔹 Real-time tarjima
+        translated_prompt = translator.translate(prompt, src='auto', dest='en').text
+
+        batch_size = 8  # 8 ta rasm yaratish
         payload = {
-            "prompt": prompt,
+            "prompt": translated_prompt,
             "image_size": "512x512",
             "width": 512,
             "height": 512,
