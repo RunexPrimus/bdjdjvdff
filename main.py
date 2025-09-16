@@ -67,13 +67,23 @@ def escape_md(text: str) -> str:
     return re.sub(r'([_*\[\]()~>#+\-=|{}.!])', r'\\\1', text)
 
 async def translate_prompt(prompt: str) -> str:
+    logger.info(f"🔍 [TRANSLATE] Original prompt: {prompt}")
+
     try:
-        return await asyncio.to_thread(
+        # Asosiy tarjima jarayoni
+        result = await asyncio.to_thread(
             GoogleTranslator(source="auto", target="en").translate, prompt
         )
+
+        logger.info(f"✅ [TRANSLATE] Success! Translated: {result}")
+        return result
+
     except Exception as e:
-        logger.error(f"Tarjima xatolik: {e}")
+        # Xato bo‘lsa hamma ma’lumotlarni chiqaramiz
+        logger.error(f"❌ [TRANSLATE ERROR] Xato turi: {type(e).__name__} | Xabar: {e}")
+        logger.warning("⚠️ Tarjima ishlamadi, original prompt ishlatilmoqda.")
         return prompt
+
 
 # ----------------------- HANDLERS -----------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
