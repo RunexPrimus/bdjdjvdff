@@ -52,8 +52,10 @@ def get_all_users():
         return json.load(f)
 
 
+import random
+
 def get_digen_headers():
-      key = random.choice(DIGEN_KEYS)  # Har safar tasodifiy key
+    key = random.choice(DIGEN_KEYS)  # ✅ Har safar tasodifiy key
     return {
         "accept": "application/json, text/plain, */*",
         "content-type": "application/json",
@@ -64,6 +66,7 @@ def get_digen_headers():
         "origin": "https://rm.digen.ai",
         "referer": "https://rm.digen.ai/",
     }
+
 
 
 def escape_md(text: str) -> str:
