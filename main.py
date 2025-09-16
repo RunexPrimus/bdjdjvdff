@@ -53,7 +53,7 @@ def get_all_users():
 
 
 def get_digen_headers():
-    key = next(_key_cycle)
+      key = random.choice(DIGEN_KEYS)  # Har safar tasodifiy key
     return {
         "accept": "application/json, text/plain, */*",
         "content-type": "application/json",
