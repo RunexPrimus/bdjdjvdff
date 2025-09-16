@@ -5,7 +5,7 @@ import re
 import os
 import json
 import itertools
-from deep_translator import GoogleTranslator
+import random
 from telegram import (
     Update, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 )
@@ -24,18 +24,17 @@ logger = logging.getLogger(__name__)
 # 🔹 ENVIRONMENT VARIABLES
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "7440949683"))
-
-# ❌ FORCE_CHANNEL olib tashlandi
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
 _key_cycle = itertools.cycle(DIGEN_KEYS)
+
 DIGEN_URL = "https://api.digen.ai/v2/tools/text_to_image"
+TASK_STATUS_URL = "https://api.digen.ai/v2/tasks"  # ✅ Status tekshirish
 
 # 🔹 USERS FILE
 USERS_FILE = "users.json"
 if not os.path.exists(USERS_FILE):
     with open(USERS_FILE, "w") as f:
         json.dump([], f)
-
 
 def add_user(user_id):
     with open(USERS_FILE, "r+") as f:
@@ -45,20 +44,16 @@ def add_user(user_id):
             f.seek(0)
             json.dump(data, f)
 
-
 def get_all_users():
     with open(USERS_FILE, "r") as f:
         return json.load(f)
 
-
-import random
-
 def get_digen_headers():
-    key = random.choice(DIGEN_KEYS)  # ✅ Har safar tasodifiy key
+    key = random.choice(DIGEN_KEYS)
     return {
         "accept": "application/json, text/plain, */*",
         "content-type": "application/json",
-        "digen-language": "uz-US",
+        "digen-language": "en-US",
         "digen-platform": "web",
         "digen-token": key["token"],
         "digen-sessionid": key["session"],
@@ -66,24 +61,48 @@ def get_digen_headers():
         "referer": "https://rm.digen.ai/",
     }
 
-
 def escape_md(text: str) -> str:
     return re.sub(r'([_*\[\]()~>#+\-=|{}.!])', r'\\\1', text)
 
-
+# 🔹 Prompt tarjima (Google API orqali)
 async def translate_prompt(prompt: str) -> str:
     try:
-        return await asyncio.to_thread(
-            GoogleTranslator(source="auto", target="en").translate, prompt
-        )
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://translate.googleapis.com/translate_a/single",
+                params={
+                    "client": "gtx",
+                    "sl": "auto",
+                    "tl": "en",
+                    "dt": "t",
+                    "q": prompt
+                }
+            ) as resp:
+                data = await resp.json()
+                return "".join([chunk[0] for chunk in data[0]])
     except Exception as e:
         logger.error(f"Tarjima xatolik: {e}")
         return prompt
 
+# 🔹 API tayyor bo'lguncha polling
+async def wait_for_images(image_id, count, session, timeout=30, interval=2):
+    status_url = f"{TASK_STATUS_URL}/{image_id}"
+    for _ in range(timeout // interval):
+        async with session.get(status_url, headers=get_digen_headers()) as r:
+            if r.status != 200:
+                await asyncio.sleep(interval)
+                continue
+            data = await r.json()
+            status = data.get("data", {}).get("status")
+            if status == "completed":
+                return [
+                    f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg"
+                    for i in range(count)
+                ]
+        await asyncio.sleep(interval)
+    return None
 
-# ❌ check_membership butunlay olib tashlandi
-
-
+# 🔹 HANDLERS
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     add_user(user.id)
@@ -97,14 +116,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
-
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     await update.callback_query.message.edit_text(
         "✍️ Send me your prompt now.\n\n_Example:_ Futuristic cyberpunk city with neon lights",
         parse_mode="Markdown"
     )
-
 
 async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = update.message.text
@@ -127,7 +144,6 @@ async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
     )
-
 
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -158,19 +174,20 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if r.status != 200:
                     await waiting_msg.edit_text(f"❌ API Error: {r.status}")
                     return
-
                 data = await r.json()
 
-        image_id = data.get("data", {}).get("id")
-        if not image_id:
-            await waiting_msg.edit_text("❌ No image ID received.")
-            return
+            image_id = data.get("data", {}).get("id")
+            if not image_id:
+                await waiting_msg.edit_text("❌ No image ID received.")
+                return
 
-        await asyncio.sleep(10)
-        image_urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg"
-                      for i in range(count)]
+            # ✅ Real-time polling
+            image_urls = await wait_for_images(image_id, count, session)
+            if not image_urls:
+                await waiting_msg.edit_text("⚠️ Timeout: Images not ready.")
+                return
+
         media_group = [InputMediaPhoto(url) for url in image_urls]
-
         await waiting_msg.edit_text("✅ *Images Ready!* 📸", parse_mode="Markdown")
         await query.message.reply_media_group(media_group)
 
@@ -188,41 +205,32 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Xatolik: {e}")
         await waiting_msg.edit_text("⚠️ Unknown error occurred. Please try again.")
 
-
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Access denied.")
-
     text = " ".join(context.args)
     if not text:
         return await update.message.reply_text("✍️ Foydalanish: /broadcast <xabar>")
-
     users = get_all_users()
     count = 0
-
     for user_id in users:
         try:
             await context.bot.send_message(user_id, text)
             count += 1
         except:
             continue
-
     await update.message.reply_text(f"✅ Broadcast {count} ta foydalanuvchiga yuborildi.")
-
 
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Access denied.")
-
     keys_info = "\n".join(
         [f"• {k['token'][:10]}... | {k['session'][:8]}..." for k in DIGEN_KEYS]
     )
-
     await update.message.reply_text(
         f"📊 *Loaded Keys:* {len(DIGEN_KEYS)}\n{keys_info}",
         parse_mode="Markdown"
     )
-
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
@@ -233,7 +241,6 @@ def main():
     app.add_handler(CallbackQueryHandler(generate, pattern="count_"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ask_image_count))
     app.run_polling()
-
 
 if __name__ == "__main__":
     main()
