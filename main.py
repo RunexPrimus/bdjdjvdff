@@ -1,5 +1,5 @@
 import logging
-import requests
+import aiohttp
 import asyncio
 import re
 import os
@@ -24,14 +24,14 @@ logger = logging.getLogger(__name__)
 # 🔹 ENVIRONMENT VARIABLES
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "7440949683"))
-FORCE_CHANNEL = os.getenv("FORCE_CHANNEL", "@Digen_Ai")  # Majburiy kanal
+FORCE_CHANNEL = os.getenv("FORCE_CHANNEL", "@Digen_Ai")
 
 # 🔹 DIGEN KEYS
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
 _key_cycle = itertools.cycle(DIGEN_KEYS)
 DIGEN_URL = "https://api.digen.ai/v2/tools/text_to_image"
 
-# 🔹 USERS FILE (broadcast uchun)
+# 🔹 USERS FILE
 USERS_FILE = "users.json"
 if not os.path.exists(USERS_FILE):
     with open(USERS_FILE, "w") as f:
@@ -39,7 +39,6 @@ if not os.path.exists(USERS_FILE):
 
 
 def add_user(user_id):
-    """Foydalanuvchini bazaga qo‘shish."""
     with open(USERS_FILE, "r+") as f:
         data = json.load(f)
         if user_id not in data:
@@ -49,13 +48,11 @@ def add_user(user_id):
 
 
 def get_all_users():
-    """Barcha foydalanuvchilarni olish."""
     with open(USERS_FILE, "r") as f:
         return json.load(f)
 
 
 def get_digen_headers():
-    """Digen API uchun headers."""
     key = next(_key_cycle)
     return {
         "accept": "application/json, text/plain, */*",
@@ -70,21 +67,21 @@ def get_digen_headers():
 
 
 def escape_md(text: str) -> str:
-    """Markdown xavfsiz qilish."""
     return re.sub(r'([_*\[\]()~>#+\-=|{}.!])', r'\\\1', text)
 
 
-def translate_prompt(prompt: str) -> str:
-    """Matnni ingliz tiliga tarjima qilish."""
+async def translate_prompt(prompt: str) -> str:
     try:
-        return GoogleTranslator(source="auto", target="en").translate(prompt)
+        # deep-translator synchronous, run in separate thread
+        return await asyncio.to_thread(
+            GoogleTranslator(source="auto", target="en").translate, prompt
+        )
     except Exception as e:
         logger.error(f"Tarjima xatolik: {e}")
         return prompt
 
 
 async def check_membership(user_id, context):
-    """Kanalga a’zolikni tekshirish."""
     try:
         chat_member = await context.bot.get_chat_member(FORCE_CHANNEL, user_id)
         return chat_member.status in ["member", "administrator", "creator"]
@@ -92,7 +89,6 @@ async def check_membership(user_id, context):
         return False
 
 
-# 🔹 START COMMAND
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     add_user(user.id)
@@ -119,7 +115,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Boshlanish tugmasi."""
     await update.callback_query.answer()
     await update.callback_query.message.edit_text(
         "✍️ Send me your prompt now.\n\n_Example:_ Futuristic cyberpunk city with neon lights",
@@ -128,9 +123,8 @@ async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Prompt qabul qilish va rasm sonini tanlash."""
     prompt = update.message.text
-    translated = translate_prompt(prompt)
+    translated = await translate_prompt(prompt)
 
     context.user_data["prompt"] = prompt
     context.user_data["translated"] = translated
@@ -152,7 +146,6 @@ async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Rasmlarni generatsiya qilish."""
     query = update.callback_query
     await query.answer()
 
@@ -176,14 +169,14 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "strength": ""
         }
 
-        headers = get_digen_headers()
-        r = requests.post(DIGEN_URL, headers=headers, json=payload)
+        async with aiohttp.ClientSession() as session:
+            async with session.post(DIGEN_URL, headers=get_digen_headers(), json=payload) as r:
+                if r.status != 200:
+                    await waiting_msg.edit_text(f"❌ API Error: {r.status}")
+                    return
 
-        if r.status_code != 200:
-            await waiting_msg.edit_text(f"❌ API Error: {r.status_code}")
-            return
+                data = await r.json()
 
-        data = r.json()
         image_id = data.get("data", {}).get("id")
         if not image_id:
             await waiting_msg.edit_text("❌ No image ID received.")
@@ -197,7 +190,6 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await waiting_msg.edit_text("✅ *Images Ready!* 📸", parse_mode="Markdown")
         await query.message.reply_media_group(media_group)
 
-        # 🔹 ADMIN LOG
         username = f"@{query.from_user.username}" if query.from_user.username else "No username"
         admin_caption = (
             f"👤 User: {query.from_user.id} | {username}\n"
@@ -214,7 +206,6 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin tomonidan barcha userlarga xabar yuborish."""
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Access denied.")
 
@@ -236,7 +227,6 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin panel."""
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Access denied.")
 
@@ -252,14 +242,12 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin))
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
     app.add_handler(CallbackQueryHandler(generate, pattern="count_"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ask_image_count))
-
     app.run_polling()
 
 
