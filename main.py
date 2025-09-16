@@ -70,13 +70,15 @@ async def translate_prompt(prompt: str) -> str:
     logger.info(f"🔍 [TRANSLATE] Original prompt: {prompt}")
 
     try:
-        # Asosiy tarjima jarayoni
         result = await asyncio.to_thread(
-            GoogleTranslator(source="auto", target="en").translate, prompt
+            GoogleTranslator(source="uz", target="en").translate, prompt
         )
-
         logger.info(f"✅ [TRANSLATE] Success! Translated: {result}")
         return result
+    except Exception as e:
+        logger.error(f"❌ [TRANSLATE ERROR] {type(e).__name__}: {e}")
+        return prompt
+
 
     except Exception as e:
         # Xato bo‘lsa hamma ma’lumotlarni chiqaramiz
