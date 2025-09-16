@@ -24,9 +24,8 @@ logger = logging.getLogger(__name__)
 # 🔹 ENVIRONMENT VARIABLES
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "7440949683"))
-FORCE_CHANNEL = os.getenv("FORCE_CHANNEL", "@Digen_Ai")
 
-# 🔹 DIGEN KEYS
+# ❌ FORCE_CHANNEL olib tashlandi
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
 _key_cycle = itertools.cycle(DIGEN_KEYS)
 DIGEN_URL = "https://api.digen.ai/v2/tools/text_to_image"
@@ -68,14 +67,12 @@ def get_digen_headers():
     }
 
 
-
 def escape_md(text: str) -> str:
     return re.sub(r'([_*\[\]()~>#+\-=|{}.!])', r'\\\1', text)
 
 
 async def translate_prompt(prompt: str) -> str:
     try:
-        # deep-translator synchronous, run in separate thread
         return await asyncio.to_thread(
             GoogleTranslator(source="auto", target="en").translate, prompt
         )
@@ -84,28 +81,12 @@ async def translate_prompt(prompt: str) -> str:
         return prompt
 
 
-async def check_membership(user_id, context):
-    try:
-        chat_member = await context.bot.get_chat_member(FORCE_CHANNEL, user_id)
-        return chat_member.status in ["member", "administrator", "creator"]
-    except:
-        return False
+# ❌ check_membership butunlay olib tashlandi
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     add_user(user.id)
-
-    if FORCE_CHANNEL:
-        is_member = await check_membership(user.id, context)
-        if not is_member:
-            join_btn = [[InlineKeyboardButton(
-                "🔗 Join Channel", url=f"https://t.me/{FORCE_CHANNEL.replace('@', '')}")]]
-            await update.message.reply_text(
-                "🚫 Botdan foydalanish uchun avval kanalga a'zo bo‘ling!",
-                reply_markup=InlineKeyboardMarkup(join_btn)
-            )
-            return
 
     kb = [[InlineKeyboardButton("🤖 Start Generating", callback_data="start_gen")]]
     await update.message.reply_text(
@@ -185,7 +166,7 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await waiting_msg.edit_text("❌ No image ID received.")
             return
 
-        await asyncio.sleep(5)
+        await asyncio.sleep(10)
         image_urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg"
                       for i in range(count)]
         media_group = [InputMediaPhoto(url) for url in image_urls]
