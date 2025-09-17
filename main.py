@@ -296,4 +296,12 @@ async def main():
     app.run_polling()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    app = Application.builder().token(TOKEN).build()
+
+    # Handlerlarni shu yerda qo‘sh
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("get", handle_prompt))
+    # boshqa handlerlar...
+
+    app.run_polling()  # ✅ Asinxron emas, o‘zi loopni boshqaradi
+
