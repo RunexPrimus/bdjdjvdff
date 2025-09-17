@@ -1,4 +1,4 @@
-# bot_postgres_universal.py
+# bot_postgres_group.py
 import logging
 import aiohttp
 import asyncio
@@ -33,14 +33,13 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", "7440949683"))
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@SizningKanal")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1001234567890"))
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
+_key_cycle = itertools.cycle(DIGEN_KEYS)
 DIGEN_URL = "https://api.digen.ai/v2/tools/text_to_image"
 DATABASE_URL = os.getenv("DATABASE_URL")  # PostgreSQL connection string
 
 if not DATABASE_URL:
     logger.error("❌ Please set DATABASE_URL environment variable (Postgres).")
     raise SystemExit(1)
-
-_key_cycle = itertools.cycle(DIGEN_KEYS)
 
 # ---------------- Helpers ----------------
 def escape_md(text: str) -> str:
@@ -145,7 +144,6 @@ async def check_sub_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
-
     if await check_subscription(user_id, context):
         await query.edit_message_text("✅ Rahmat! Siz obuna bo‘lgansiz. Endi botdan foydalanishingiz mumkin.")
     else:
@@ -159,7 +157,7 @@ async def check_sub_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup(kb)
         )
 
-# ---------------- User/session functions (DB) ----------------
+# ---------------- User/session functions ----------------
 async def add_user_db(pool, tg_user):
     now = utc_now()
     async with pool.acquire() as conn:
@@ -178,7 +176,6 @@ async def add_user_db(pool, tg_user):
                 now,
                 now
             )
-        # add session
         await conn.execute(
             "INSERT INTO sessions(user_id, started_at) VALUES($1, $2)",
             tg_user.id, now
@@ -193,30 +190,6 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
             tg_user.id, tg_user.username if tg_user.username else None,
             prompt, translated, image_id, count, now
         )
-
-# ---------------- Stats queries ----------------
-async def get_total_users(pool):
-    async with pool.acquire() as conn:
-        row = await conn.fetchval("SELECT COUNT(*) FROM users")
-        return row or 0
-
-async def get_active_users_count(pool, days):
-    cutoff = utc_now() - timedelta(days=days)
-    async with pool.acquire() as conn:
-        row = await conn.fetchval("SELECT COUNT(*) FROM users WHERE last_seen >= $1", cutoff)
-        return row or 0
-
-async def get_sessions_count(pool, days):
-    cutoff = utc_now() - timedelta(days=days)
-    async with pool.acquire() as conn:
-        row = await conn.fetchval("SELECT COUNT(*) FROM sessions WHERE started_at >= $1", cutoff)
-        return row or 0
-
-# ---------------- Meta (start_time) ----------------
-async def get_start_time(pool):
-    async with pool.acquire() as conn:
-        val = await conn.fetchval("SELECT value FROM meta WHERE key = 'start_time'")
-        return int(val) if val else int(time.time())
 
 # ---------------- Handlers ----------------
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -245,32 +218,27 @@ async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# ---------------- Universal prompt handler ----------------
-async def prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ---------------- Prompt handler (DM yoki /get guruhda) ----------------
+async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # DM
     chat_type = update.effective_chat.type
-    tg_user = update.effective_user
+    text = update.message.text
 
     if chat_type in ["group", "supergroup"]:
-        # guruhda faqat /get prefiksi bilan ishlaydi
-        if not update.message.text.startswith("/get"):
+        # guruhda faqat /get bilan boshlansa qabul qilamiz
+        if not text.startswith("/get"):
+            return  # oddiy guruh matniga javob bermaymiz
+        text = text[4:].strip()  # /get dan keyin prompt
+        if not text:
+            await update.message.reply_text("⚠️ /get dan keyin matn kiriting.")
             return
-        context.args = update.message.text.split()[1:]  # /get dan keyingi matn
-        prompt = " ".join(context.args)
-    else:
-        # DM va normal chat
-        prompt = update.message.text
-
-    if not prompt:
-        await update.message.reply_text("❌ Iltimos, prompt matnini kiriting.")
-        return
 
     if not await force_sub_required(update, context):
         return
 
-    await add_user_db(context.application.bot_data["db_pool"], tg_user)
-
-    context.user_data["prompt"] = prompt
-    context.user_data["translated"] = prompt  # tarjima kerak bo'lmasa shunday
+    await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
+    context.user_data["prompt"] = text
+    context.user_data["translated"] = text  # translation removed
 
     kb = [[
         InlineKeyboardButton("1️⃣", callback_data="count_1"),
@@ -278,9 +246,8 @@ async def prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         InlineKeyboardButton("4️⃣", callback_data="count_4"),
         InlineKeyboardButton("8️⃣", callback_data="count_8"),
     ]]
-
     await update.message.reply_text(
-        f"🖌 *Sizning matningiz:*\n{escape_md(prompt)}\n\n"
+        f"🖌 *Sizning matningiz:*\n{escape_md(text)}\n\n"
         f"🔢 Nechta rasm yaratilsin?",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
@@ -347,10 +314,8 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         media_group = [InputMediaPhoto(url) for url in urls]
         await query.message.reply_media_group(media_group)
 
-        # log generation to DB
         await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
 
-        # send admin notification
         admin_caption = (
             f"👤 *Yangi generatsiya:*\n"
             f"🆔 ID: `{user.id}`\n"
@@ -371,104 +336,30 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.exception(f"Xatolik generate(): {e}")
         await waiting_msg.edit_text("⚠️ Xatolik yuz berdi. Qaytadan urinib ko‘ring.")
 
-# ---------------- Stats & ping ----------------
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pool = context.application.bot_data["db_pool"]
-    total_users = await get_total_users(pool)
-    daily_u = await get_active_users_count(pool, 1)
-    weekly_u = await get_active_users_count(pool, 7)
-    monthly_u = await get_active_users_count(pool, 30)
-    yearly_u = await get_active_users_count(pool, 365)
-    daily_s = await get_sessions_count(pool, 1)
-    weekly_s = await get_sessions_count(pool, 7)
-    monthly_s = await get_sessions_count(pool, 30)
-    start_ts = await get_start_time(pool)
-    uptime_seconds = int(time.time() - start_ts)
-    uptime = f"{uptime_seconds // 3600} soat {(uptime_seconds % 3600) // 60} daqiqa"
-
-    await update.message.reply_text(
-        f"📊 *Bot statistikasi:*\n"
-        f"👥 Umumiy foydalanuvchilar: {total_users}\n"
-        f"📅 24 soat: {daily_u} foydalanuvchi ({daily_s} sessiya)\n"
-        f"📅 7 kun: {weekly_u} foydalanuvchi ({weekly_s} sessiya)\n"
-        f"📅 30 kun: {monthly_u} foydalanuvchi ({monthly_s} sessiya)\n"
-        f"📅 365 kun: {yearly_u} foydalanuvchi\n"
-        f"⏱ Ish vaqti: {uptime}",
-        parse_mode="Markdown"
-    )
-
-async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    start = time.time()
-    msg = await update.message.reply_text("🏓 Ping o‘lchanmoqda...")
-    end = time.time()
-    latency = (end - start) * 1000
-    await msg.edit_text(f"🏓 *Pong!* `{int(latency)} ms`", parse_mode="Markdown")
-
-# ---------------- Admin ----------------
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return await update.message.reply_text("⛔ Ruxsat yo‘q.")
-    pool = context.application.bot_data["db_pool"]
-    async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT id FROM users")
-        user_ids = [r["id"] for r in rows]
-
-    count = 0
-    if update.message.photo:
-        file_id = update.message.photo[-1].file_id
-        caption = update.message.caption or ""
-        for uid in user_ids:
-            try:
-                await context.bot.send_photo(uid, file_id, caption=caption, parse_mode="Markdown")
-                count += 1
-            except Exception:
-                continue
-        return await update.message.reply_text(f"✅ {count} foydalanuvchiga rasm yuborildi.")
-
-    text = " ".join(context.args)
-    if not text:
-        return await update.message.reply_text("✍️ Foydalanish: /broadcast <xabar> (yoki yuboring rasm bilan)")
-
-    for uid in user_ids:
-        try:
-            await context.bot.send_message(uid, text, parse_mode="Markdown")
-            count += 1
-        except Exception:
-            continue
-
-    await update.message.reply_text(f"✅ {count} foydalanuvchiga xabar yuborildi.")
-
-async def admin_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return await update.message.reply_text("⛔ Ruxsat yo‘q.")
-    keys_info = "\n".join([f"• {k.get('token','')[:10]}... | {k.get('session','')[:8]}..." for k in DIGEN_KEYS])
-    await update.message.reply_text(f"📊 *Yuklangan kalitlar:* {len(DIGEN_KEYS)}\n{keys_info}", parse_mode="Markdown")
-
-# ---------------- Startup / main ----------------
+# ---------------- Startup ----------------
 async def on_startup(app: Application):
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
     app.bot_data["db_pool"] = pool
     await init_db(pool)
     logger.info("✅ DB initialized and pool created.")
 
+# ---------------- Main ----------------
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.post_init = on_startup
 
-    # Commands
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("admin", admin_info))
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("ping", ping))
 
-    # Callback buttons
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
     app.add_handler(CallbackQueryHandler(generate, pattern="count_"))
     app.add_handler(CallbackQueryHandler(check_sub_button, pattern="check_sub"))
 
-    # Universal text handler
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, prompt_handler))
+    # Universal prompt handler
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_prompt))
 
     app.run_polling()
 
