@@ -291,14 +291,21 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # In private, allow plain text to be prompt
+# --- main.py ichida private_text_handler ni quyidagiga o'zgartiring ---
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Only in private chats
+    # Conversation davomida bo'lsa, boshqa handler ishlamasin
+    if "donate_conversation" in context.user_data:
+        return  # donate flow hali tugamagan
+
+    # Faqat private chatda ishlasin
     if update.effective_chat.type != "private":
         return
+
     if not await force_sub_if_private(update, context):
         return
+
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
-    prompt = update.message.text
+    prompt = update.message.text.strip()
     context.user_data["prompt"] = prompt
     context.user_data["translated"] = prompt
     kb = [[
@@ -312,6 +319,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
     )
+
 
 # GENERATE
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -507,7 +515,7 @@ async def broadcast_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 WAITING_AMOUNT = 1
 
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Can be triggered by /donate or donate button
+    context.user_data["donate_conversation"] = True  # 👈 qo'shildi
     if update.callback_query:
         await update.callback_query.answer()
         await update.callback_query.message.reply_text("💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):")
@@ -527,18 +535,22 @@ async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     payload = f"donate_{update.effective_user.id}_{int(time.time())}"
     prices = [LabeledPrice(f"{amount} Stars", amount * 100)]
-    # provider_token left empty for Stars / digital goods
+
+    # conversation tugadi -> flagni tozalaymiz
+    context.user_data.pop("donate_conversation", None)
+
     await context.bot.send_invoice(
         chat_id=update.effective_chat.id,
         title="💖 Bot Donation",
         description="Botni qo‘llab-quvvatlash uchun ixtiyoriy summa yuboring.",
         payload=payload,
-        provider_token="",  # Stars (XTR) -> provider_token empty
+        provider_token="",  # Stars uchun bo'sh
         currency="XTR",
         prices=prices,
         is_flexible=False
     )
     return ConversationHandler.END
+
 
 async def precheckout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.pre_checkout_query.answer(ok=True)
