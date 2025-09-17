@@ -18,7 +18,7 @@ from telegram import (
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
     CallbackQueryHandler, ContextTypes, filters,
-    PreCheckoutQueryHandler
+    PreCheckoutQueryHandler, ConversationHandler
 )
 
 # ---------------- LOG ----------------
@@ -44,9 +44,7 @@ if not DATABASE_URL:
 
 # ---------------- Helpers ----------------
 def escape_md(text: str) -> str:
-    if not text:
-        return ""
-    return re.sub(r'([_*\[\]()~>#+\-=|{}.!])', r'\\\1', text)
+    return re.sub(r'([_*\[\]()~>#+\-=|{}.!])', r'\\\1', text or "")
 
 def utc_now():
     return datetime.now(timezone.utc)
@@ -125,67 +123,55 @@ async def add_user_db(pool, tg_user):
         user = await conn.fetchrow("SELECT id FROM users WHERE id = $1", tg_user.id)
         if user:
             await conn.execute(
-                "UPDATE users SET username = $1, last_seen = $2 WHERE id = $3",
-                tg_user.username if tg_user.username else None,
-                now, tg_user.id
+                "UPDATE users SET username=$1, last_seen=$2 WHERE id=$3",
+                tg_user.username if tg_user.username else None, now, tg_user.id
             )
         else:
             await conn.execute(
                 "INSERT INTO users(id, username, first_seen, last_seen) VALUES($1,$2,$3,$4)",
-                tg_user.id,
-                tg_user.username if tg_user.username else None,
-                now,
-                now
+                tg_user.id, tg_user.username, now, now
             )
         await conn.execute(
-            "INSERT INTO sessions(user_id, started_at) VALUES($1, $2)",
+            "INSERT INTO sessions(user_id, started_at) VALUES($1,$2)",
             tg_user.id, now
         )
 
 async def log_generation(pool, tg_user, prompt, translated, image_id, count):
-    now = utc_now()
     async with pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO generations(user_id, username, prompt, translated_prompt, image_id, image_count, created_at) "
             "VALUES($1,$2,$3,$4,$5,$6,$7)",
-            tg_user.id, tg_user.username if tg_user.username else None,
-            prompt, translated, image_id, count, now
+            tg_user.id, tg_user.username, prompt, translated, image_id, count, utc_now()
         )
 
-# ---------------- Start ----------------
+# ---------------- Handlers ----------------
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    tg_user = update.effective_user
-    await add_user_db(context.application.bot_data["db_pool"], tg_user)
-    kb = [[InlineKeyboardButton("🎨 Rasm yaratishni boshlash", callback_data="start_gen")],
-          [InlineKeyboardButton("💖 Donate qilish", callback_data="donate_custom")]]
+    await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
+    kb = [
+        [InlineKeyboardButton("🎨 Rasm yaratish", callback_data="start_gen")],
+        [InlineKeyboardButton("💖 Donate qilish", callback_data="donate_custom")]
+    ]
     await update.message.reply_text(
-        "👋 Salom!\n\nMen siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.\n\n"
-        "✍️ Xohlagan narsani yozing — men uni rasmga aylantiraman.\n\n"
-        "_Misol:_ Futuristik cyberpunk shahar neon chiroqlar bilan",
+        "👋 Salom!\n\nMen siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.\n"
+        "✍️ Yozing va natijani kuting!",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
-    await update.callback_query.message.edit_text(
-        "✍️ Endi tasvir yaratish uchun matn yuboring.\n\n_Misol:_ Futuristik cyberpunk shahar neon chiroqlar bilan",
+    await update.callback_query.message.reply_text(
+        "✍️ Matn yuboring.\n\n_Misol:_ Futuristik cyberpunk shahar neon chiroqlar bilan",
         parse_mode="Markdown"
     )
+    context.user_data["awaiting_prompt"] = True
 
-# ---------------- Prompt handler ----------------
 async def get_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    tg_user = update.effective_user
-    text = update.message.text if update.message else None
-    if not text:
+    if not context.user_data.get("awaiting_prompt"):
         return
-    await add_user_db(context.application.bot_data["db_pool"], tg_user)
+    text = update.message.text
     context.user_data["prompt"] = text
     context.user_data["translated"] = text
-    await ask_image_count(update, context)
-
-async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    prompt = context.user_data.get("prompt", "")
     kb = [[
         InlineKeyboardButton("1️⃣", callback_data="count_1"),
         InlineKeyboardButton("2️⃣", callback_data="count_2"),
@@ -193,108 +179,92 @@ async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
         InlineKeyboardButton("8️⃣", callback_data="count_8"),
     ]]
     await update.message.reply_text(
-        f"🖌 Sizning matningiz:\n{escape_md(prompt)}\n\n🔢 Nechta rasm yaratilsin?",
+        f"🖌 Sizning matningiz:\n{escape_md(text)}\n\nNechta rasm yaratilsin?",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
     )
+    context.user_data["awaiting_prompt"] = False
 
-# ---------------- Generate ----------------
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    user = query.from_user
     count = int(query.data.split("_")[1])
     prompt = context.user_data.get("prompt", "")
     translated = context.user_data.get("translated", "")
+    waiting = await query.edit_message_text(f"🔄 {count} ta rasm yaratilmoqda...")
 
-    waiting_msg = await query.edit_message_text(f"🔄 Rasm yaratilmoqda ({count} ta)...⏳")
     try:
         payload = {
-            "prompt": translated,
-            "image_size": "512x512",
-            "width": 512,
-            "height": 512,
-            "lora_id": "",
-            "batch_size": count,
-            "reference_images": [],
-            "strength": ""
+            "prompt": translated, "image_size": "512x512",
+            "width": 512, "height": 512,
+            "batch_size": count, "reference_images": []
         }
         headers = get_digen_headers()
         async with aiohttp.ClientSession() as session:
             async with session.post(DIGEN_URL, headers=headers, json=payload) as r:
                 if r.status != 200:
-                    await waiting_msg.edit_text(f"❌ API xatosi: {r.status}")
+                    await waiting.edit_text(f"❌ API xatosi: {r.status}")
                     return
                 data = await r.json()
 
         image_id = data.get("data", {}).get("id")
         if not image_id:
-            await waiting_msg.edit_text("❌ Rasm ID olinmadi.")
+            await waiting.edit_text("❌ Rasm ID olinmadi.")
             return
 
         urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
-        await query.edit_message_text(f"✅ Rasm tayyor! 📸")
-        media_group = [InputMediaPhoto(url) for url in urls]
-        await query.message.reply_media_group(media_group)
-        await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
+        await waiting.edit_text("✅ Rasm tayyor!")
+        await query.message.reply_media_group([InputMediaPhoto(url) for url in urls])
+        await log_generation(context.application.bot_data["db_pool"], query.from_user, prompt, translated, image_id, count)
     except Exception as e:
-        logger.exception(f"[GENERATE ERROR] {e}")
-        await waiting_msg.edit_text("⚠️ Xatolik yuz berdi. Qaytadan urinib ko‘ring.")
+        logger.error(f"[GENERATE ERROR] {e}")
+        await waiting.edit_text("⚠️ Xatolik yuz berdi. Qayta urinib ko‘ring.")
 
-# ---------------- Donate flow ----------------
+# --------- Donate Flow ----------
+WAITING_AMOUNT = 1
+
 async def donate_custom_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    await query.message.reply_text("💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000 Stars):")
-    return "WAITING_AMOUNT"
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.message.reply_text("💰 Yubormoqchi bo‘lgan miqdorni kiriting (1–100000 Stars):")
+    else:
+        await update.message.reply_text("💰 Yubormoqchi bo‘lgan miqdorni kiriting (1–100000 Stars):")
+    return WAITING_AMOUNT
 
 async def donate_custom_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
     try:
-        amount = int(text)
+        amount = int(update.message.text)
         if amount < 1 or amount > 100000:
             raise ValueError
     except ValueError:
-        await update.message.reply_text("❌ Iltimos, 1–100000 oralig‘ida raqam kiriting.")
-        return "WAITING_AMOUNT"
+        await update.message.reply_text("❌ 1–100000 oralig‘ida raqam kiriting.")
+        return WAITING_AMOUNT
 
-    user = update.effective_user
-    chat_id = update.effective_chat.id
-    payload = f"donate_{user.id}_{int(time.time())}"
-
+    payload = f"donate_{update.effective_user.id}_{int(time.time())}"
     prices = [LabeledPrice(f"{amount} Stars", amount * 100)]
     await context.bot.send_invoice(
-        chat_id=chat_id,
+        chat_id=update.effective_chat.id,
         title="💖 Bot Donation",
         description="Botni qo‘llab-quvvatlash uchun ixtiyoriy summa yuboring.",
         payload=payload,
-        provider_token="",  # digital goods
+        provider_token="",
         currency="XTR",
-        prices=prices,
-        is_flexible=False
+        prices=prices
     )
-    return -1
+    return ConversationHandler.END
 
 async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.pre_checkout_query
-    await query.answer(ok=True)
+    await update.pre_checkout_query.answer(ok=True)
 
 async def successful_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     payment = update.message.successful_payment
-    user = update.effective_user
-    chat_id = update.effective_chat.id
-    amount_stars = payment.total_amount // 100
-    payload = payment.invoice_payload
-
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=f"✅ Rahmat {user.first_name}! Siz {amount_stars} Stars yubordingiz."
-    )
+    stars = payment.total_amount // 100
+    await update.message.reply_text(f"✅ Rahmat! {stars} Stars yubordingiz.")
     pool = context.application.bot_data["db_pool"]
     async with pool.acquire() as conn:
         await conn.execute(
-            "INSERT INTO donations(user_id, username, stars, payload, created_at) VALUES($1,$2,$3,$4,now())",
-            user.id, user.username if user.username else None, amount_stars, payload
+            "INSERT INTO donations(user_id, username, stars, payload) VALUES($1,$2,$3,$4)",
+            update.effective_user.id, update.effective_user.username, stars, payment.invoice_payload
         )
 
 # ---------------- Main ----------------
@@ -305,27 +275,25 @@ async def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.bot_data["db_pool"] = pool
 
-    # Command handlers
+    # Handlers
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
-
+    app.add_handler(CallbackQueryHandler(generate, pattern=r"count_\d+"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, get_prompt))
 
-    # Image count selection
-    app.add_handler(CallbackQueryHandler(generate, pattern=r"count_\d+"))
-
     # Donate
-    app.add_handler(CommandHandler("donate", donate_custom_prompt))
-    app.add_handler(CallbackQueryHandler(donate_custom_prompt, pattern="donate_custom"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, donate_custom_amount))
+    donate_conv = ConversationHandler(
+        entry_points=[CommandHandler("donate", donate_custom_prompt),
+                      CallbackQueryHandler(donate_custom_prompt, pattern="donate_custom")],
+        states={WAITING_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, donate_custom_amount)]},
+        fallbacks=[]
+    )
+    app.add_handler(donate_conv)
 
-    # Payments
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
-    await app.start()
-    await app.updater.start_polling()
-    await app.idle()
+    app.run_polling()
 
 if __name__ == "__main__":
     asyncio.run(main())
