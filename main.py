@@ -309,33 +309,25 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 data = await r.json()
 
         image_id = data.get("data", {}).get("id")
-        if not image_id:
-            await waiting_msg.edit_text("❌ Rasm ID olinmadi.")
+        urls = data.get("data", {}).get("urls", [])
+        if not image_id or not urls:
+            await waiting_msg.edit_text("❌ Rasm ID yoki URL olinmadi.")
             return
 
-try:
-    last_progress = -1
-    progress = 0
+        # ---------------- Progress bar ----------------
+        last_progress = -1
+        progress = 0
+        while progress < 100:
+            progress = min(progress + 15, 95)
+            if progress != last_progress:
+                bar = "▰" * (progress // 10) + "▱" * (10 - progress // 10)
+                await waiting_msg.edit_text(
+                    f"🔄 Rasm yaratilmoqda ({count} ta):\n{bar} {progress}%"
+                )
+                last_progress = progress
+            await asyncio.sleep(1)
 
-    while progress < 100:
-        progress = min(progress + 15, 95)
-        if progress != last_progress:
-            bar = "▰" * (progress // 10) + "▱" * (10 - progress // 10)
-            await waiting_msg.edit_text(f"🔄 Rasm yaratilmoqda ({count} ta):\n{bar} {progress}%")
-            last_progress = progress
-        await asyncio.sleep(1)
-
-except Exception as e:
-    logger.error(f"Xatolik progress loop: {e}")
-    
-            async with aiohttp.ClientSession() as check_session:
-                try:
-                    async with check_session.get(urls[0]) as check:
-                        if check.status == 200:
-                            break
-                except Exception:
-                    pass
-
+        # ---------------- Done ----------------
         await waiting_msg.edit_text(f"✅ Rasm tayyor! 📸", parse_mode="Markdown")
         media_group = [InputMediaPhoto(url) for url in urls]
         await query.message.reply_media_group(media_group)
