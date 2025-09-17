@@ -259,7 +259,7 @@ async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["translated"] = translated
 
     kb = [[
-        InlineKeyboardButton("1️⃣", callback_data="count_1"),
+        InlineKeyboardButton("1️⃣", callback_data="count_15"),
         InlineKeyboardButton("2️⃣", callback_data="count_2"),
         InlineKeyboardButton("4️⃣", callback_data="count_4"),
         InlineKeyboardButton("8️⃣", callback_data="count_8"),
