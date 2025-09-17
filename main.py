@@ -142,20 +142,23 @@ async def prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # DM: har qanday matn prompt
     if chat_type == "private":
         prompt = text
-    # Group: faqat /get bilan boshlangan prompt
+    # Group: faqat /get yoki /get@BotUsername bilan boshlangan prompt
     elif chat_type in ["group", "supergroup"]:
         if not text.lower().startswith("/get"):
             return
-        prompt = text.partition(" ")[2].strip()
-        if not prompt:
+        # /get yoki /get@BotUsername dan keyin promptni ajratish
+        parts = text.split(maxsplit=1)
+        if len(parts) < 2:
             await update.message.reply_text("❌ /get dan keyin prompt yozing")
             return
+        prompt = parts[1].strip()
     else:
         return
 
     await add_user_db(context.application.bot_data["db_pool"], tg_user)
     context.user_data["prompt"] = prompt
     await ask_image_count(update, context)
+
 
 async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = context.user_data.get("prompt", "")
