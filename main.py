@@ -83,7 +83,12 @@ async def force_sub_required(update: Update, context: ContextTypes.DEFAULT_TYPE)
     subscribed = await check_subscription(user_id, context)
 
     if not subscribed:
-        kb = [[InlineKeyboardButton("🔗 Obuna bo‘lish", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")]]
+        kb = [[
+            InlineKeyboardButton("🔗 Obuna bo‘lish", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}"),
+        ], [
+            InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")
+        ]]
+
         if update.callback_query:
             await update.callback_query.answer()
             await update.callback_query.message.reply_text(
@@ -97,6 +102,25 @@ async def force_sub_required(update: Update, context: ContextTypes.DEFAULT_TYPE)
             )
         return False
     return True
+
+# 🔹 Tekshirish tugmasi uchun handler
+async def check_sub_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+
+    if await check_subscription(user_id, context):
+        await query.edit_message_text("✅ Rahmat! Siz obuna bo‘lgansiz. Endi botdan foydalanishingiz mumkin.")
+    else:
+        kb = [[
+            InlineKeyboardButton("🔗 Obuna bo‘lish", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}"),
+        ], [
+            InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")
+        ]]
+        await query.edit_message_text(
+            "⛔ Hali ham obuna bo‘lmadingiz. Obuna bo‘lib, qayta tekshiring.",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
 
 # ----------------------- TARJIMA -----------------------
 async def translate_prompt(prompt: str) -> str:
@@ -277,6 +301,7 @@ def main():
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
     app.add_handler(CallbackQueryHandler(generate, pattern="count_"))
+    app.add_handler(CallbackQueryHandler(check_sub_button, pattern="check_sub"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ask_image_count))
     app.run_polling()
 
