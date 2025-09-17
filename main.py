@@ -199,6 +199,7 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     count = int(query.data.split("_")[1])
     prompt = context.user_data.get("prompt", "")
     translated = context.user_data.get("translated", "")
+    user = query.from_user  # 🔑 foydalanuvchi ma'lumotlari
 
     waiting_msg = await query.edit_message_text(
         f"🔄 Rasm yaratilmoqda ({count} ta)...\n0% ⏳", parse_mode="Markdown"
@@ -228,7 +229,6 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await waiting_msg.edit_text("❌ Rasm ID olinmadi.")
             return
 
-        # Progress bar + har 1 sekundda tekshirish
         progress = 0
         while True:
             progress = min(progress + 15, 95)
@@ -246,10 +246,27 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         media_group = [InputMediaPhoto(url) for url in urls]
         await query.message.reply_media_group(media_group)
 
+        # 🔥 ADMINGA XABAR YUBORISH
+        admin_caption = (
+            f"👤 *Yangi generatsiya:*\n"
+            f"🆔 ID: `{user.id}`\n"
+            f"👤 Username: @{user.username if user.username else '❌ yo‘q'}\n"
+            f"✍️ Prompt: {escape_md(prompt)}\n"
+            f"🌎 Tarjima: {escape_md(translated)}\n"
+            f"📸 {count} ta rasm"
+        )
+        try:
+            await context.bot.send_media_group(
+                chat_id=ADMIN_ID,
+                media=[InputMediaPhoto(urls[0], caption=admin_caption, parse_mode="Markdown")] +
+                      [InputMediaPhoto(u) for u in urls[1:]]
+            )
+        except Exception as e:
+            logger.error(f"❌ Admin xabari yuborilmadi: {e}")
+
     except Exception as e:
         logger.error(f"Xatolik: {e}")
         await waiting_msg.edit_text("⚠️ Xatolik yuz berdi. Qaytadan urinib ko‘ring.")
-
 # ----------------------- ADMIN -----------------------
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
