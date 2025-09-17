@@ -313,16 +313,21 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await waiting_msg.edit_text("❌ Rasm ID olinmadi.")
             return
 
-        last_progress = -1
+try:
+    last_progress = -1
+    progress = 0
 
-while progress < 100:
-    progress = min(progress + 15, 95)
-    if progress != last_progress:
-        bar = "▰" * (progress // 10) + "▱" * (10 - progress // 10)
-        await waiting_msg.edit_text(f"🔄 Rasm yaratilmoqda ({count} ta):\n{bar} {progress}%")
-        last_progress = progress
-    await asyncio.sleep(1)
+    while progress < 100:
+        progress = min(progress + 15, 95)
+        if progress != last_progress:
+            bar = "▰" * (progress // 10) + "▱" * (10 - progress // 10)
+            await waiting_msg.edit_text(f"🔄 Rasm yaratilmoqda ({count} ta):\n{bar} {progress}%")
+            last_progress = progress
+        await asyncio.sleep(1)
 
+except Exception as e:
+    logger.error(f"Xatolik progress loop: {e}")
+    
             async with aiohttp.ClientSession() as check_session:
                 try:
                     async with check_session.get(urls[0]) as check:
