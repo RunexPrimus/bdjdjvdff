@@ -1,4 +1,4 @@
-# bot_postgres.py
+# bot_postgres_universal.py
 import logging
 import aiohttp
 import asyncio
@@ -33,13 +33,14 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", "7440949683"))
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@SizningKanal")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1001234567890"))
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
-_key_cycle = itertools.cycle(DIGEN_KEYS)
 DIGEN_URL = "https://api.digen.ai/v2/tools/text_to_image"
-DATABASE_URL = os.getenv("DATABASE_URL")  # PostgreSQL connection string (Railway)
+DATABASE_URL = os.getenv("DATABASE_URL")  # PostgreSQL connection string
 
 if not DATABASE_URL:
     logger.error("❌ Please set DATABASE_URL environment variable (Postgres).")
     raise SystemExit(1)
+
+_key_cycle = itertools.cycle(DIGEN_KEYS)
 
 # ---------------- Helpers ----------------
 def escape_md(text: str) -> str:
@@ -85,7 +86,6 @@ CREATE TABLE IF NOT EXISTS generations (
 async def init_db(pool):
     async with pool.acquire() as conn:
         await conn.execute(CREATE_TABLES_SQL)
-        # ensure start_time exists
         row = await conn.fetchrow("SELECT value FROM meta WHERE key = 'start_time'")
         if not row:
             await conn.execute(
@@ -155,13 +155,12 @@ async def check_sub_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")
         ]]
         await query.edit_message_text(
-            "⛔ Hali ham obuna bo‘lmadingiz. Obuna bo‘lib, qayta tekshiring.",
+            "⛔ Hali ham obuna bo‘lmadiz. Obuna bo‘lib, qayta tekshiring.",
             reply_markup=InlineKeyboardMarkup(kb)
         )
 
 # ---------------- User/session functions (DB) ----------------
 async def add_user_db(pool, tg_user):
-    """Add or update user and insert a session row."""
     now = utc_now()
     async with pool.acquire() as conn:
         user = await conn.fetchrow("SELECT id FROM users WHERE id = $1", tg_user.id)
@@ -246,17 +245,32 @@ async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ---------------- Universal prompt handler ----------------
+async def prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_type = update.effective_chat.type
+    tg_user = update.effective_user
+
+    if chat_type in ["group", "supergroup"]:
+        # guruhda faqat /get prefiksi bilan ishlaydi
+        if not update.message.text.startswith("/get"):
+            return
+        context.args = update.message.text.split()[1:]  # /get dan keyingi matn
+        prompt = " ".join(context.args)
+    else:
+        # DM va normal chat
+        prompt = update.message.text
+
+    if not prompt:
+        await update.message.reply_text("❌ Iltimos, prompt matnini kiriting.")
+        return
+
     if not await force_sub_required(update, context):
         return
-    await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
 
-    prompt = update.message.text
-    # translation removed per your request — we will use prompt as-is
-    translated = prompt
+    await add_user_db(context.application.bot_data["db_pool"], tg_user)
 
     context.user_data["prompt"] = prompt
-    context.user_data["translated"] = translated
+    context.user_data["translated"] = prompt  # tarjima kerak bo'lmasa shunday
 
     kb = [[
         InlineKeyboardButton("1️⃣", callback_data="count_1"),
@@ -272,6 +286,7 @@ async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
+# ---------------- Generation ----------------
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await force_sub_required(update, context):
         return
@@ -315,7 +330,6 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         progress = 0
         urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
-        # simple polling for first image availability
         while True:
             progress = min(progress + 15, 95)
             bar = "▰" * (progress // 10) + "▱" * (10 - progress // 10)
@@ -336,7 +350,7 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # log generation to DB
         await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
 
-        # send admin notification (media group with caption on first)
+        # send admin notification
         admin_caption = (
             f"👤 *Yangi generatsiya:*\n"
             f"🆔 ID: `{user.id}`\n"
@@ -365,11 +379,9 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     weekly_u = await get_active_users_count(pool, 7)
     monthly_u = await get_active_users_count(pool, 30)
     yearly_u = await get_active_users_count(pool, 365)
-
     daily_s = await get_sessions_count(pool, 1)
     weekly_s = await get_sessions_count(pool, 7)
     monthly_s = await get_sessions_count(pool, 30)
-
     start_ts = await get_start_time(pool)
     uptime_seconds = int(time.time() - start_ts)
     uptime = f"{uptime_seconds // 3600} soat {(uptime_seconds % 3600) // 60} daqiqa"
@@ -392,20 +404,17 @@ async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
     latency = (end - start) * 1000
     await msg.edit_text(f"🏓 *Pong!* `{int(latency)} ms`", parse_mode="Markdown")
 
-# ---------------- Admin broadcast ----------------
+# ---------------- Admin ----------------
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Ruxsat yo‘q.")
-
     pool = context.application.bot_data["db_pool"]
-    # fetch all user ids
     async with pool.acquire() as conn:
         rows = await conn.fetch("SELECT id FROM users")
         user_ids = [r["id"] for r in rows]
 
     count = 0
     if update.message.photo:
-        # photo + optional caption
         file_id = update.message.photo[-1].file_id
         caption = update.message.caption or ""
         for uid in user_ids:
@@ -432,13 +441,11 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Ruxsat yo‘q.")
-    # show loaded DIGEN keys count
     keys_info = "\n".join([f"• {k.get('token','')[:10]}... | {k.get('session','')[:8]}..." for k in DIGEN_KEYS])
     await update.message.reply_text(f"📊 *Yuklangan kalitlar:* {len(DIGEN_KEYS)}\n{keys_info}", parse_mode="Markdown")
 
 # ---------------- Startup / main ----------------
 async def on_startup(app: Application):
-    # create asyncpg pool and store to app.bot_data
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
     app.bot_data["db_pool"] = pool
     await init_db(pool)
@@ -446,19 +453,22 @@ async def on_startup(app: Application):
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
-    # register startup
     app.post_init = on_startup
 
+    # Commands
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("admin", admin_info))
     app.add_handler(CommandHandler("broadcast", broadcast))
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("ping", ping))
 
+    # Callback buttons
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
     app.add_handler(CallbackQueryHandler(generate, pattern="count_"))
     app.add_handler(CallbackQueryHandler(check_sub_button, pattern="check_sub"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ask_image_count))
+
+    # Universal text handler
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, prompt_handler))
 
     app.run_polling()
 
