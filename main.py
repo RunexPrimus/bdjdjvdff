@@ -295,13 +295,20 @@ async def main():
 
     app.run_polling()
 
+def main():
+    app = Application.builder().token(BOT_TOKEN).build()
+    app.post_init = on_startup
+
+    app.add_handler(CommandHandler("start", start_handler))
+    app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
+    app.add_handler(CallbackQueryHandler(generate, pattern="count_"))
+    app.add_handler(CallbackQueryHandler(check_sub_button, pattern="check_sub"))
+    app.add_handler(CommandHandler("get", get_prompt))  # /get universal
+
+    # Catch plain messages for private chat
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, get_prompt))
+
+    app.run_polling()
+
 if __name__ == "__main__":
-    app = Application.builder().token(TOKEN).build()
-
-    # Handlerlarni shu yerda qo‘sh
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("get", handle_prompt))
-    # boshqa handlerlar...
-
-    app.run_polling()  # ✅ Asinxron emas, o‘zi loopni boshqaradi
-
+    main()
