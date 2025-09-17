@@ -344,6 +344,18 @@ async def on_startup(app: Application):
     logger.info("✅ DB initialized and pool created.")
 
 # ---------------- Main ----------------
+# ---------------- Admin info ----------------
+async def admin_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return await update.message.reply_text("⛔ Ruxsat yo‘q.")
+
+    # show loaded DIGEN keys count
+    keys_info = "\n".join([f"• {k.get('token','')[:10]}... | {k.get('session','')[:8]}..." for k in DIGEN_KEYS])
+    await update.message.reply_text(
+        f"📊 *Yuklangan kalitlar:* {len(DIGEN_KEYS)}\n{keys_info}",
+        parse_mode="Markdown"
+    )
+
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.post_init = on_startup
