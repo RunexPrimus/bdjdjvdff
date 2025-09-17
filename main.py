@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "7440949683"))
 
+CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@SizningKanal")  # majburiy kanal
+CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1001234567890"))
+
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
 _key_cycle = itertools.cycle(DIGEN_KEYS)
 DIGEN_URL = "https://api.digen.ai/v2/tools/text_to_image"
@@ -66,9 +69,38 @@ def get_digen_headers():
 def escape_md(text: str) -> str:
     return re.sub(r'([_*\[\]()~>#+\-=|{}.!])', r'\\\1', text)
 
+# ----------------------- FORCE SUB -----------------------
+async def check_subscription(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    try:
+        member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
+        return member.status in ["member", "administrator", "creator"]
+    except Exception as e:
+        logger.error(f"❌ [SUB CHECK ERROR] {type(e).__name__}: {e}")
+        return False
+
+async def force_sub_required(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    user_id = update.effective_user.id
+    subscribed = await check_subscription(user_id, context)
+
+    if not subscribed:
+        kb = [[InlineKeyboardButton("🔗 Obuna bo‘lish", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")]]
+        if update.callback_query:
+            await update.callback_query.answer()
+            await update.callback_query.message.reply_text(
+                "⛔ Botdan foydalanish uchun kanalimizga obuna bo‘ling!",
+                reply_markup=InlineKeyboardMarkup(kb)
+            )
+        else:
+            await update.message.reply_text(
+                "⛔ Botdan foydalanish uchun kanalimizga obuna bo‘ling!",
+                reply_markup=InlineKeyboardMarkup(kb)
+            )
+        return False
+    return True
+
+# ----------------------- TARJIMA -----------------------
 async def translate_prompt(prompt: str) -> str:
     logger.info(f"🔍 [TRANSLATE] Original prompt: {prompt}")
-
     try:
         result = await asyncio.to_thread(
             GoogleTranslator(source="uz", target="en").translate, prompt
@@ -77,18 +109,14 @@ async def translate_prompt(prompt: str) -> str:
         return result
     except Exception as e:
         logger.error(f"❌ [TRANSLATE ERROR] {type(e).__name__}: {e}")
-        return prompt
-
-
-    except Exception as e:
-        # Xato bo‘lsa hamma ma’lumotlarni chiqaramiz
-        logger.error(f"❌ [TRANSLATE ERROR] Xato turi: {type(e).__name__} | Xabar: {e}")
         logger.warning("⚠️ Tarjima ishlamadi, original prompt ishlatilmoqda.")
         return prompt
 
-
 # ----------------------- HANDLERS -----------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await force_sub_required(update, context):
+        return
+
     user = update.effective_user
     add_user(user.id)
 
@@ -103,6 +131,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await force_sub_required(update, context):
+        return
+
     await update.callback_query.answer()
     await update.callback_query.message.edit_text(
         "✍️ Endi tasvir yaratish uchun matn yuboring.\n\n_Misol:_ Futuristik cyberpunk shahar neon chiroqlar bilan",
@@ -110,6 +141,9 @@ async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await force_sub_required(update, context):
+        return
+
     prompt = update.message.text
     translated = await translate_prompt(prompt)
 
@@ -132,6 +166,9 @@ async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await force_sub_required(update, context):
+        return
+
     query = update.callback_query
     await query.answer()
 
@@ -175,7 +212,6 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await waiting_msg.edit_text(f"🔄 Rasm yaratilmoqda ({count} ta):\n{bar} {progress}%", parse_mode="Markdown")
             await asyncio.sleep(1)
 
-            # Har 1 sekundda tayyor-yo‘qligini tekshiradi
             urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
             async with aiohttp.ClientSession() as check_session:
                 async with check_session.get(urls[0]) as check:
@@ -186,21 +222,11 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         media_group = [InputMediaPhoto(url) for url in urls]
         await query.message.reply_media_group(media_group)
 
-        # Admin xabari
-        username = f"@{query.from_user.username}" if query.from_user.username else "Ismi yo'q"
-        admin_caption = (
-            f"👤 Foydalanuvchi: {query.from_user.id} | {username}\n"
-            f"🖌 Matn: {escape_md(prompt)}\n"
-            f"🌎 Tarjima: {escape_md(translated)}"
-        )
-
-        await context.bot.send_media_group(ADMIN_ID, media_group)
-        await context.bot.send_message(ADMIN_ID, admin_caption, parse_mode="Markdown")
-
     except Exception as e:
         logger.error(f"Xatolik: {e}")
         await waiting_msg.edit_text("⚠️ Xatolik yuz berdi. Qaytadan urinib ko‘ring.")
 
+# ----------------------- ADMIN -----------------------
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Ruxsat yo‘q.")
