@@ -144,6 +144,7 @@ async def check_sub_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
+
     if await check_subscription(user_id, context):
         await query.edit_message_text("✅ Rahmat! Siz obuna bo‘lgansiz. Endi botdan foydalanishingiz mumkin.")
     else:
@@ -153,11 +154,11 @@ async def check_sub_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")
         ]]
         await query.edit_message_text(
-            "⛔ Hali ham obuna bo‘lmadiz. Obuna bo‘lib, qayta tekshiring.",
+            "⛔ Hali ham obuna bo‘lmadingiz. Obuna bo‘lib, qayta tekshiring.",
             reply_markup=InlineKeyboardMarkup(kb)
         )
 
-# ---------------- User/session functions ----------------
+# ---------------- User/session functions (DB) ----------------
 async def add_user_db(pool, tg_user):
     now = utc_now()
     async with pool.acquire() as conn:
@@ -191,7 +192,7 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
             prompt, translated, image_id, count, now
         )
 
-# ---------------- Handlers ----------------
+# ---------------- Start handler ----------------
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await force_sub_required(update, context):
         return
@@ -208,6 +209,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
+# ---------------- Generate handlers ----------------
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await force_sub_required(update, context):
         return
@@ -218,27 +220,25 @@ async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-# ---------------- Prompt handler (DM yoki /get guruhda) ----------------
-async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # DM
-    chat_type = update.effective_chat.type
-    text = update.message.text
-
-    if chat_type in ["group", "supergroup"]:
-        # guruhda faqat /get bilan boshlansa qabul qilamiz
-        if not text.startswith("/get"):
-            return  # oddiy guruh matniga javob bermaymiz
-        text = text[4:].strip()  # /get dan keyin prompt
-        if not text:
-            await update.message.reply_text("⚠️ /get dan keyin matn kiriting.")
+async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type == "group":
+        # only respond if starts with /get
+        if not update.message.text.lower().startswith("/get"):
             return
+        prompt = update.message.text[4:].strip()
+    else:
+        prompt = update.message.text
+
+    if not prompt:
+        return
 
     if not await force_sub_required(update, context):
         return
-
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
-    context.user_data["prompt"] = text
-    context.user_data["translated"] = text  # translation removed
+
+    translated = prompt
+    context.user_data["prompt"] = prompt
+    context.user_data["translated"] = translated
 
     kb = [[
         InlineKeyboardButton("1️⃣", callback_data="count_1"),
@@ -246,14 +246,14 @@ async def handle_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         InlineKeyboardButton("4️⃣", callback_data="count_4"),
         InlineKeyboardButton("8️⃣", callback_data="count_8"),
     ]]
+
     await update.message.reply_text(
-        f"🖌 *Sizning matningiz:*\n{escape_md(text)}\n\n"
+        f"🖌 *Sizning matningiz:*\n{escape_md(prompt)}\n\n"
         f"🔢 Nechta rasm yaratilsin?",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
-# ---------------- Generation ----------------
 async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await force_sub_required(update, context):
         return
@@ -336,6 +336,33 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.exception(f"Xatolik generate(): {e}")
         await waiting_msg.edit_text("⚠️ Xatolik yuz berdi. Qaytadan urinib ko‘ring.")
 
+# ---------------- Admin commands ----------------
+async def admin_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return await update.message.reply_text("⛔ Ruxsat yo‘q.")
+    keys_info = "\n".join([f"• {k.get('token','')[:10]}... | {k.get('session','')[:8]}..." for k in DIGEN_KEYS])
+    await update.message.reply_text(f"📊 *Yuklangan kalitlar:* {len(DIGEN_KEYS)}\n{keys_info}", parse_mode="Markdown")
+
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return await update.message.reply_text("⛔ Ruxsat yo‘q.")
+    pool = context.application.bot_data["db_pool"]
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT id FROM users")
+        user_ids = [r["id"] for r in rows]
+
+    text = " ".join(context.args)
+    if not text:
+        return await update.message.reply_text("✍️ Foydalanish: /broadcast <xabar> (yoki rasm bilan yuboring)")
+    count = 0
+    for uid in user_ids:
+        try:
+            await context.bot.send_message(uid, text, parse_mode="Markdown")
+            count += 1
+        except Exception:
+            continue
+    await update.message.reply_text(f"✅ {count} foydalanuvchiga xabar yuborildi.")
+
 # ---------------- Startup ----------------
 async def on_startup(app: Application):
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
@@ -343,35 +370,18 @@ async def on_startup(app: Application):
     await init_db(pool)
     logger.info("✅ DB initialized and pool created.")
 
-# ---------------- Main ----------------
-# ---------------- Admin info ----------------
-async def admin_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return await update.message.reply_text("⛔ Ruxsat yo‘q.")
-
-    # show loaded DIGEN keys count
-    keys_info = "\n".join([f"• {k.get('token','')[:10]}... | {k.get('session','')[:8]}..." for k in DIGEN_KEYS])
-    await update.message.reply_text(
-        f"📊 *Yuklangan kalitlar:* {len(DIGEN_KEYS)}\n{keys_info}",
-        parse_mode="Markdown"
-    )
-
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     app.post_init = on_startup
 
+    # Handlers
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("admin", admin_info))
     app.add_handler(CommandHandler("broadcast", broadcast))
-    app.add_handler(CommandHandler("stats", stats))
-    app.add_handler(CommandHandler("ping", ping))
-
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
     app.add_handler(CallbackQueryHandler(generate, pattern="count_"))
     app.add_handler(CallbackQueryHandler(check_sub_button, pattern="check_sub"))
-
-    # Universal prompt handler
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_prompt))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ask_image_count))
 
     app.run_polling()
 
