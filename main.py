@@ -268,6 +268,7 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
         )
 
 # ---------------- Main ----------------
+# ---------------- Main ----------------
 async def main():
     pool = await asyncpg.create_pool(DATABASE_URL)
     await init_db(pool)
@@ -293,22 +294,8 @@ async def main():
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
-    app.run_polling()
-
-def main():
-    app = Application.builder().token(BOT_TOKEN).build()
-    app.post_init = on_startup
-
-    app.add_handler(CommandHandler("start", start_handler))
-    app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
-    app.add_handler(CallbackQueryHandler(generate, pattern="count_"))
-    app.add_handler(CallbackQueryHandler(check_sub_button, pattern="check_sub"))
-    app.add_handler(CommandHandler("get", get_prompt))  # /get universal
-
-    # Catch plain messages for private chat
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, get_prompt))
-
-    app.run_polling()
+    await app.run_polling()  # ✅ asyncio-compatible run_polling
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())  # ✅ async main() ni ishga tushiramiz
+
