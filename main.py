@@ -259,7 +259,7 @@ async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["translated"] = translated
 
     kb = [[
-        InlineKeyboardButton("1️⃣", callback_data="count_15"),
+        InlineKeyboardButton("1️⃣", callback_data="count_1"),
         InlineKeyboardButton("2️⃣", callback_data="count_2"),
         InlineKeyboardButton("4️⃣", callback_data="count_4"),
         InlineKeyboardButton("8️⃣", callback_data="count_8"),
@@ -309,25 +309,26 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 data = await r.json()
 
         image_id = data.get("data", {}).get("id")
-        urls = data.get("data", {}).get("urls", [])
-        if not image_id or not urls:
-            await waiting_msg.edit_text("❌ Rasm ID yoki URL olinmadi.")
+        if not image_id:
+            await waiting_msg.edit_text("❌ Rasm ID olinmadi.")
             return
 
-        # ---------------- Progress bar ----------------
-        last_progress = -1
         progress = 0
-        while progress < 100:
+        urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
+        # simple polling for first image availability
+        while True:
             progress = min(progress + 15, 95)
-            if progress != last_progress:
-                bar = "▰" * (progress // 10) + "▱" * (10 - progress // 10)
-                await waiting_msg.edit_text(
-                    f"🔄 Rasm yaratilmoqda ({count} ta):\n{bar} {progress}%"
-                )
-                last_progress = progress
+            bar = "▰" * (progress // 10) + "▱" * (10 - progress // 10)
+            await waiting_msg.edit_text(f"🔄 Rasm yaratilmoqda ({count} ta):\n{bar} {progress}%", parse_mode="Markdown")
             await asyncio.sleep(1)
+            async with aiohttp.ClientSession() as check_session:
+                try:
+                    async with check_session.get(urls[0]) as check:
+                        if check.status == 200:
+                            break
+                except Exception:
+                    pass
 
-        # ---------------- Done ----------------
         await waiting_msg.edit_text(f"✅ Rasm tayyor! 📸", parse_mode="Markdown")
         media_group = [InputMediaPhoto(url) for url in urls]
         await query.message.reply_media_group(media_group)
