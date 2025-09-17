@@ -6,6 +6,8 @@ import os
 import json
 import itertools
 import random
+import time
+from datetime import datetime, timedelta
 from deep_translator import GoogleTranslator
 from telegram import (
     Update, InlineKeyboardMarkup, InlineKeyboardButton,
@@ -41,16 +43,34 @@ if not os.path.exists(USERS_FILE):
 
 # ----------------------- USERLAR -----------------------
 def add_user(user_id):
+    now = int(time.time())
     with open(USERS_FILE, "r+") as f:
         data = json.load(f)
-        if user_id not in data:
-            data.append(user_id)
-            f.seek(0)
-            json.dump(data, f)
+        found = False
+        for u in data:
+            if isinstance(u, dict) and u.get("id") == user_id:
+                u["last_seen"] = now
+                found = True
+                break
+            elif u == user_id:  # eski formatdan o'tish
+                found = True
+                data.remove(u)
+                data.append({"id": user_id, "last_seen": now})
+                break
+        if not found:
+            data.append({"id": user_id, "last_seen": now})
+        f.seek(0)
+        json.dump(data, f)
+        f.truncate()
 
 def get_all_users():
     with open(USERS_FILE, "r") as f:
         return json.load(f)
+
+def get_active_users(days: int):
+    users = get_all_users()
+    cutoff = int(time.time()) - days * 86400
+    return len([u for u in users if isinstance(u, dict) and u["last_seen"] >= cutoff])
 
 # ----------------------- HEADER -----------------------
 def get_digen_headers():
@@ -103,7 +123,6 @@ async def force_sub_required(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return False
     return True
 
-# 🔹 Tekshirish tugmasi uchun handler
 async def check_sub_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -133,7 +152,6 @@ async def translate_prompt(prompt: str) -> str:
         return result
     except Exception as e:
         logger.error(f"❌ [TRANSLATE ERROR] {type(e).__name__}: {e}")
-        logger.warning("⚠️ Tarjima ishlamadi, original prompt ishlatilmoqda.")
         return prompt
 
 # ----------------------- HANDLERS -----------------------
@@ -158,6 +176,7 @@ async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await force_sub_required(update, context):
         return
 
+    add_user(update.effective_user.id)
     await update.callback_query.answer()
     await update.callback_query.message.edit_text(
         "✍️ Endi tasvir yaratish uchun matn yuboring.\n\n_Misol:_ Futuristik cyberpunk shahar neon chiroqlar bilan",
@@ -168,6 +187,7 @@ async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await force_sub_required(update, context):
         return
 
+    add_user(update.effective_user.id)
     prompt = update.message.text
     translated = await translate_prompt(prompt)
 
@@ -195,11 +215,11 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = update.callback_query
     await query.answer()
+    user = query.from_user
 
     count = int(query.data.split("_")[1])
     prompt = context.user_data.get("prompt", "")
     translated = context.user_data.get("translated", "")
-    user = query.from_user  # 🔑 foydalanuvchi ma'lumotlari
 
     waiting_msg = await query.edit_message_text(
         f"🔄 Rasm yaratilmoqda ({count} ta)...\n0% ⏳", parse_mode="Markdown"
@@ -267,17 +287,51 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Xatolik: {e}")
         await waiting_msg.edit_text("⚠️ Xatolik yuz berdi. Qaytadan urinib ko‘ring.")
+
+# ----------------------- STATS & PING -----------------------
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    users = get_all_users()
+    total_users = len(users)
+    daily = get_active_users(1)
+    weekly = get_active_users(7)
+    monthly = get_active_users(30)
+    yearly = get_active_users(365)
+
+    uptime_seconds = int(time.time() - context.bot_data.get("start_time", time.time()))
+    uptime = f"{uptime_seconds // 3600} soat {(uptime_seconds % 3600) // 60} daqiqa"
+
+    await update.message.reply_text(
+        f"📊 *Bot statistikasi:*\n"
+        f"👥 Umumiy foydalanuvchilar: {total_users}\n"
+        f"📅 24 soat: {daily} | 7 kun: {weekly} | 30 kun: {monthly} | 365 kun: {yearly}\n"
+        f"⏱ Ish vaqti: {uptime}",
+        parse_mode="Markdown"
+    )
+
+async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    start = time.time()
+    msg = await update.message.reply_text("🏓 Ping o‘lchanmoqda...")
+    end = time.time()
+    latency = (end - start) * 1000
+    await msg.edit_text(f"🏓 *Pong!* `{int(latency)} ms`", parse_mode="Markdown")
+
 # ----------------------- ADMIN -----------------------
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return await update.message.reply_text("⛔ Ruxsat yo‘q.")
 
+    users = get_all_users()
+    count = 0
+
     if update.message.photo:
-        users = get_all_users()
-        count = 0
-        for user_id in users:
+        for user in users:
             try:
-                await context.bot.send_photo(user_id, update.message.photo[-1].file_id, caption=update.message.caption or "")
+                await context.bot.send_photo(
+                    user["id"],
+                    update.message.photo[-1].file_id,
+                    caption=update.message.caption or "",
+                    parse_mode="Markdown"
+                )
                 count += 1
             except:
                 continue
@@ -287,11 +341,9 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not text:
         return await update.message.reply_text("✍️ Foydalanish: /broadcast <xabar>")
 
-    users = get_all_users()
-    count = 0
-    for user_id in users:
+    for user in users:
         try:
-            await context.bot.send_message(user_id, text)
+            await context.bot.send_message(user["id"], text, parse_mode="Markdown")
             count += 1
         except:
             continue
@@ -311,11 +363,17 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+# ----------------------- MAIN -----------------------
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
+    app.bot_data["start_time"] = time.time()
+
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin))
     app.add_handler(CommandHandler("broadcast", broadcast))
+    app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("ping", ping))
+
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
     app.add_handler(CallbackQueryHandler(generate, pattern="count_"))
     app.add_handler(CallbackQueryHandler(check_sub_button, pattern="check_sub"))
