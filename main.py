@@ -191,14 +191,14 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
           [InlineKeyboardButton("💖 Donate", callback_data="donate_custom")]]
     await update.message.reply_text(
         "👋 Salom!\n\nMen siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.\n"
-        "Privatda matn yuboring yoki guruhda /get bilan ishlating.",
+        "Guruhga admin sifatida qo'shing va /get + prompt tartibida rasm generatsiya qiling.",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
-    await update.callback_query.message.reply_text("✍️ Endi tasvir yaratish uchun matn yuboring (privatda).")
+    await update.callback_query.message.reply_text("✍️ Endi tasvir yaratish uchun matn yuboring.")
 
 # /get command (works in groups and private)
 async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -212,7 +212,7 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
         prompt = " ".join(context.args)
     else:
         if not context.args:
-            await update.message.reply_text("✍️ Iltimos, rasm uchun matn yozing (yoki oddiy matn yuboring).")
+            await update.message.reply_text("✍️ Iltimos, rasm uchun matn yozing.")
             return
         prompt = " ".join(context.args)
 
