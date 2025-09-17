@@ -389,7 +389,7 @@ async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return WAITING_AMOUNT
 
     payload = f"donate_{update.effective_user.id}_{int(time.time())}"
-    prices = [LabeledPrice(f"{amount} Stars", amount * 100)]
+    prices = [LabeledPrice(f"{amount} Stars", amount)]
     # provider_token empty for Stars (XTR)
     await context.bot.send_invoice(
         chat_id=update.effective_chat.id,
