@@ -269,9 +269,11 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
 
 # ---------------- Main ----------------
 # ---------------- Main ----------------
-async def main():
-    pool = await asyncpg.create_pool(DATABASE_URL)
-    await init_db(pool)
+def main():
+    # asyncpg uchun event loop yaratamiz va sinxron ishlatamiz
+    loop = asyncio.get_event_loop()
+    pool = loop.run_until_complete(asyncpg.create_pool(DATABASE_URL))
+    loop.run_until_complete(init_db(pool))
 
     app = Application.builder().token(BOT_TOKEN).build()
     app.bot_data["db_pool"] = pool
@@ -282,7 +284,7 @@ async def main():
     app.add_handler(CallbackQueryHandler(generate, pattern=r"count_\d+"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, get_prompt))
 
-    # Donate
+    # Donate Conversation
     donate_conv = ConversationHandler(
         entry_points=[CommandHandler("donate", donate_custom_prompt),
                       CallbackQueryHandler(donate_custom_prompt, pattern="donate_custom")],
@@ -294,8 +296,9 @@ async def main():
     app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
 
-    await app.run_polling()  # ✅ asyncio-compatible run_polling
+    # ❌ "await app.run_polling()" emas!
+    app.run_polling()
 
 if __name__ == "__main__":
-    asyncio.run(main())  # ✅ async main() ni ishga tushiramiz
+    main()
 
