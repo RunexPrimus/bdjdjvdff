@@ -202,6 +202,11 @@ async def get_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.warning("[GET HANDLER] text is None")
         return
 
+    # --- Subscription tekshirish ---
+    if not await force_sub_required(update, context):
+        logger.info(f"[SUB CHECK] user_id={tg_user.id} obuna emas")
+        return  # obuna bo'lmaganlar davom eta olmaydi
+
     if chat_type in ["group", "supergroup"]:
         parts = text.split(maxsplit=1)
         if len(parts) < 2:
