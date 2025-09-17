@@ -1,4 +1,4 @@
-# bot_postgres_get_logs.py
+# bot_postgres_digen_donate.py
 import logging
 import aiohttp
 import asyncio
@@ -8,16 +8,17 @@ import json
 import itertools
 import random
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 import asyncpg
 from telegram import (
     Update, InlineKeyboardMarkup, InlineKeyboardButton,
-    InputMediaPhoto
+    InputMediaPhoto, LabeledPrice
 )
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
-    CallbackQueryHandler, ContextTypes, filters
+    CallbackQueryHandler, ContextTypes, filters,
+    PreCheckoutQueryHandler
 )
 
 # ---------------- LOG ----------------
@@ -34,7 +35,7 @@ CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@SizningKanal")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1001234567890"))
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
 DIGEN_URL = "https://api.digen.ai/v2/tools/text_to_image"
-DATABASE_URL = os.getenv("DATABASE_URL")  # PostgreSQL connection string (Railway)
+DATABASE_URL = os.getenv("DATABASE_URL")  # PostgreSQL connection string
 _key_cycle = itertools.cycle(DIGEN_KEYS)
 
 if not DATABASE_URL:
@@ -80,6 +81,15 @@ CREATE TABLE IF NOT EXISTS generations (
     image_count INT,
     created_at TIMESTAMPTZ
 );
+
+CREATE TABLE IF NOT EXISTS donations (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT,
+    username TEXT,
+    stars INT,
+    payload TEXT,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
 """
 
 async def init_db(pool):
@@ -107,55 +117,6 @@ def get_digen_headers():
         "origin": "https://rm.digen.ai",
         "referer": "https://rm.digen.ai/",
     }
-
-# ---------------- Subscription check ----------------
-async def check_subscription(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    try:
-        member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
-        return member.status in ["member", "administrator", "creator"]
-    except Exception as e:
-        logger.debug(f"[SUB CHECK ERROR] {e}")
-        return False
-
-async def force_sub_required(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    user_id = update.effective_user.id
-    subscribed = await check_subscription(user_id, context)
-    if not subscribed:
-        kb = [[
-            InlineKeyboardButton("🔗 Obuna bo‘lish", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}"),
-        ], [
-            InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")
-        ]]
-        if update.callback_query:
-            await update.callback_query.answer()
-            await update.callback_query.message.reply_text(
-                "⛔ Botdan foydalanish uchun kanalimizga obuna bo‘ling!",
-                reply_markup=InlineKeyboardMarkup(kb)
-            )
-        else:
-            await update.message.reply_text(
-                "⛔ Botdan foydalanish uchun kanalimizga obuna bo‘ling!",
-                reply_markup=InlineKeyboardMarkup(kb)
-            )
-        return False
-    return True
-
-async def check_sub_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    if await check_subscription(user_id, context):
-        await query.edit_message_text("✅ Rahmat! Siz obuna bo‘lgansiz. Endi botdan foydalanishingiz mumkin.")
-    else:
-        kb = [[
-            InlineKeyboardButton("🔗 Obuna bo‘lish", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}"),
-        ], [
-            InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")
-        ]]
-        await query.edit_message_text(
-            "⛔ Hali ham obuna bo‘lmadingiz. Obuna bo‘lib, qayta tekshiring.",
-            reply_markup=InlineKeyboardMarkup(kb)
-        )
 
 # ---------------- User/session functions (DB) ----------------
 async def add_user_db(pool, tg_user):
@@ -191,35 +152,38 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
             prompt, translated, image_id, count, now
         )
 
-# ---------------- Prompt handler (universal) ----------------
+# ---------------- Start ----------------
+async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    tg_user = update.effective_user
+    await add_user_db(context.application.bot_data["db_pool"], tg_user)
+    kb = [[InlineKeyboardButton("🎨 Rasm yaratishni boshlash", callback_data="start_gen")],
+          [InlineKeyboardButton("💖 Donate qilish", callback_data="donate_custom")]]
+    await update.message.reply_text(
+        "👋 Salom!\n\nMen siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.\n\n"
+        "✍️ Xohlagan narsani yozing — men uni rasmga aylantiraman.\n\n"
+        "_Misol:_ Futuristik cyberpunk shahar neon chiroqlar bilan",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
+async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
+    await update.callback_query.message.edit_text(
+        "✍️ Endi tasvir yaratish uchun matn yuboring.\n\n_Misol:_ Futuristik cyberpunk shahar neon chiroqlar bilan",
+        parse_mode="Markdown"
+    )
+
+# ---------------- Prompt handler ----------------
 async def get_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_user = update.effective_user
-    chat_type = update.effective_chat.type
     text = update.message.text if update.message else None
-    logger.info(f"[GET HANDLER] user_id={tg_user.id}, chat_type={chat_type}, text={text}")
-
     if not text:
-        logger.warning("[GET HANDLER] text is None")
         return
-
-    if chat_type in ["group", "supergroup"]:
-        parts = text.split(maxsplit=1)
-        if len(parts) < 2:
-            await update.message.reply_text("❌ Guruhda /get dan keyin prompt yozing")
-            logger.info("[GET HANDLER] No prompt after /get in group")
-            return
-        prompt = parts[1].strip()
-    else:
-        prompt = text
-
-    logger.info(f"[GET HANDLER] prompt: {prompt}")
-
     await add_user_db(context.application.bot_data["db_pool"], tg_user)
-    context.user_data["prompt"] = prompt
-    context.user_data["translated"] = prompt  # Translation removed
+    context.user_data["prompt"] = text
+    context.user_data["translated"] = text
     await ask_image_count(update, context)
 
-# ---------------- Ask image count ----------------
 async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = context.user_data.get("prompt", "")
     kb = [[
@@ -243,7 +207,7 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = context.user_data.get("prompt", "")
     translated = context.user_data.get("translated", "")
 
-    waiting_msg = await query.edit_message_text(f"🔄 Rasm yaratilmoqda ({count} ta)...\n0% ⏳", parse_mode="Markdown")
+    waiting_msg = await query.edit_message_text(f"🔄 Rasm yaratilmoqda ({count} ta)...⏳")
     try:
         payload = {
             "prompt": translated,
@@ -269,21 +233,7 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
-        progress = 0
-        while True:
-            progress = min(progress + 15, 95)
-            bar = "▰" * (progress // 10) + "▱" * (10 - progress // 10)
-            await waiting_msg.edit_text(f"🔄 Rasm yaratilmoqda ({count} ta):\n{bar} {progress}%", parse_mode="Markdown")
-            await asyncio.sleep(1)
-            async with aiohttp.ClientSession() as check_session:
-                try:
-                    async with check_session.get(urls[0]) as check:
-                        if check.status == 200:
-                            break
-                except Exception:
-                    pass
-
-        await waiting_msg.edit_text(f"✅ Rasm tayyor! 📸", parse_mode="Markdown")
+        await query.edit_message_text(f"✅ Rasm tayyor! 📸")
         media_group = [InputMediaPhoto(url) for url in urls]
         await query.message.reply_media_group(media_group)
         await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
@@ -291,47 +241,91 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.exception(f"[GENERATE ERROR] {e}")
         await waiting_msg.edit_text("⚠️ Xatolik yuz berdi. Qaytadan urinib ko‘ring.")
 
-# ---------------- Start ----------------
-async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    tg_user = update.effective_user
-    await add_user_db(context.application.bot_data["db_pool"], tg_user)
-    kb = [[InlineKeyboardButton("🎨 Rasm yaratishni boshlash", callback_data="start_gen")]]
-    await update.message.reply_text(
-        "👋 Salom!\n\nMen siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.\n\n"
-        "✍️ Xohlagan narsani yozing — men uni rasmga aylantiraman.\n\n"
-        "_Misol:_ Futuristik cyberpunk shahar neon chiroqlar bilan",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
+# ---------------- Donate flow ----------------
+async def donate_custom_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text("💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000 Stars):")
+    return "WAITING_AMOUNT"
 
-async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-    await update.callback_query.message.edit_text(
-        "✍️ Endi tasvir yaratish uchun matn yuboring.\n\n_Misol:_ Futuristik cyberpunk shahar neon chiroqlar bilan",
-        parse_mode="Markdown"
-    )
+async def donate_custom_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    try:
+        amount = int(text)
+        if amount < 1 or amount > 100000:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("❌ Iltimos, 1–100000 oralig‘ida raqam kiriting.")
+        return "WAITING_AMOUNT"
 
-# ---------------- Startup ----------------
-async def on_startup(app: Application):
-    pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
-    app.bot_data["db_pool"] = pool
-    await init_db(pool)
-    logger.info("✅ DB initialized and pool created.")
+    user = update.effective_user
+    chat_id = update.effective_chat.id
+    payload = f"donate_{user.id}_{int(time.time())}"
+
+    prices = [LabeledPrice(f"{amount} Stars", amount * 100)]
+    await context.bot.send_invoice(
+        chat_id=chat_id,
+        title="💖 Bot Donation",
+        description="Botni qo‘llab-quvvatlash uchun ixtiyoriy summa yuboring.",
+        payload=payload,
+        provider_token="",  # digital goods
+        currency="XTR",
+        prices=prices,
+        is_flexible=False
+    )
+    return -1
+
+async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.pre_checkout_query
+    await query.answer(ok=True)
+
+async def successful_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    payment = update.message.successful_payment
+    user = update.effective_user
+    chat_id = update.effective_chat.id
+    amount_stars = payment.total_amount // 100
+    payload = payment.invoice_payload
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"✅ Rahmat {user.first_name}! Siz {amount_stars} Stars yubordingiz."
+    )
+    pool = context.application.bot_data["db_pool"]
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO donations(user_id, username, stars, payload, created_at) VALUES($1,$2,$3,$4,now())",
+            user.id, user.username if user.username else None, amount_stars, payload
+        )
 
 # ---------------- Main ----------------
-def main():
-    app = Application.builder().token(BOT_TOKEN).build()
-    app.post_init = on_startup
+async def main():
+    pool = await asyncpg.create_pool(DATABASE_URL)
+    await init_db(pool)
 
+    app = Application.builder().token(BOT_TOKEN).build()
+    app.bot_data["db_pool"] = pool
+
+    # Command handlers
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
-    app.add_handler(CallbackQueryHandler(generate, pattern="count_"))
-    app.add_handler(CommandHandler("get", get_prompt))  # /get universal
 
-    # Catch plain messages for private chat
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, get_prompt))
 
-    app.run_polling()
+    # Image count selection
+    app.add_handler(CallbackQueryHandler(generate, pattern=r"count_\d+"))
+
+    # Donate
+    app.add_handler(CommandHandler("donate", donate_custom_prompt))
+    app.add_handler(CallbackQueryHandler(donate_custom_prompt, pattern="donate_custom"))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, donate_custom_amount))
+
+    # Payments
+    app.add_handler(PreCheckoutQueryHandler(precheckout_callback))
+    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
+
+    await app.start()
+    await app.updater.start_polling()
+    await app.idle()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
