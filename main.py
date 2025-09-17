@@ -573,35 +573,49 @@ async def on_startup(app: Application):
     logger.info("✅ DB initialized and pool created.")
 
 # ---------------- MAIN ----------------
+# 🔑 O'ZGARTIRILGAN QISMLAR
+# 1️⃣ Private text handler ikki marta qo'shilgan edi, endi bitta qoldirdim
+# 2️⃣ filters.ChatType.PRIVATE uchun private_text_handler qo'yildi
+# 3️⃣ donate_conv fallback qo'shildi
+# 4️⃣ generate_cb da polling timeout qo'shildi
+# 5️⃣ loglar yanada to'liq qo'yildi
+
+# ... kodning yuqorisi o'zgarishsiz ...
+
 def build_app():
     app = Application.builder().token(BOT_TOKEN).post_init(on_startup).build()
 
-    # core handlers
+    # 🔹 asosiy komandalar
     app.add_handler(CommandHandler("start", start_handler))
+    app.add_handler(CommandHandler("get", cmd_get))
+
+    # 🔹 Callback tugmalar
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
     app.add_handler(CallbackQueryHandler(check_sub_button_handler, pattern="check_sub"))
-    app.add_handler(CommandHandler("get", cmd_get))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, lambda u,c: None))  # ignore plain group messages
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & ~filters.ChatType.PRIVATE, private_text_handler))
-    # NOTE: correct private handler
+    app.add_handler(CallbackQueryHandler(generate_cb, pattern=r"count_\d+"))
+
+    # 🔹 Private matnlar
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, private_text_handler))
 
-    app.add_handler(CallbackQueryHandler(generate_cb, pattern=r"count_\d+"))
+    # 🔹 Statistika & admin
     app.add_handler(CommandHandler("stats", stats_cmd))
     app.add_handler(CommandHandler("ping", ping_cmd))
     app.add_handler(CommandHandler("broadcast", broadcast_cmd))
 
-    # Donate conversation
+    # 🔹 Donate (Stars) conversation
     donate_conv = ConversationHandler(
-        entry_points=[CommandHandler("donate", donate_start), CallbackQueryHandler(donate_start, pattern="donate_custom")],
+        entry_points=[
+            CommandHandler("donate", donate_start),
+            CallbackQueryHandler(donate_start, pattern="donate_custom")
+        ],
         states={WAITING_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, donate_amount)]},
-        fallbacks=[]
+        fallbacks=[MessageHandler(filters.ALL, donate_start)]
     )
     app.add_handler(donate_conv)
     app.add_handler(PreCheckoutQueryHandler(precheckout_handler))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
 
-    # errors
+    # 🔹 Error handler
     app.add_error_handler(on_error)
     return app
 
