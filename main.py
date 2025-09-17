@@ -144,8 +144,14 @@ async def check_sub_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
-    if await check_subscription(user_id, context):
+    chat_id = query.message.chat.id
+
+    logger.info(f"[SUB BUTTON] user_id={user_id}, chat_id={chat_id}")
+
+    subscribed = await check_subscription(user_id, context)
+    if subscribed:
         await query.edit_message_text("✅ Rahmat! Siz obuna bo‘lgansiz. Endi botdan foydalanishingiz mumkin.")
+        logger.info(f"[SUB BUTTON] user {user_id} subscribed ✅")
     else:
         kb = [[
             InlineKeyboardButton("🔗 Obuna bo‘lish", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}"),
@@ -153,9 +159,11 @@ async def check_sub_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")
         ]]
         await query.edit_message_text(
-            "⛔ Hali ham obuna bo‘lmadingiz. Obuna bo‘lib, qayta tekshiring.",
+            "⛔ Hali ham obuna bo‘lmadiz. Obuna bo‘lib, qayta tekshiring.",
             reply_markup=InlineKeyboardMarkup(kb)
         )
+        logger.info(f"[SUB BUTTON] user {user_id} NOT subscribed ❌")
+
 
 # ---------------- User/session functions (DB) ----------------
 async def add_user_db(pool, tg_user):
