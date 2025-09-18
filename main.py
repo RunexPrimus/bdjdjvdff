@@ -1,14 +1,15 @@
-# bot_postgres.py
+@@ -1,495 +1,443 @@
+#!/usr/bin/env python3
+# main.py
 import logging
 import aiohttp
 import asyncio
 import re
 import os
 import json
-import itertools
 import random
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 import asyncpg
 from telegram import (
@@ -16,9 +17,10 @@ from telegram import (
     InputMediaPhoto, LabeledPrice
 )
 from telegram.ext import (
-    Application, CommandHandler, MessageHandler,
-    CallbackQueryHandler, ContextTypes, filters, PreCheckoutQueryHandler
+    Application, CommandHandler, MessageHandler, CallbackQueryHandler,
+    ContextTypes, filters, ConversationHandler, PreCheckoutQueryHandler
 )
+from telegram.error import BadRequest, TelegramError
 
 # ---------------- LOG ----------------
 logging.basicConfig(
@@ -29,19 +31,22 @@ logger = logging.getLogger(__name__)
 
 # ---------------- ENV ----------------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "7440949683"))
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@SizningKanal")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1001234567890"))
+DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))  # e.g. '[{"token":"...","session":"..."}]'
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
-_key_cycle = itertools.cycle(DIGEN_KEYS)
-DIGEN_URL = "https://api.digen.ai/v2/tools/text_to_image "
-DATABASE_URL = os.getenv("DATABASE_URL")  # PostgreSQL connection string (Railway)
+DIGEN_URL = os.getenv("DIGEN_URL", "https://api.digen.ai/v2/tools/text_to_image")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
+if not BOT_TOKEN:
+    logger.error("BOT_TOKEN muhim! ENV ga qo'ying.")
+    raise SystemExit(1)
 if not DATABASE_URL:
-    logger.error("❌ Please set DATABASE_URL environment variable (Postgres).")
+    logger.error("DATABASE_URL muhim! ENV ga qo'ying.")
     raise SystemExit(1)
 
-# ---------------- Helpers ----------------
+# ---------------- helpers ----------------
 def escape_md(text: str) -> str:
     if not text:
         return ""
@@ -50,7 +55,7 @@ def escape_md(text: str) -> str:
 def utc_now():
     return datetime.now(timezone.utc)
 
-# ---------------- Database utilities ----------------
+# ---------------- DB schema ----------------
 CREATE_TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
@@ -80,20 +85,25 @@ CREATE TABLE IF NOT EXISTS generations (
     image_count INT,
     created_at TIMESTAMPTZ
 );
+
+CREATE TABLE IF NOT EXISTS donations (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT,
+    username TEXT,
+    stars INT,
+    payload TEXT,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
 """
 
 async def init_db(pool):
     async with pool.acquire() as conn:
         await conn.execute(CREATE_TABLES_SQL)
-        # ensure start_time exists
         row = await conn.fetchrow("SELECT value FROM meta WHERE key = 'start_time'")
         if not row:
-            await conn.execute(
-                "INSERT INTO meta(key, value) VALUES($1, $2)",
-                "start_time", str(int(time.time()))
-            )
+            await conn.execute("INSERT INTO meta(key, value) VALUES($1, $2)", "start_time", str(int(time.time())))
 
-# ---------------- Digen header ----------------
+# ---------------- Digen headers ----------------
 def get_digen_headers():
     if not DIGEN_KEYS:
         return {}
@@ -103,87 +113,65 @@ def get_digen_headers():
         "content-type": "application/json",
         "digen-language": "uz-US",
         "digen-platform": "web",
-        "digen-token": key["token"],
-        "digen-sessionid": key["session"],
-        "origin": "https://rm.digen.ai ",
-        "referer": "https://rm.digen.ai/ ",
+        "digen-token": key.get("token", ""),
+        "digen-sessionid": key.get("session", ""),
+        "origin": "https://rm.digen.ai",
+        "referer": "https://rm.digen.ai/",
     }
 
-# ---------------- Subscription check ----------------
+# ---------------- subscription check (optional) ----------------
+# ---------------- subscription check ----------------
 async def check_subscription(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     try:
         member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
-        return member.status in ["member", "administrator", "creator"]
+        return member.status in ("member", "administrator", "creator")
     except Exception as e:
         logger.debug(f"[SUB CHECK ERROR] {e}")
+        # If can't check, return False (force subscribe) or True (fail open). We choose False to show prompt.
         return False
 
-async def force_sub_required(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    user_id = update.effective_user.id
-    subscribed = await check_subscription(user_id, context)
-    if not subscribed:
-        kb = [[
-            InlineKeyboardButton("🔗 Obuna bo‘lish", url=f"https://t.me/ {CHANNEL_USERNAME.strip('@')}"),
-        ], [
-            InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")
-        ]]
+async def force_sub_if_private(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    if update.effective_chat.type != "private":
+        return True
+    ok = await check_subscription(update.effective_user.id, context)
+    if not ok:
+        kb = [
+            [InlineKeyboardButton("🔗 Kanalga obuna bo‘lish", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
+            [InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")]
+        ]
         if update.callback_query:
             await update.callback_query.answer()
-            await update.callback_query.message.reply_text(
-                "⛔ Botdan foydalanish uchun kanalimizga obuna bo‘ling!",
-                reply_markup=InlineKeyboardMarkup(kb)
-            )
+            await update.callback_query.message.reply_text("⛔ Botdan foydalanish uchun kanalimizga obuna bo‘ling!", reply_markup=InlineKeyboardMarkup(kb))
         else:
-            await update.message.reply_text(
-                "⛔ Botdan foydalanish uchun kanalimizga obuna bo‘ling!",
-                reply_markup=InlineKeyboardMarkup(kb)
-            )
+            await update.message.reply_text("⛔ Botdan foydalanish uchun kanalimizga obuna bo‘ling!", reply_markup=InlineKeyboardMarkup(kb))
         return False
     return True
 
-async def check_sub_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-
+async def check_sub_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    user_id = q.from_user.id
     if await check_subscription(user_id, context):
-        await query.edit_message_text("✅ Rahmat! Siz obuna bo‘lgansiz. Endi botdan foydalanishingiz mumkin.")
+        await q.edit_message_text("✅ Rahmat! Siz obuna bo‘lgansiz. Endi botdan foydalanishingiz mumkin.")
     else:
-        kb = [[
-            InlineKeyboardButton("🔗 Obuna bo‘lish", url=f"https://t.me/ {CHANNEL_USERNAME.strip('@')}"),
-        ], [
-            InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")
-        ]]
-        await query.edit_message_text(
-            "⛔ Hali ham obuna bo‘lmadingiz. Obuna bo‘lib, qayta tekshiring.",
-            reply_markup=InlineKeyboardMarkup(kb)
-        )
+        kb = [
+            [InlineKeyboardButton("🔗 Kanalga obuna bo‘lish", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
+            [InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")]
+        ]
+        await q.edit_message_text("⛔ Hali ham obuna bo‘lmagansiz. Obuna bo‘lib, qayta tekshiring.", reply_markup=InlineKeyboardMarkup(kb))
 
-# ---------------- User/session functions (DB) ----------------
+# ---------------- DB user/session/logging ----------------
 async def add_user_db(pool, tg_user):
-    """Add or update user and insert a session row."""
     now = utc_now()
     async with pool.acquire() as conn:
-        user = await conn.fetchrow("SELECT id FROM users WHERE id = $1", tg_user.id)
-        if user:
-            await conn.execute(
-                "UPDATE users SET username = $1, last_seen = $2 WHERE id = $3",
-                tg_user.username if tg_user.username else None,
-                now, tg_user.id
-            )
+        row = await conn.fetchrow("SELECT id FROM users WHERE id = $1", tg_user.id)
+        if row:
+            await conn.execute("UPDATE users SET username=$1, last_seen=$2 WHERE id=$3",
+                               tg_user.username if tg_user.username else None, now, tg_user.id)
         else:
-            await conn.execute(
-                "INSERT INTO users(id, username, first_seen, last_seen) VALUES($1,$2,$3,$4)",
-                tg_user.id,
-                tg_user.username if tg_user.username else None,
-                now,
-                now
-            )
-        # add session
-        await conn.execute(
-            "INSERT INTO sessions(user_id, started_at) VALUES($1, $2)",
-            tg_user.id, now
-        )
+            await conn.execute("INSERT INTO users(id, username, first_seen, last_seen) VALUES($1,$2,$3,$4)",
+                               tg_user.id, tg_user.username if tg_user.username else None, now, now)
+        await conn.execute("INSERT INTO sessions(user_id, started_at) VALUES($1,$2)", tg_user.id, now)
 
 async def log_generation(pool, tg_user, prompt, translated, image_id, count):
     now = utc_now()
@@ -194,390 +182,351 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
             tg_user.id, tg_user.username if tg_user.username else None,
             prompt, translated, image_id, count, now
         )
+# ... generate_cb() ichida, log_generation() dan keyin:
+await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
 
-# ---------------- Stats queries ----------------
-async def get_total_users(pool):
-    async with pool.acquire() as conn:
-        row = await conn.fetchval("SELECT COUNT(*) FROM users")
-        return row or 0
-
-async def get_active_users_count(pool, days):
-    cutoff = utc_now() - timedelta(days=days)
-    async with pool.acquire() as conn:
-        row = await conn.fetchval("SELECT COUNT(*) FROM users WHERE last_seen >= $1", cutoff)
-        return row or 0
-
-async def get_sessions_count(pool, days):
-    cutoff = utc_now() - timedelta(days=days)
-    async with pool.acquire() as conn:
-        row = await conn.fetchval("SELECT COUNT(*) FROM sessions WHERE started_at >= $1", cutoff)
-        return row or 0
-
-# ---------------- Meta (start_time) ----------------
-async def get_start_time(pool):
-    async with pool.acquire() as conn:
-        val = await conn.fetchval("SELECT value FROM meta WHERE key = 'start_time'")
-        return int(val) if val else int(time.time())
+# 🔔 Admin notification
+try:
+    admin_text = (
+        f"👤 <b>Yangi Generatsiya</b>\n"
+        f"🆔 <code>{user.id}</code>\n"
+        f"👥 @{user.username or 'no_username'}\n"
+        f"🖊 Prompt: <code>{escape_md(prompt)}</code>\n"
+        f"📸 Rasmlar soni: {count}\n"
+        f"🕒 {utc_now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+    )
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=admin_text,
+        parse_mode="HTML"
+    )
+except Exception as e:
+    logger.warning(f"[ADMIN NOTIFY ERROR] {e}")
 
 # ---------------- Handlers ----------------
-async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await force_sub_required(update, context):
-        return
-    tg_user = update.effective_user
-    await add_user_db(context.application.bot_data["db_pool"], tg_user)
 
-    kb = [
-        [InlineKeyboardButton("🎨 Rasm yaratishni boshlash", callback_data="start_gen")],
-        [InlineKeyboardButton("💝 Donate (Yulduzchalar ⭐️)", callback_data="donate_stars")]
-    ]
+# START
+async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await force_sub_if_private(update, context):
+        return
+    await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
+    kb = [[InlineKeyboardButton("🎨 Rasm yaratish", callback_data="start_gen")],
+          [InlineKeyboardButton("💖 Donate", callback_data="donate_custom")]]
     await update.message.reply_text(
-        "👋 Salom!\n\n"
-        "Men siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.\n\n"
-        "✍️ Xohlagan narsani yozing — men uni rasmga aylantiraman.\n\n"
-        "_Misol:_ Futuristik cyberpunk shahar neon chiroqlar bilan",
+        "👋 Salom!\n\nMen siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.\n"
+        "Guruhga admin sifatida qo'shing va /get + prompt tartibida rasm generatsiya qiling.",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await force_sub_required(update, context):
-        return
-    await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     await update.callback_query.answer()
-    await update.callback_query.message.edit_text(
-        "✍️ Endi tasvir yaratish uchun matn yuboring.\n\n_Misol:_ Futuristik cyberpunk shahar neon chiroqlar bilan",
-        parse_mode="Markdown"
-    )
+    await update.callback_query.message.reply_text("✍️ Endi tasvir yaratish uchun matn yuboring.")
 
-# Foydalanuvchi donate miqdorini kiritayotganligini belgilash uchun kalit
-DONATE_AMOUNT_STATE = "awaiting_donate_amount"
-
-async def handle_donate_stars(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Foydalanuvchiga qancha yulduzcha yuborishini so'rash"""
-    query = update.callback_query
-    await query.answer()
-
-    await query.edit_message_text(
-        "💫 Qancha Telegram Yulduzchasi (⭐️) yubormoqchisiz?\n\n"
-        "Iltimos, 1 dan 100000 gacha bo'lgan butun son kiriting.\n"
-        "Misol: `50` yoki `1000`",
-        parse_mode="Markdown"
-    )
-    # Keyingi matnli xabarni ushbu funksiya bilan bog'lash uchun holatni o'rnatamiz
-    context.user_data['state'] = DONATE_AMOUNT_STATE
-
-async def handle_donate_amount_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Foydalanuvchi kiritgan miqdorni qabul qilish va to'lov chekini yuborish"""
-    # Faqatgina donate holatida bo'lsa ishlasin
-    if context.user_data.get('state') != DONATE_AMOUNT_STATE:
+# /get command (works in groups and private)
+async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not await force_sub_if_private(update, context):
         return
+    chat_type = update.effective_chat.type
+    if chat_type in ("group", "supergroup"):
+        if not context.args:
+            await update.message.reply_text("❌ Guruhda /get dan keyin prompt yozing. Misol: /get futuristik shahar")
+            await update.message.reply_text("❌ Guruhda /get dan keyin prompt yozing.")
+            return
+        prompt = " ".join(context.args)
+    else:
+        if not context.args:
+            await update.message.reply_text("✍️ Iltimos, rasm uchun matn yozing.")
+            return
+        prompt = " ".join(context.args)
 
-    # Holatni tozalaymiz
-    context.user_data['state'] = None
-
-    text = update.message.text.strip()
-
-    try:
-        amount = int(text)
-        if amount < 1:
-            raise ValueError("Miqdor 1 dan kichik")
-        if amount > 100000:
-            raise ValueError("Miqdor 100000 dan katta")
-    except ValueError:
-        await update.message.reply_text(
-            "❌ Noto'g'ri miqdor. Iltimos, 1 dan 100000 gacha bo'lgan butun son kiriting.\n"
-            "Misol: `50`"
-        )
-        # Foydalanuvchiga qayta urinish imkoniyati berish uchun holatni qayta o'rnatamiz
-        context.user_data['state'] = DONATE_AMOUNT_STATE
-        return
-
-    # To'lov chekini tayyorlash
-    prices = [LabeledPrice(label="Telegram Stars", amount=amount)]
-
-    try:
-        await update.message.reply_invoice(
-            title="💝 Botni qo'llab-quvvatlash",
-            description=f"Siz {amount} ta Telegram Yulduzchasini yuborishni tanladingiz. Rahmat!",
-            payload=f"donate_{amount}",
-            provider_token="",  # Stars uchun bo'sh
-            currency="XTR",     # Telegram Stars valyutasi
-            prices=prices,
-            start_parameter="donate-stars",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("⭐️ To'lov qilish", pay=True)
-            ]])
-        )
-
-    except Exception as e:
-        logger.error(f"Xatolik send_donate_invoice: {e}")
-        await update.message.reply_text("❌ To'lov yuborishda xatolik yuz berdi. Iltimos, keyinroq urinib ko'ring.")
-
-async def handle_pre_checkout_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """To'lovni tasdiqlash"""
-    query = update.pre_checkout_query
-    await query.answer(ok=True)
-
-async def handle_successful_donation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Muvaffaqiyatli to'lovdan keyin xabar yuborish"""
-    message = update.message
-    amount = message.successful_payment.total_amount
-    user = message.from_user
-
-    # Log qilish
-    logger.info(f"✅ Foydalanuvchi {user.id} ({user.username}) {amount} ta yulduzcha yubordi.")
-
-    await message.reply_text(
-        f"🎉 Juda ham katta rahmat! Siz {amount} ta ⭐️ yulduzcha yubordingiz!\n"
-        "Sizning yordamingiz botni yanada yaxshilashga yordam beradi! 💖"
-    )
-
-    # Admin ga xabar (ixtiyoriy)
-    try:
-        await context.bot.send_message(
-            chat_id=ADMIN_ID,
-            text=f"💫 YANGI DONATSIYA!\n"
-                 f"👤 @{user.username or user.id}\n"
-                 f"⭐️ {amount} ta yulduzcha"
-        )
-    except Exception as e:
-        logger.error(f"Admin xabarida xatolik: {e}")
-
-#---_--------------
-async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Agar foydalanuvchi donate miqdorini kiritayotgan bo'lsa, bu funksiya ishlamaydi
-    if context.user_data.get('state') == DONATE_AMOUNT_STATE:
-        return
-
-    if not await force_sub_required(update, context):
-        return
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
-
-    prompt = update.message.text
-    # translation removed per your request — we will use prompt as-is
-    translated = prompt
-
     context.user_data["prompt"] = prompt
-    context.user_data["translated"] = translated
-
+    context.user_data["translated"] = prompt
     kb = [[
         InlineKeyboardButton("1️⃣", callback_data="count_1"),
         InlineKeyboardButton("2️⃣", callback_data="count_2"),
         InlineKeyboardButton("4️⃣", callback_data="count_4"),
         InlineKeyboardButton("8️⃣", callback_data="count_8"),
     ]]
-
     await update.message.reply_text(
-        f"🖌 *Sizning matningiz:*\n{escape_md(prompt)}\n\n"
-        f"🔢 Nechta rasm yaratilsin?",
+        f"🖌 Sizning matningiz:\n{escape_md(prompt)}\n\n🔢 Nechta rasm yaratilsin?",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
-async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await force_sub_required(update, context):
+# Private plain text -> prompt
+async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "private":
+        return
+    # If conversation for donate is active, PTB will route to conversation handler first.
+    if not await force_sub_if_private(update, context):
+        return
+    await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
+    prompt = update.message.text
+    context.user_data["prompt"] = prompt
+    context.user_data["translated"] = prompt
+    kb = [[
+        InlineKeyboardButton("1️⃣", callback_data="count_1"),
+        InlineKeyboardButton("2️⃣", callback_data="count_2"),
+        InlineKeyboardButton("4️⃣", callback_data="count_4"),
+        InlineKeyboardButton("8️⃣", callback_data="count_8"),
+    ]]
+    await update.message.reply_text(
+        f"🖌 Sizning matningiz:\n{escape_md(prompt)}\n\n🔢 Nechta rasm yaratilsin?",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
+# GENERATE (robust)
+async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    try:
+        count = int(q.data.split("_")[1])
+    except Exception:
+        try:
+            await q.edit_message_text("❌ Noto'g'ri tugma.")
+        except Exception:
+            pass
+        await q.edit_message_text("❌ Noto‘g‘ri tugma.")
         return
 
-    query = update.callback_query
-    await query.answer()
-    user = query.from_user
-
-    count = int(query.data.split("_")[1])
+    user = q.from_user
     prompt = context.user_data.get("prompt", "")
-    translated = context.user_data.get("translated", "")
+    translated = context.user_data.get("translated", prompt)
 
-    waiting_msg = await query.edit_message_text(
-        f"🔄 Rasm yaratilmoqda ({count} ta)...\n0% ⏳", parse_mode="Markdown"
-    )
+    # try edit message (ignore MessageNotModified)
+    try:
+        await q.edit_message_text(f"🔄 Rasm yaratilmoqda ({count})... ⏳")
+    except BadRequest:
+        pass
+    except Exception as e:
+        logger.debug(f"[EDIT WARN] {e}")
+
+    payload = {
+        "prompt": translated,
+        "image_size": "512x512",
+        "width": 512,
+        "height": 512,
+        "lora_id": "",
+        "batch_size": count,
+        "reference_images": [],
+        "strength": ""
+    }
+    headers = get_digen_headers()
+    sess_timeout = aiohttp.ClientTimeout(total=180)
 
     try:
-        payload = {
-            "prompt": translated,
-            "image_size": "512x512",
-            "width": 512,
-            "height": 512,
-            "lora_id": "",
-            "batch_size": count,
-            "reference_images": [],
-            "strength": ""
-        }
-
-        headers = get_digen_headers()
-        async with aiohttp.ClientSession() as session:
-            async with session.post(DIGEN_URL, headers=headers, json=payload) as r:
-                if r.status != 200:
-                    await waiting_msg.edit_text(f"❌ API xatosi: {r.status}")
-                    return
-                data = await r.json()
-
-        image_id = data.get("data", {}).get("id")
-        if not image_id:
-            await waiting_msg.edit_text("❌ Rasm ID olinmadi.")
-            return
-
-        progress = 0
-        urls = [f"https://liveme-image.s3.amazonaws.com/ {image_id}-{i}.jpeg" for i in range(count)]
-        # simple polling for first image availability
-        while True:
-            progress = min(progress + 15, 95)
-            bar = "▰" * (progress // 10) + "▱" * (10 - progress // 10)
-            await waiting_msg.edit_text(f"🔄 Rasm yaratilmoqda ({count} ta):\n{bar} {progress}%", parse_mode="Markdown")
-            await asyncio.sleep(1)
-            async with aiohttp.ClientSession() as check_session:
+        async with aiohttp.ClientSession(timeout=sess_timeout) as session:
+            async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
+                text_resp = await resp.text()
+                logger.info(f"[DIGEN] status={resp.status}")
                 try:
-                    async with check_session.get(urls[0]) as check:
-                        if check.status == 200:
+                    data = await resp.json()
+                except Exception:
+                    logger.error(f"[DIGEN PARSE ERROR] status={resp.status} text={text_resp}")
+                    await q.message.reply_text("❌ API dan noma'lum javob keldi. Adminga murojaat qiling.")
+                    await q.message.reply_text("❌ API javobini o‘qib bo‘lmadi.")
+                    return
+
+            logger.debug(f"[DIGEN DATA] {json.dumps(data)[:2000]}")
+
+            # try multiple possible locations for id
+            image_id = None
+            if isinstance(data, dict):
+                image_id = (data.get("data") or {}).get("id") or data.get("id")
+            image_id = (data.get("data") or {}).get("id") or data.get("id")
+            if not image_id:
+                logger.error("[DIGEN] image_id olinmadi")
+                await q.message.reply_text("❌ Rasm ID olinmadi (API javobi).")
+                await q.message.reply_text("❌ Rasm ID olinmadi.")
+                return
+
+            urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
+            logger.info(f"[GENERATE] urls: {urls}")
+
+            # wait loop for first image
+            available = False
+            max_wait = 60
+            waited = 0
+            interval = 1.5
+            while waited < max_wait:
+            while waited < 60:
+                try:
+                    async with session.get(urls[0]) as chk:
+                        if chk.status == 200:
+                            available = True
                             break
                 except Exception:
+                except:
                     pass
+                await asyncio.sleep(interval)
+                waited += interval
+                await asyncio.sleep(1.5)
+                waited += 1.5
 
-        await waiting_msg.edit_text(f"✅ Rasm tayyor! 📸", parse_mode="Markdown")
-        media_group = [InputMediaPhoto(url) for url in urls]
-        await query.message.reply_media_group(media_group)
+            if not available:
+                logger.warning("[GENERATE] URL not ready after wait")
+                try:
+                    await q.edit_message_text("⚠️ Rasmni tayyorlash biroz vaqt olmoqda. Keyinroq urinib ko'ring.")
+                except Exception:
+                    pass
+                await q.edit_message_text("⚠️ Rasm tayyor bo‘lmadi.")
+                return
 
-        # log generation to DB
-        await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
+            # send media group, fallback to single photos
+            try:
+                media = [InputMediaPhoto(u) for u in urls]
+                await q.message.reply_media_group(media)
+            except TelegramError as e:
+                logger.exception(f"[MEDIA_GROUP ERROR] {e}; fallback to single photos")
+                for i in range(0, len(media), 10):
+                    await q.message.reply_media_group(media[i:i+10])
+            except TelegramError:
+                for u in urls:
+                    try:
+                        await q.message.reply_photo(u)
+                    except Exception as ex:
+                        logger.exception(f"[SINGLE SEND ERR] {ex}")
+                    await q.message.reply_photo(u)
 
-        # send admin notification (media group with caption on first)
-        admin_caption = (
-            f"👤 *Yangi generatsiya:*\n"
-            f"🆔 ID: `{user.id}`\n"
-            f"👤 Username: @{user.username if user.username else 'yo‘q'}\n"
-            f"✍️ Prompt: {escape_md(prompt)}\n"
-            f"📸 {count} ta rasm"
-        )
-        try:
-            await context.bot.send_media_group(
-                chat_id=ADMIN_ID,
-                media=[InputMediaPhoto(urls[0], caption=admin_caption, parse_mode="Markdown")] +
-                      [InputMediaPhoto(u) for u in urls[1:]]
-            )
-        except Exception as e:
-            logger.error(f"❌ Admin xabari yuborilmadi: {e}")
+            await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
+
+            try:
+                await q.edit_message_text("✅ Rasm tayyor! 📸")
+            except BadRequest:
+                pass
+                admin_text = (
+                    f"👤 <b>Yangi Generatsiya</b>\n"
+                    f"🆔 <code>{user.id}</code>\n"
+                    f"👥 @{user.username or 'no_username'}\n"
+                    f"🖊 Prompt: <code>{escape_md(prompt)}</code>\n"
+                    f"📸 Rasmlar soni: {count}\n"
+                    f"🕒 {utc_now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                )
+                await context.bot.send_message(chat_id=ADMIN_ID, text=admin_text, parse_mode="HTML")
+            except Exception as e:
+                logger.warning(f"[ADMIN NOTIFY ERROR] {e}")
+
+            await q.edit_message_text("✅ Rasm tayyor! 📸")
 
     except Exception as e:
-        logger.exception(f"Xatolik generate(): {e}")
-        await waiting_msg.edit_text("⚠️ Xatolik yuz berdi. Qaytadan urinib ko‘ring.")
-
-# ---------------- Stats & ping ----------------
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    pool = context.application.bot_data["db_pool"]
-    total_users = await get_total_users(pool)
-    daily_u = await get_active_users_count(pool, 1)
-    weekly_u = await get_active_users_count(pool, 7)
-    monthly_u = await get_active_users_count(pool, 30)
-    yearly_u = await get_active_users_count(pool, 365)
-
-    daily_s = await get_sessions_count(pool, 1)
-    weekly_s = await get_sessions_count(pool, 7)
-    monthly_s = await get_sessions_count(pool, 30)
-
-    start_ts = await get_start_time(pool)
-    uptime_seconds = int(time.time() - start_ts)
-    uptime = f"{uptime_seconds // 3600} soat {(uptime_seconds % 3600) // 60} daqiqa"
-
-    await update.message.reply_text(
-        f"📊 *Bot statistikasi:*\n"
-        f"👥 Umumiy foydalanuvchilar: {total_users}\n"
-        f"📅 24 soat: {daily_u} foydalanuvchi ({daily_s} sessiya)\n"
-        f"📅 7 kun: {weekly_u} foydalanuvchi ({weekly_s} sessiya)\n"
-        f"📅 30 kun: {monthly_u} foydalanuvchi ({monthly_s} sessiya)\n"
-        f"📅 365 kun: {yearly_u} foydalanuvchi\n"
-        f"⏱ Ish vaqti: {uptime}",
-        parse_mode="Markdown"
-    )
-
-async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    start = time.time()
-    msg = await update.message.reply_text("🏓 Ping o‘lchanmoqda...")
-    end = time.time()
-    latency = (end - start) * 1000
-    await msg.edit_text(f"🏓 *Pong!* `{int(latency)} ms`", parse_mode="Markdown")
-
-# ---------------- Admin broadcast ----------------
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return await update.message.reply_text("⛔ Ruxsat yo‘q.")
-
-    pool = context.application.bot_data["db_pool"]
-    # fetch all user ids
-    async with pool.acquire() as conn:
-        rows = await conn.fetch("SELECT id FROM users")
-        user_ids = [r["id"] for r in rows]
-
-    count = 0
-    if update.message.photo:
-        # photo + optional caption
-        file_id = update.message.photo[-1].file_id
-        caption = update.message.caption or ""
-        for uid in user_ids:
-            try:
-                await context.bot.send_photo(uid, file_id, caption=caption, parse_mode="Markdown")
-                count += 1
-            except Exception:
-                continue
-        return await update.message.reply_text(f"✅ {count} foydalanuvchiga rasm yuborildi.")
-
-    text = " ".join(context.args)
-    if not text:
-        return await update.message.reply_text("✍️ Foydalanish: /broadcast <xabar> (yoki yuboring rasm bilan)")
-
-    for uid in user_ids:
+        logger.exception(f"[GENERATE ERROR] {e}")
         try:
-            await context.bot.send_message(uid, text, parse_mode="Markdown")
-            count += 1
+            await q.edit_message_text("⚠️ Xatolik yuz berdi. Qayta urinib ko‘ring.")
         except Exception:
-            continue
+            pass
+        await q.edit_message_text("⚠️ Xatolik yuz berdi.")
 
-    await update.message.reply_text(f"✅ {count} foydalanuvchiga xabar yuborildi.")
+# ---------------- Donate (Stars) flow ----------------
+# ---------------- Donate ----------------
+WAITING_AMOUNT = 1
 
-async def admin_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return await update.message.reply_text("⛔ Ruxsat yo‘q.")
-    # show loaded DIGEN keys count
-    keys_info = "\n".join([f"• {k.get('token','')[:10]}... | {k.get('session','')[:8]}..." for k in DIGEN_KEYS])
-    await update.message.reply_text(f"📊 *Yuklangan kalitlar:* {len(DIGEN_KEYS)}\n{keys_info}", parse_mode="Markdown")
+async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.message.reply_text("💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):")
+    else:
+        await update.message.reply_text("💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):")
+    return WAITING_AMOUNT
 
-# ---------------- Startup / main ----------------
+async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    txt = update.message.text.strip()
+    try:
+        amount = int(txt)
+        if amount < 1 or amount > 100000:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("❌ Iltimos, 1–100000 oralig‘ida butun son kiriting.")
+        await update.message.reply_text("❌ 1–100000 oralig‘ida butun son kiriting.")
+        return WAITING_AMOUNT
+
+    payload = f"donate_{update.effective_user.id}_{int(time.time())}"
+    prices = [LabeledPrice(f"{amount} Stars", amount)]
+    # provider_token empty for Stars (XTR)
+    await context.bot.send_invoice(
+        chat_id=update.effective_chat.id,
+        title="💖 Bot Donation",
+        description="Botni qo‘llab-quvvatlash uchun ixtiyoriy summa yuboring.",
+        payload=payload,
+        provider_token="",  # for XTR leave empty
+        provider_token="",
+        currency="XTR",
+        prices=prices,
+        is_flexible=False
+    )
+    return ConversationHandler.END
+
+async def precheckout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.pre_checkout_query.answer(ok=True)
+
+async def successful_payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    payment = update.message.successful_payment
+    amount_stars = payment.total_amount // 100
+    amount_stars = payment.total_amount  # ✅ 100 ga bo‘linmaydi!
+    user = update.effective_user
+    await update.message.reply_text(f"✅ Rahmat, {user.first_name}! Siz {amount_stars} Stars yubordingiz.")
+    await update.message.reply_text(f"✅ Rahmat, {user.first_name}! Siz {amount_stars} ⭐ yubordingiz.")
+    pool = context.application.bot_data["db_pool"]
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO donations(user_id, username, stars, payload) VALUES($1,$2,$3,$4)",
+            user.id, user.username if user.username else None, amount_stars, payment.invoice_payload
+        )
+
+# ---------------- Error handler ----------------
+async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE):
+    logger.exception("Unhandled exception:", exc_info=context.error)
+    try:
+        if isinstance(update, Update) and update.effective_chat:
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="⚠️ Xatolik yuz berdi. Adminga murojaat qiling.")
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="⚠️ Xatolik yuz berdi.")
+    except Exception:
+        pass
+
+# ---------------- Startup ----------------
 async def on_startup(app: Application):
-    # create asyncpg pool and store to app.bot_data
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
     app.bot_data["db_pool"] = pool
     await init_db(pool)
     logger.info("✅ DB initialized and pool created.")
 
-def main():
-    app = Application.builder().token(BOT_TOKEN).build()
-    # register startup
-    app.post_init = on_startup
+# ---------------- MAIN ----------------
+def build_app():
+    app = Application.builder().token(BOT_TOKEN).post_init(on_startup).build()
 
+    # Basic handlers
     app.add_handler(CommandHandler("start", start_handler))
-    app.add_handler(CommandHandler("admin", admin_info))
-    app.add_handler(CommandHandler("broadcast", broadcast))
-    app.add_handler(CommandHandler("stats", stats))
-    app.add_handler(CommandHandler("ping", ping))
-
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
-    app.add_handler(CallbackQueryHandler(generate, pattern="count_"))
-    app.add_handler(CallbackQueryHandler(check_sub_button, pattern="check_sub"))
-    app.add_handler(CallbackQueryHandler(handle_donate_stars, pattern="donate_stars"))  # Yangi qo'shilgan
+    app.add_handler(CallbackQueryHandler(check_sub_button_handler, pattern="check_sub"))
+    app.add_handler(CommandHandler("get", cmd_get))
 
-    # To'lov tizimi
-    app.add_handler(PreCheckoutQueryHandler(handle_pre_checkout_query))  # Yangi qo'shilgan
-    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, handle_successful_donation))  # Yangi qo'shilgan
+    # Donate conversation MUST be added BEFORE generic text handler
+    donate_conv = ConversationHandler(
+        entry_points=[CommandHandler("donate", donate_start), CallbackQueryHandler(donate_start, pattern="donate_custom")],
+        states={WAITING_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, donate_amount)]},
+        fallbacks=[]
+    )
+    app.add_handler(donate_conv)
 
-    # Matnli xabarlar
-    # Eslatma: `ask_image_count` handleri barcha matnli xabarlarni ushlab oladi.
-    # Shuning uchun, donate holati faol bo'lganda, u ishlamay qolishini ta'minlash kerak.
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ask_image_count))
+    # Payments handlers
+    app.add_handler(PreCheckoutQueryHandler(precheckout_handler))
+    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
 
-    # Yangi: Donate holatida bo'lsa, matnni `handle_donate_amount_text` ga yo'naltirish
-    # Bu handler `ask_image_count` dan OLDIN ro'yxatdan o'tishi kerak, chunki u aniqroq shartga ega.
-    app.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
-        handle_donate_amount_text
-    ))
+    # Generate callback
+    app.add_handler(CallbackQueryHandler(generate_cb, pattern=r"count_\d+"))
 
+    # private plain text -> prompt handler (after donate_conv)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, private_text_handler))
+
+    # errors
+    app.add_error_handler(on_error)
+    return app
+
+def main():
+    app = build_app()
+    logger.info("Application initialized. Starting polling...")
     app.run_polling()
 
 if __name__ == "__main__":
