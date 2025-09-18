@@ -13,11 +13,11 @@ from datetime import datetime, timezone, timedelta
 import asyncpg
 from telegram import (
     Update, InlineKeyboardMarkup, InlineKeyboardButton,
-    InputMediaPhoto
+    InputMediaPhoto, LabeledPrice
 )
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
-    CallbackQueryHandler, ContextTypes, filters
+    CallbackQueryHandler, ContextTypes, filters, PreCheckoutQueryHandler
 )
 
 # ---------------- LOG ----------------
@@ -34,7 +34,7 @@ CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@SizningKanal")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1001234567890"))
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
 _key_cycle = itertools.cycle(DIGEN_KEYS)
-DIGEN_URL = "https://api.digen.ai/v2/tools/text_to_image"
+DIGEN_URL = "https://api.digen.ai/v2/tools/text_to_image "
 DATABASE_URL = os.getenv("DATABASE_URL")  # PostgreSQL connection string (Railway)
 
 if not DATABASE_URL:
@@ -105,8 +105,8 @@ def get_digen_headers():
         "digen-platform": "web",
         "digen-token": key["token"],
         "digen-sessionid": key["session"],
-        "origin": "https://rm.digen.ai",
-        "referer": "https://rm.digen.ai/",
+        "origin": "https://rm.digen.ai ",
+        "referer": "https://rm.digen.ai/ ",
     }
 
 # ---------------- Subscription check ----------------
@@ -123,7 +123,7 @@ async def force_sub_required(update: Update, context: ContextTypes.DEFAULT_TYPE)
     subscribed = await check_subscription(user_id, context)
     if not subscribed:
         kb = [[
-            InlineKeyboardButton("🔗 Obuna bo‘lish", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}"),
+            InlineKeyboardButton("🔗 Obuna bo‘lish", url=f"https://t.me/ {CHANNEL_USERNAME.strip('@')}"),
         ], [
             InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")
         ]]
@@ -150,7 +150,7 @@ async def check_sub_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("✅ Rahmat! Siz obuna bo‘lgansiz. Endi botdan foydalanishingiz mumkin.")
     else:
         kb = [[
-            InlineKeyboardButton("🔗 Obuna bo‘lish", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}"),
+            InlineKeyboardButton("🔗 Obuna bo‘lish", url=f"https://t.me/ {CHANNEL_USERNAME.strip('@')}"),
         ], [
             InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")
         ]]
@@ -226,7 +226,10 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tg_user = update.effective_user
     await add_user_db(context.application.bot_data["db_pool"], tg_user)
 
-    kb = [[InlineKeyboardButton("🎨 Rasm yaratishni boshlash", callback_data="start_gen")]]
+    kb = [
+        [InlineKeyboardButton("🎨 Rasm yaratishni boshlash", callback_data="start_gen")],
+        [InlineKeyboardButton("💝 Donate (Yulduzchalar ⭐️)", callback_data="donate_stars")]
+    ]
     await update.message.reply_text(
         "👋 Salom!\n\n"
         "Men siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.\n\n"
@@ -246,7 +249,106 @@ async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+# Foydalanuvchi donate miqdorini kiritayotganligini belgilash uchun kalit
+DONATE_AMOUNT_STATE = "awaiting_donate_amount"
+
+async def handle_donate_stars(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Foydalanuvchiga qancha yulduzcha yuborishini so'rash"""
+    query = update.callback_query
+    await query.answer()
+
+    await query.edit_message_text(
+        "💫 Qancha Telegram Yulduzchasi (⭐️) yubormoqchisiz?\n\n"
+        "Iltimos, 1 dan 100000 gacha bo'lgan butun son kiriting.\n"
+        "Misol: `50` yoki `1000`",
+        parse_mode="Markdown"
+    )
+    # Keyingi matnli xabarni ushbu funksiya bilan bog'lash uchun holatni o'rnatamiz
+    context.user_data['state'] = DONATE_AMOUNT_STATE
+
+async def handle_donate_amount_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Foydalanuvchi kiritgan miqdorni qabul qilish va to'lov chekini yuborish"""
+    # Faqatgina donate holatida bo'lsa ishlasin
+    if context.user_data.get('state') != DONATE_AMOUNT_STATE:
+        return
+
+    # Holatni tozalaymiz
+    context.user_data['state'] = None
+
+    text = update.message.text.strip()
+
+    try:
+        amount = int(text)
+        if amount < 1:
+            raise ValueError("Miqdor 1 dan kichik")
+        if amount > 100000:
+            raise ValueError("Miqdor 100000 dan katta")
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Noto'g'ri miqdor. Iltimos, 1 dan 100000 gacha bo'lgan butun son kiriting.\n"
+            "Misol: `50`"
+        )
+        # Foydalanuvchiga qayta urinish imkoniyati berish uchun holatni qayta o'rnatamiz
+        context.user_data['state'] = DONATE_AMOUNT_STATE
+        return
+
+    # To'lov chekini tayyorlash
+    prices = [LabeledPrice(label="Telegram Stars", amount=amount)]
+
+    try:
+        await update.message.reply_invoice(
+            title="💝 Botni qo'llab-quvvatlash",
+            description=f"Siz {amount} ta Telegram Yulduzchasini yuborishni tanladingiz. Rahmat!",
+            payload=f"donate_{amount}",
+            provider_token="",  # Stars uchun bo'sh
+            currency="XTR",     # Telegram Stars valyutasi
+            prices=prices,
+            start_parameter="donate-stars",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("⭐️ To'lov qilish", pay=True)
+            ]])
+        )
+
+    except Exception as e:
+        logger.error(f"Xatolik send_donate_invoice: {e}")
+        await update.message.reply_text("❌ To'lov yuborishda xatolik yuz berdi. Iltimos, keyinroq urinib ko'ring.")
+
+async def handle_pre_checkout_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """To'lovni tasdiqlash"""
+    query = update.pre_checkout_query
+    await query.answer(ok=True)
+
+async def handle_successful_donation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Muvaffaqiyatli to'lovdan keyin xabar yuborish"""
+    message = update.message
+    amount = message.successful_payment.total_amount
+    user = message.from_user
+
+    # Log qilish
+    logger.info(f"✅ Foydalanuvchi {user.id} ({user.username}) {amount} ta yulduzcha yubordi.")
+
+    await message.reply_text(
+        f"🎉 Juda ham katta rahmat! Siz {amount} ta ⭐️ yulduzcha yubordingiz!\n"
+        "Sizning yordamingiz botni yanada yaxshilashga yordam beradi! 💖"
+    )
+
+    # Admin ga xabar (ixtiyoriy)
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"💫 YANGI DONATSIYA!\n"
+                 f"👤 @{user.username or user.id}\n"
+                 f"⭐️ {amount} ta yulduzcha"
+        )
+    except Exception as e:
+        logger.error(f"Admin xabarida xatolik: {e}")
+
+#---_--------------
 async def ask_image_count(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Agar foydalanuvchi donate miqdorini kiritayotgan bo'lsa, bu funksiya ishlamaydi
+    if context.user_data.get('state') == DONATE_AMOUNT_STATE:
+        return
+
     if not await force_sub_required(update, context):
         return
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
@@ -314,7 +416,7 @@ async def generate(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         progress = 0
-        urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
+        urls = [f"https://liveme-image.s3.amazonaws.com/ {image_id}-{i}.jpeg" for i in range(count)]
         # simple polling for first image availability
         while True:
             progress = min(progress + 15, 95)
@@ -458,10 +560,25 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
     app.add_handler(CallbackQueryHandler(generate, pattern="count_"))
     app.add_handler(CallbackQueryHandler(check_sub_button, pattern="check_sub"))
+    app.add_handler(CallbackQueryHandler(handle_donate_stars, pattern="donate_stars"))  # Yangi qo'shilgan
+
+    # To'lov tizimi
+    app.add_handler(PreCheckoutQueryHandler(handle_pre_checkout_query))  # Yangi qo'shilgan
+    app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, handle_successful_donation))  # Yangi qo'shilgan
+
+    # Matnli xabarlar
+    # Eslatma: `ask_image_count` handleri barcha matnli xabarlarni ushlab oladi.
+    # Shuning uchun, donate holati faol bo'lganda, u ishlamay qolishini ta'minlash kerak.
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, ask_image_count))
+
+    # Yangi: Donate holatida bo'lsa, matnni `handle_donate_amount_text` ga yo'naltirish
+    # Bu handler `ask_image_count` dan OLDIN ro'yxatdan o'tishi kerak, chunki u aniqroq shartga ega.
+    app.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
+        handle_donate_amount_text
+    ))
 
     app.run_polling()
 
 if __name__ == "__main__":
     main()
-    
