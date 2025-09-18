@@ -8,7 +8,8 @@ import os
 import json
 import random
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from decimal import Decimal
 
 import asyncpg
 from telegram import (
@@ -54,6 +55,7 @@ def utc_now():
     return datetime.now(timezone.utc)
 
 # ---------------- DB schema ----------------
+# Note: users.lang default is NULL so we can force language selection on first start
 CREATE_TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
@@ -64,7 +66,9 @@ CREATE TABLE IF NOT EXISTS users (
     id BIGINT PRIMARY KEY,
     username TEXT,
     first_seen TIMESTAMPTZ,
-    last_seen TIMESTAMPTZ
+    last_seen TIMESTAMPTZ,
+    lang TEXT,
+    balance NUMERIC DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -81,7 +85,7 @@ CREATE TABLE IF NOT EXISTS generations (
     translated_prompt TEXT,
     image_id TEXT,
     image_count INT,
-    created_at TIMESTAMPTZ
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS donations (
@@ -90,6 +94,13 @@ CREATE TABLE IF NOT EXISTS donations (
     username TEXT,
     stars INT,
     payload TEXT,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS referrals (
+    id SERIAL PRIMARY KEY,
+    inviter_id BIGINT,
+    invited_id BIGINT UNIQUE,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 """
@@ -124,7 +135,7 @@ async def check_subscription(user_id: int, context: ContextTypes.DEFAULT_TYPE) -
         return member.status in ("member", "administrator", "creator")
     except Exception as e:
         logger.debug(f"[SUB CHECK ERROR] {e}")
-        # If can't check, return False (force subscribe) or True (fail open). We choose False to show prompt.
+        # If can't check, return False to show prompt.
         return False
 
 async def force_sub_if_private(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
@@ -158,17 +169,36 @@ async def check_sub_button_handler(update: Update, context: ContextTypes.DEFAULT
         await q.edit_message_text("⛔ Hali ham obuna bo‘lmagansiz. Obuna bo‘lib, qayta tekshiring.", reply_markup=InlineKeyboardMarkup(kb))
 
 # ---------------- DB user/session/logging ----------------
-async def add_user_db(pool, tg_user):
+async def add_user_db(pool, tg_user) -> bool:
+    """
+    Ensure user exists. Returns True if user was newly created.
+    """
     now = utc_now()
     async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT id FROM users WHERE id = $1", tg_user.id)
         if row:
             await conn.execute("UPDATE users SET username=$1, last_seen=$2 WHERE id=$3",
                                tg_user.username if tg_user.username else None, now, tg_user.id)
+            created = False
         else:
             await conn.execute("INSERT INTO users(id, username, first_seen, last_seen) VALUES($1,$2,$3,$4)",
                                tg_user.id, tg_user.username if tg_user.username else None, now, now)
+            created = True
         await conn.execute("INSERT INTO sessions(user_id, started_at) VALUES($1,$2)", tg_user.id, now)
+    return created
+
+async def get_user_record(pool, user_id):
+    async with pool.acquire() as conn:
+        return await conn.fetchrow("SELECT * FROM users WHERE id=$1", user_id)
+
+async def set_user_lang(pool, user_id, lang_code):
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE users SET lang=$1 WHERE id=$2", lang_code, user_id)
+
+async def adjust_user_balance(pool, user_id, delta: Decimal):
+    async with pool.acquire() as conn:
+        # Use numeric arithmetic
+        await conn.execute("UPDATE users SET balance = (COALESCE(balance, 0) + $1) WHERE id=$2", str(delta), user_id)
 
 async def log_generation(pool, tg_user, prompt, translated, image_id, count):
     now = utc_now()
@@ -180,27 +210,156 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
             prompt, translated, image_id, count, now
         )
 
+# ---------------- Limits / Referral helpers ----------------
+FREE_8_PER_DAY = 3
+PRICE_PER_8 = Decimal("1")      # 1 Stars
+REFERRAL_REWARD = Decimal("0.25")
+
+async def get_8_used_today(pool, user_id) -> int:
+    # Count generations where image_count == 8 and created_at >= start of UTC day
+    now = utc_now()
+    start_day = datetime(year=now.year, month=now.month, day=now.day, tzinfo=timezone.utc)
+    async with pool.acquire() as conn:
+        cnt = await conn.fetchval(
+            "SELECT COUNT(*) FROM generations WHERE user_id=$1 AND image_count=8 AND created_at >= $2",
+            user_id, start_day
+        )
+    return int(cnt or 0)
+
+async def handle_referral(pool, inviter_id: int, invited_id: int):
+    # Add referral only if not exists
+    if inviter_id == invited_id:
+        return False
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT id FROM referrals WHERE invited_id=$1", invited_id)
+        if row:
+            return False
+        try:
+            await conn.execute("INSERT INTO referrals(inviter_id, invited_id) VALUES($1,$2)", inviter_id, invited_id)
+            # Give inviter reward
+            await conn.execute("UPDATE users SET balance = COALESCE(balance, 0) + $1 WHERE id=$2", str(REFERRAL_REWARD), inviter_id)
+            return True
+        except asyncpg.UniqueViolationError:
+            return False
+        except Exception as e:
+            logger.exception(f"[REFERRAL ERR] {e}")
+            return False
+
+# ---------------- UI: languages ----------------
+# 15 languages + Uzbek (Cyrillic)
+LANGS = [
+    ("🇺🇸 English", "en"),
+    ("🇷🇺 Русский", "ru"),
+    ("🇮🇩 Indonesia", "id"),
+    ("🇱🇹 Lietuvių", "lt"),
+    ("🇲🇽 Español (MX)", "es-MX"),
+    ("🇪🇸 Español", "es"),
+    ("🇮🇹 Italiano", "it"),
+    ("🇨🇳 中文", "zh"),
+    ("🇺🇿 O'zbek (Latin)", "uz"),
+    ("🇺🇿 Кирилл (O'zbek)", "uzk"),
+    ("🇧🇩 বাংলা", "bn"),
+    ("🇮🇳 हिन्दी", "hi"),
+    ("🇧🇷 Português", "pt"),
+    ("🇸🇦 العربية", "ar"),
+    ("🇺🇦 Українська", "uk"),
+    ("🇻🇳 Tiếng Việt", "vi")
+]
+
+def build_lang_keyboard():
+    kb = []
+    row = []
+    for label, code in LANGS:
+        row.append(InlineKeyboardButton(label, callback_data=f"set_lang_{code}"))
+        if len(row) == 2:
+            kb.append(row)
+            row = []
+    if row:
+        kb.append(row)
+    return InlineKeyboardMarkup(kb)
+
 # ---------------- Handlers ----------------
+
+# Small helper to send main panel
+async def send_main_panel(chat, lang_code, bot_data):
+    """Return InlineKeyboardMarkup for main panel and a text message. lang_code currently unused for translations."""
+    kb = [
+        [InlineKeyboardButton("🎨 Rasm yaratish", callback_data="start_gen")],
+        [InlineKeyboardButton("💖 Donate", callback_data="donate_custom"), InlineKeyboardButton("👤 Hisobim", callback_data="my_account")],
+        [InlineKeyboardButton("🌐 Tilni o‘zgartirish", callback_data="change_lang"), InlineKeyboardButton("ℹ️ Statistika / Info", callback_data="show_info")],
+    ]
+    text = "👋 Bosh panel — bu yerdan rasmlar yaratish, balans va sozlamalarni boshqarishingiz mumkin."
+    return text, InlineKeyboardMarkup(kb)
 
 # START
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await force_sub_if_private(update, context):
         return
-    await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
-    kb = [[InlineKeyboardButton("🎨 Rasm yaratish", callback_data="start_gen")],
-          [InlineKeyboardButton("💖 Donate", callback_data="donate_custom")]]
-    await update.message.reply_text(
-        "👋 Salom!\n\nMen siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.\n"
-        "Privatda matn yuboring yoki guruhda /get bilan ishlating.",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
+
+    # Add user and detect if new
+    created = await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
+    user_rec = await get_user_record(context.application.bot_data["db_pool"], update.effective_user.id)
+    # Handle referral if present and user is new
+    args = []
+    if update.message and update.message.text:
+        parts = update.message.text.strip().split()
+        if len(parts) > 1:
+            args = parts[1:]
+    # Also use context.args if available (CommandHandler provides it)
+    if context.args:
+        args = context.args
+
+    if created and args:
+        # look for ref_<id>
+        for a in args:
+            if a.startswith("ref_"):
+                try:
+                    inviter_id = int(a.split("_", 1)[1])
+                    # handle referral
+                    await handle_referral(context.application.bot_data["db_pool"], inviter_id, update.effective_user.id)
+                except Exception:
+                    pass
+
+    # If user has no lang set -> show language selection
+    if not user_rec or not user_rec.get("lang"):
+        await update.message.reply_text(
+            "🌐 Iltimos, tilni tanlang (birinchi marta):",
+            reply_markup=build_lang_keyboard()
+        )
+        return
+
+    # Otherwise send main panel
+    text, kb = await send_main_panel(update.effective_chat, user_rec.get("lang"), context.application.bot_data)
+    await update.message.reply_text(text, reply_markup=kb)
+
+async def change_lang_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    await q.edit_message_text("🌐 Tilni tanlang:", reply_markup=build_lang_keyboard())
+
+async def set_lang_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    data = q.data  # set_lang_<code>
+    code = data.split("_", 2)[2]
+    await set_user_lang(context.application.bot_data["db_pool"], q.from_user.id, code)
+    # send confirmation and main panel
+    text, kb = await send_main_panel(q.message.chat, code, context.application.bot_data)
+    try:
+        await q.edit_message_text(f"✅ Til {code} ga o'zgartirildi.\n\n{text}", reply_markup=kb)
+    except BadRequest:
+        try:
+            await q.message.reply_text(f"✅ Til {code} ga o'zgartirildi.\n\n{text}", reply_markup=kb)
+        except Exception:
+            pass
 
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-    await update.callback_query.message.reply_text("✍️ Endi tasvir yaratish uchun matn yuboring (privatda).")
+    # simple route to ask prompt
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.message.reply_text("✍️ Endi tasvir yaratish uchun matn yuboring (privatda).")
 
-# /get command (works in groups and private)
+# /get command (works in groups and private) - unchanged
 async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await force_sub_if_private(update, context):
         return
@@ -254,7 +413,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
-# GENERATE (robust)
+# GENERATE (robust) with limit checks for 8-image batches
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -271,13 +430,45 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = context.user_data.get("prompt", "")
     translated = context.user_data.get("translated", prompt)
 
-    # try edit message (ignore MessageNotModified)
-    try:
-        await q.edit_message_text(f"🔄 Rasm yaratilmoqda ({count})... ⏳")
-    except BadRequest:
-        pass
-    except Exception as e:
-        logger.debug(f"[EDIT WARN] {e}")
+    # check 8-image limits
+    if count == 8:
+        pool = context.application.bot_data["db_pool"]
+        used = await get_8_used_today(pool, user.id)
+        if used >= FREE_8_PER_DAY:
+            # need 1 Stars to proceed
+            # check user's balance
+            rec = await get_user_record(pool, user.id)
+            balance = Decimal(rec.get("balance") or 0)
+            if balance < PRICE_PER_8:
+                # insufficient
+                kb = [
+                    [InlineKeyboardButton("💖 Donate", callback_data="donate_custom")],
+                    [InlineKeyboardButton("👤 Hisobim", callback_data="my_account")]
+                ]
+                try:
+                    await q.edit_message_text("⚠️ Siz bugun allaqachon 3 marta 8 ta rasm yaratdingiz. Har keyingi 8 ta generatsiya — 1 Stars. Balans yetarli emas.", reply_markup=InlineKeyboardMarkup(kb))
+                except Exception:
+                    pass
+                return
+            else:
+                # deduct price
+                await adjust_user_balance(pool, user.id, -PRICE_PER_8)
+                # notify user
+                try:
+                    await q.edit_message_text(f"💳 {PRICE_PER_8} Stars yechildi. Rasm yaratilmoqda ({count})... ⏳")
+                except BadRequest:
+                    pass
+        else:
+            # free - allowed
+            try:
+                await q.edit_message_text(f"🔄 Rasm yaratilmoqda ({count})... ⏳ (bugun {used}/{FREE_8_PER_DAY} dan foydalanildi)")
+            except BadRequest:
+                pass
+    else:
+        try:
+            await q.edit_message_text(f"🔄 Rasm yaratilmoqda ({count})... ⏳")
+        except BadRequest:
+            pass
 
     payload = {
         "prompt": translated,
@@ -367,7 +558,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-# ---------------- Donate (Stars) flow ----------------
+# ---------------- Donate (Stars) flow (unchanged) ----------------
 WAITING_AMOUNT = 1
 
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -390,7 +581,6 @@ async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     payload = f"donate_{update.effective_user.id}_{int(time.time())}"
     prices = [LabeledPrice(f"{amount} Stars", amount)]
-    prices = [LabeledPrice(f"{amount} Stars", amount)]
     # provider_token empty for Stars (XTR)
     await context.bot.send_invoice(
         chat_id=update.effective_chat.id,
@@ -409,6 +599,7 @@ async def precheckout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def successful_payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     payment = update.message.successful_payment
+    # Keep same logic as before: amount_stars calculation may depend on your currency scaling
     amount_stars = payment.total_amount // 100
     user = update.effective_user
     await update.message.reply_text(f"✅ Rahmat, {user.first_name}! Siz {amount_stars} Stars yubordingiz.")
@@ -418,6 +609,124 @@ async def successful_payment_handler(update: Update, context: ContextTypes.DEFAU
             "INSERT INTO donations(user_id, username, stars, payload) VALUES($1,$2,$3,$4)",
             user.id, user.username if user.username else None, amount_stars, payment.invoice_payload
         )
+    # update user's balance
+    await adjust_user_balance(pool, user.id, Decimal(amount_stars))
+
+# ---------------- Hisobim / Account panel ----------------
+async def my_account_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Can be callback_query or message command
+    if update.callback_query:
+        q = update.callback_query
+        await q.answer()
+        user_id = q.from_user.id
+        chat = q.message.chat
+    else:
+        user_id = update.effective_user.id
+        chat = update.effective_chat
+
+    rec = await get_user_record(context.application.bot_data["db_pool"], user_id)
+    balance = Decimal(rec.get("balance") or 0)
+    # Count referrals
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        refs = await conn.fetchval("SELECT COUNT(*) FROM referrals WHERE inviter_id=$1", user_id)
+    refs = int(refs or 0)
+    referral_link = f"https://t.me/{(os.getenv('BOT_USERNAME') or 'YourBot')}?start=ref_{user_id}"
+    text = (
+        f"👤 Hisobim\n\n"
+        f"💳 Balans: {balance} Stars\n"
+        f"👥 Taklif qilinganlar: {refs}\n\n"
+        f"🔗 Sizning referral link:\n{referral_link}\n\n"
+        f"📤 Yechib olish: Tez kunda\n"
+        f"🔑 API: Tez kunda"
+    )
+    kb = [
+        [InlineKeyboardButton("💖 Donate", callback_data="donate_custom"), InlineKeyboardButton("📤 Yechib olish (Tez kunda)", callback_data="withdraw")],
+        [InlineKeyboardButton("🌐 Tilni o‘zgartirish", callback_data="change_lang"), InlineKeyboardButton("← Ortga", callback_data="back_main")]
+    ]
+    if update.callback_query:
+        try:
+            await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
+        except BadRequest:
+            try:
+                await q.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb))
+            except Exception:
+                pass
+    else:
+        await chat.send_message(text, reply_markup=InlineKeyboardMarkup(kb))
+
+# ---------------- Info / Stats ----------------
+async def info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Send uptime, ping, totals, and admin contact
+    if update.callback_query:
+        q = update.callback_query
+        await q.answer()
+        chat = q.message.chat
+    else:
+        chat = update.effective_chat
+
+    pool = context.application.bot_data["db_pool"]
+    async with pool.acquire() as conn:
+        start_time_row = await conn.fetchrow("SELECT value FROM meta WHERE key='start_time'")
+        start_ts = int(start_time_row["value"]) if start_time_row else int(time.time())
+        user_count = await conn.fetchval("SELECT COUNT(*) FROM users")
+        gen_count = await conn.fetchval("SELECT COUNT(*) FROM generations")
+        donation_sum = await conn.fetchval("SELECT COALESCE(SUM(stars),0) FROM donations")
+    # uptime
+    uptime_seconds = int(time.time()) - start_ts
+    uptime_str = str(timedelta(seconds=uptime_seconds))
+    # ping measurement (simple HTTP GET to google with timeout)
+    ping_ms = None
+    try:
+        t0 = time.time()
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://www.google.com", timeout=2) as resp:
+                await resp.text()
+        ping_ms = int((time.time() - t0) * 1000)
+    except Exception:
+        ping_ms = None
+
+    text = (
+        f"📊 Statistika\n\n"
+        f"⏱ Ish vaqti (uptime): {uptime_str}\n"
+        f"🌐 Ping: {f'{ping_ms} ms' if ping_ms is not None else 'Nomaʼlum'}\n"
+        f"👥 Foydalanuvchilar: {user_count}\n"
+        f"🖼 Umumiy yaratilgan rasmlar: {gen_count}\n"
+        f"💰 Umumiy donations: {donation_sum}\n"
+    )
+    kb = [
+        [InlineKeyboardButton("📩 Admin bilan bog‘lanish", url=f"tg://user?id={ADMIN_ID}")],
+        [InlineKeyboardButton("← Ortga", callback_data="back_main")]
+    ]
+    if update.callback_query:
+        try:
+            await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
+        except BadRequest:
+            await q.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb))
+    else:
+        await chat.send_message(text, reply_markup=InlineKeyboardMarkup(kb))
+
+# ---------------- Simple navigation handlers ----------------
+async def back_main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    rec = await get_user_record(context.application.bot_data["db_pool"], q.from_user.id)
+    text, kb = await send_main_panel(q.message.chat, rec.get("lang") if rec else None, context.application.bot_data)
+    try:
+        await q.edit_message_text(text, reply_markup=kb)
+    except BadRequest:
+        try:
+            await q.message.reply_text(text, reply_markup=kb)
+        except Exception:
+            pass
+
+async def withdraw_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    # placeholder
+    try:
+        await q.edit_message_text("📤 Yechib olish funksiyasi hozircha tayyor emas — Tez kunda! ⏳")
+    except Exception:
+        pass
 
 # ---------------- Error handler ----------------
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -444,6 +753,17 @@ def build_app():
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
     app.add_handler(CallbackQueryHandler(check_sub_button_handler, pattern="check_sub"))
     app.add_handler(CommandHandler("get", cmd_get))
+
+    # Language handlers
+    app.add_handler(CallbackQueryHandler(set_lang_handler, pattern=r"set_lang_"))
+    app.add_handler(CallbackQueryHandler(change_lang_entry, pattern=r"change_lang"))
+    app.add_handler(CallbackQueryHandler(back_main_handler, pattern=r"back_main"))
+    app.add_handler(CallbackQueryHandler(withdraw_handler, pattern=r"withdraw"))
+
+    # Info / account
+    app.add_handler(CommandHandler("info", info_handler))
+    app.add_handler(CallbackQueryHandler(info_handler, pattern=r"show_info"))
+    app.add_handler(CallbackQueryHandler(my_account_handler, pattern=r"my_account"))
 
     # Donate conversation MUST be added BEFORE generic text handler
     donate_conv = ConversationHandler(
