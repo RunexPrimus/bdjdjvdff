@@ -1024,10 +1024,6 @@ def t(context: ContextTypes.DEFAULT_TYPE, key: str, **kwargs) -> str:
     if user_id and hasattr(context.application, 'bot_data') and "db_pool" in context.application.bot_data:
         try:
             pool = context.application.bot_data["db_pool"]
-            async def get_lang():
-                async with pool.acquire() as conn:
-                    row = await conn.fetchrow("SELECT lang FROM users WHERE id = $1", user_id)
-                    return row['lang'] if row and row['lang'] else "en"
             # This is a bit of a hack to run async code in a sync context, but it should work for most cases.
             # A better approach would be to pass the lang_code explicitly where needed or refactor to be fully async.
             # For now, we'll assume the DB call is fast or cached.
@@ -1073,6 +1069,7 @@ def utc_now():
 
 # ---------------- DB schema ----------------
 # Note: users.lang default is NULL so we can force language selection on first start
+# Also, add a migration to add the 'lang' column if it doesn't exist
 CREATE_TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
@@ -1122,9 +1119,29 @@ CREATE TABLE IF NOT EXISTS referrals (
 );
 """
 
+# SQL to add 'lang' column if it doesn't exist (PostgreSQL specific)
+ADD_LANG_COLUMN_SQL = """
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='users' AND column_name='lang'
+    ) THEN
+        ALTER TABLE users ADD COLUMN lang TEXT;
+    END IF;
+END
+$$;
+"""
+
 async def init_db(pool):
     async with pool.acquire() as conn:
         await conn.execute(CREATE_TABLES_SQL)
+        # Try to add the 'lang' column if it doesn't exist
+        try:
+            await conn.execute(ADD_LANG_COLUMN_SQL)
+            logger.info("Checked/Added 'lang' column to 'users' table.")
+        except Exception as e:
+            logger.warning(f"Could not add 'lang' column: {e}. It might already exist or the DB user lacks permissions.")
         row = await conn.fetchrow("SELECT value FROM meta WHERE key = 'start_time'")
         if not row:
             await conn.execute("INSERT INTO meta(key, value) VALUES($1, $2)", "start_time", str(int(time.time())))
@@ -1219,6 +1236,7 @@ async def get_user_record(pool, user_id):
 
 async def set_user_lang(pool, user_id, lang_code):
     async with pool.acquire() as conn:
+        # Use a simple UPDATE. If the column doesn't exist, the query will fail, which is handled by the error handler.
         await conn.execute("UPDATE users SET lang=$1 WHERE id=$2", lang_code, user_id)
 
 async def adjust_user_balance(pool, user_id, delta: Decimal):
@@ -1377,18 +1395,25 @@ async def set_lang_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
     data = q.data  # set_lang_<code>
     code = data.split("_", 2)[2]
-    await set_user_lang(context.application.bot_data["db_pool"], q.from_user.id, code)
-    # Store the language in context.user_data for immediate use
-    context.user_data['lang'] = code
-    # send confirmation and main panel
-    text, kb = await send_main_panel(q.message.chat, context)
-    confirmation_text = t(context, "language_set", lang_code=code)
-    full_text = f"{confirmation_text}\n\n{text}"
     try:
-        await q.edit_message_text(full_text, reply_markup=kb)
-    except BadRequest:
+        await set_user_lang(context.application.bot_data["db_pool"], q.from_user.id, code)
+        # Store the language in context.user_data for immediate use
+        context.user_data['lang'] = code
+        # send confirmation and main panel
+        text, kb = await send_main_panel(q.message.chat, context)
+        confirmation_text = t(context, "language_set", lang_code=code)
+        full_text = f"{confirmation_text}\n\n{text}"
         try:
-            await q.message.reply_text(full_text, reply_markup=kb)
+            await q.edit_message_text(full_text, reply_markup=kb)
+        except BadRequest:
+            try:
+                await q.message.reply_text(full_text, reply_markup=kb)
+            except Exception:
+                pass
+    except Exception as e:
+        logger.error(f"Error setting language for user {q.from_user.id}: {e}")
+        try:
+            await q.edit_message_text(t(context, "error_try_again"))
         except Exception:
             pass
 
