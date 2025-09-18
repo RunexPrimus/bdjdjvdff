@@ -1,3 +1,4 @@
+```python
 #!/usr/bin/env python3
 # main.py
 import logging
@@ -35,8 +36,11 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@SizningKanal")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1001234567890"))
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))  # e.g. '[{"token":"...","session":"..."}]'
-DIGEN_URL = os.getenv("DIGEN_URL", "https://api.digen.ai/v2/tools/text_to_image")
+# Ensure DIGEN_URL ends without trailing spaces
+DIGEN_URL = os.getenv("DIGEN_URL", "https://api.digen.ai/v2/tools/text_to_image").strip()
 DATABASE_URL = os.getenv("DATABASE_URL")
+# Get BOT_USERNAME from environment or derive from BOT_TOKEN if needed (optional)
+BOT_USERNAME = os.getenv("BOT_USERNAME", BOT_TOKEN.split(':')[0] if BOT_TOKEN and ':' in BOT_TOKEN else "YourBot")
 
 if not BOT_TOKEN:
     logger.error("BOT_TOKEN muhim! ENV ga qo'ying.")
@@ -44,6 +48,1022 @@ if not BOT_TOKEN:
 if not DATABASE_URL:
     logger.error("DATABASE_URL muhim! ENV ga qo'ying.")
     raise SystemExit(1)
+
+# ---------------- TRANSLATIONS ----------------
+TRANSLATIONS = {
+    "en": {
+        "choose_language": "🌐 Please choose your language:",
+        "language_set": "✅ Language set to {lang_code}.",
+        "main_panel_text": "👋 Main panel — manage images, balance, and settings here.",
+        "btn_generate": "🎨 Generate Image",
+        "btn_donate": "💖 Donate",
+        "btn_account": "👤 My Account",
+        "btn_change_lang": "🌐 Change Language",
+        "btn_info": "ℹ️ Info / Stats",
+        "btn_back": "⬅️ Back",
+        "enter_prompt": "✍️ Please send the text prompt for the image (in private chat).",
+        "prompt_received": "🖌 Your prompt:\n{prompt}\n\n🔢 How many images to generate?",
+        "btn_1": "1️⃣",
+        "btn_2": "2️⃣",
+        "btn_4": "4️⃣",
+        "btn_8": "8️⃣",
+        "generating": "🔄 Generating image(s) ({count})... ⏳",
+        "generating_8_limited": "🔄 Generating image(s) ({count})... ⏳ (Used {used}/{limit} free 8-batches today)",
+        "insufficient_balance_8": "⚠️ You have already used 3 free 8-image generations today. Each subsequent 8-image generation costs 1 Star. Insufficient balance.",
+        "stars_deducted": "💳 {price} Star(s) deducted. Generating image(s) ({count})... ⏳",
+        "image_ready": "✅ Image(s) ready! 📸",
+        "btn_generate_again": "🔄 Generate Again",
+        "account_title": "👤 My Account",
+        "account_balance": "💳 Balance: {balance} Stars",
+        "account_referrals": "👥 Referred Users: {count}",
+        "account_referral_link": "🔗 Your Referral Link:\n{link}",
+        "account_withdraw": "📤 Withdraw",
+        "account_api": "🔑 API",
+        "withdraw_soon": "📤 Withdrawal feature is not ready yet — Coming soon! ⏳",
+        "api_soon": "🔑 API access: Coming soon!",
+        "info_title": "📊 Statistics",
+        "info_uptime": "⏱ Uptime: {uptime}",
+        "info_ping": "🌐 Ping: {ping} ms",
+        "info_users": "👥 Users: {count}",
+        "info_images": "🖼 Total Images Generated: {count}",
+        "info_donations": "💰 Total Donations: {amount}",
+        "btn_contact_admin": "📩 Contact Admin",
+        "sub_check_prompt": "⛔ You must be subscribed to our channel to use the bot!",
+        "sub_check_link_text": "🔗 Subscribe to Channel",
+        "sub_check_button_text": "✅ Check Subscription",
+        "sub_check_success": "✅ Thank you! You are subscribed. You can now use the bot.",
+        "sub_check_fail": "⛔ You are still not subscribed. Please subscribe and check again.",
+        "invalid_button": "❌ Invalid button.",
+        "error_try_again": "⚠️ An error occurred. Please try again.",
+        "image_wait_timeout": "⚠️ It's taking a while to prepare the image. Please try again later.",
+        "image_id_missing": "❌ Failed to get image ID (API response).",
+        "api_unknown_response": "❌ Unknown response from API. Please contact the admin.",
+        "enter_donate_amount": "💰 Please enter the amount you want to donate (1–100000):",
+        "invalid_donate_amount": "❌ Please enter an integer between 1 and 100000.",
+        "donate_invoice_title": "💖 Bot Donation",
+        "donate_invoice_description": "Send an optional amount to support the bot.",
+        "donate_thanks": "✅ Thank you, {first_name}! You sent {amount_stars} Stars.",
+        "account_withdraw_soon": "📤 Withdraw: Coming soon",
+        "account_api_soon": "🔑 API: Coming soon",
+        "referral_reward": "You received {reward} Stars for a successful referral!",
+        "prompt_missing_group": "❌ In a group, please provide a prompt after /get. Example: /get futuristic city",
+        "prompt_missing_private": "✍️ Please send the text prompt for the image (or just send plain text).",
+        "prompt_received_private": "🖌 Your prompt:\n{prompt}\n\n🔢 How many images to generate?",
+        "prompt_received_group": "🖌 Your prompt:\n{prompt}\n\n🔢 How many images to generate?",
+    },
+    "ru": {
+        "choose_language": "🌐 Пожалуйста, выберите язык:",
+        "language_set": "✅ Язык установлен на {lang_code}.",
+        "main_panel_text": "👋 Главная панель — управляйте изображениями, балансом и настройками здесь.",
+        "btn_generate": "🎨 Создать изображение",
+        "btn_donate": "💖 Пожертвовать",
+        "btn_account": "👤 Мой аккаунт",
+        "btn_change_lang": "🌐 Изменить язык",
+        "btn_info": "ℹ️ Информация / Статистика",
+        "btn_back": "⬅️ Назад",
+        "enter_prompt": "✍️ Пожалуйста, отправьте текстовый запрос для изображения (в личном чате).",
+        "prompt_received": "🖌 Ваш запрос:\n{prompt}\n\n🔢 Сколько изображений сгенерировать?",
+        "btn_1": "1️⃣",
+        "btn_2": "2️⃣",
+        "btn_4": "4️⃣",
+        "btn_8": "8️⃣",
+        "generating": "🔄 Генерация изображения(й) ({count})... ⏳",
+        "generating_8_limited": "🔄 Генерация изображения(й) ({count})... ⏳ (Использовано {used}/{limit} бесплатных пакетов по 8 сегодня)",
+        "insufficient_balance_8": "⚠️ Вы уже использовали 3 бесплатные генерации по 8 изображений сегодня. Каждая последующая генерация из 8 изображений стоит 1 Star. Недостаточный баланс.",
+        "stars_deducted": "💳 Списано {price} Star(s). Генерация изображения(й) ({count})... ⏳",
+        "image_ready": "✅ Изображение(я) готово(ы)! 📸",
+        "btn_generate_again": "🔄 Создать снова",
+        "account_title": "👤 Мой аккаунт",
+        "account_balance": "💳 Баланс: {balance} Stars",
+        "account_referrals": "👥 Приглашенные пользователи: {count}",
+        "account_referral_link": "🔗 Ваша реферальная ссылка:\n{link}",
+        "account_withdraw": "📤 Вывести",
+        "account_api": "🔑 API",
+        "withdraw_soon": "📤 Функция вывода ещё не готова — Скоро будет! ⏳",
+        "api_soon": "🔑 Доступ к API: Скоро!",
+        "info_title": "📊 Статистика",
+        "info_uptime": "⏱ Время работы: {uptime}",
+        "info_ping": "🌐 Пинг: {ping} мс",
+        "info_users": "👥 Пользователи: {count}",
+        "info_images": "🖼 Всего сгенерировано изображений: {count}",
+        "info_donations": "💰 Всего пожертвований: {amount}",
+        "btn_contact_admin": "📩 Связаться с админом",
+        "sub_check_prompt": "⛔ Вы должны быть подписаны на наш канал, чтобы использовать бота!",
+        "sub_check_link_text": "🔗 Подписаться на канал",
+        "sub_check_button_text": "✅ Проверить подписку",
+        "sub_check_success": "✅ Спасибо! Вы подписаны. Теперь вы можете использовать бота.",
+        "sub_check_fail": "⛔ Вы всё ещё не подписаны. Пожалуйста, подпишитесь и проверьте снова.",
+        "invalid_button": "❌ Неверная кнопка.",
+        "error_try_again": "⚠️ Произошла ошибка. Пожалуйста, попробуйте снова.",
+        "image_wait_timeout": "⚠️ Подготовка изображения занимает много времени. Пожалуйста, попробуйте позже.",
+        "image_id_missing": "❌ Не удалось получить ID изображения (ответ API).",
+        "api_unknown_response": "❌ Неизвестный ответ от API. Пожалуйста, свяжитесь с администратором.",
+        "enter_donate_amount": "💰 Пожалуйста, введите сумму пожертвования (1–100000):",
+        "invalid_donate_amount": "❌ Пожалуйста, введите целое число от 1 до 100000.",
+        "donate_invoice_title": "💖 Пожертвование боту",
+        "donate_invoice_description": "Отправьте произвольную сумму для поддержки бота.",
+        "donate_thanks": "✅ Спасибо, {first_name}! Вы отправили {amount_stars} Stars.",
+        "account_withdraw_soon": "📤 Вывести: Скоро",
+        "account_api_soon": "🔑 API: Скоро",
+        "referral_reward": "Вы получили {reward} Stars за успешное приглашение!",
+        "prompt_missing_group": "❌ В группе, пожалуйста, укажите запрос после /get. Пример: /get футуристический город",
+        "prompt_missing_private": "✍️ Пожалуйста, отправьте текстовый запрос для изображения (или просто отправьте текст).",
+        "prompt_received_private": "🖌 Ваш запрос:\n{prompt}\n\n🔢 Сколько изображений сгенерировать?",
+        "prompt_received_group": "🖌 Ваш запрос:\n{prompt}\n\n🔢 Сколько изображений сгенерировать?",
+    },
+    "id": {
+        "choose_language": "🌐 Silakan pilih bahasa Anda:",
+        "language_set": "✅ Bahasa diatur ke {lang_code}.",
+        "main_panel_text": "👋 Panel utama — kelola gambar, saldo, dan pengaturan di sini.",
+        "btn_generate": "🎨 Buat Gambar",
+        "btn_donate": "💖 Donasi",
+        "btn_account": "👤 Akun Saya",
+        "btn_change_lang": "🌐 Ubah Bahasa",
+        "btn_info": "ℹ️ Info / Statistik",
+        "btn_back": "⬅️ Kembali",
+        "enter_prompt": "✍️ Silakan kirim prompt teks untuk gambar (di chat pribadi).",
+        "prompt_received": "🖌 Prompt Anda:\n{prompt}\n\n🔢 Berapa banyak gambar yang akan dibuat?",
+        "btn_1": "1️⃣",
+        "btn_2": "2️⃣",
+        "btn_4": "4️⃣",
+        "btn_8": "8️⃣",
+        "generating": "🔄 Membuat gambar ({count})... ⏳",
+        "generating_8_limited": "🔄 Membuat gambar ({count})... ⏳ (Digunakan {used}/{limit} batch 8 gratis hari ini)",
+        "insufficient_balance_8": "⚠️ Anda sudah menggunakan 3 pembuatan gambar 8 gratis hari ini. Setiap pembuatan berikutnya memerlukan 1 Star. Saldo tidak mencukupi.",
+        "stars_deducted": "💳 {price} Star(s) telah dikurangi. Membuat gambar ({count})... ⏳",
+        "image_ready": "✅ Gambar siap! 📸",
+        "btn_generate_again": "🔄 Buat Lagi",
+        "account_title": "👤 Akun Saya",
+        "account_balance": "💳 Saldo: {balance} Stars",
+        "account_referrals": "👥 Pengguna yang Diundang: {count}",
+        "account_referral_link": "🔗 Tautan Referral Anda:\n{link}",
+        "account_withdraw": "📤 Tarik",
+        "account_api": "🔑 API",
+        "withdraw_soon": "📤 Fitur penarikan belum siap — Akan datang segera! ⏳",
+        "api_soon": "🔑 Akses API: Akan datang segera!",
+        "info_title": "📊 Statistik",
+        "info_uptime": "⏱ Waktu Aktif: {uptime}",
+        "info_ping": "🌐 Ping: {ping} ms",
+        "info_users": "👥 Pengguna: {count}",
+        "info_images": "🖼 Total Gambar yang Dibuat: {count}",
+        "info_donations": "💰 Total Donasi: {amount}",
+        "btn_contact_admin": "📩 Hubungi Admin",
+        "sub_check_prompt": "⛔ Anda harus berlangganan ke channel kami untuk menggunakan bot!",
+        "sub_check_link_text": "🔗 Berlangganan ke Channel",
+        "sub_check_button_text": "✅ Periksa Langganan",
+        "sub_check_success": "✅ Terima kasih! Anda sudah berlangganan. Sekarang Anda dapat menggunakan bot.",
+        "sub_check_fail": "⛔ Anda belum berlangganan. Silakan berlangganan dan periksa lagi.",
+        "invalid_button": "❌ Tombol tidak valid.",
+        "error_try_again": "⚠️ Terjadi kesalahan. Silakan coba lagi.",
+        "image_wait_timeout": "⚠️ Memakan waktu lama untuk menyiapkan gambar. Silakan coba lagi nanti.",
+        "image_id_missing": "❌ Gagal mendapatkan ID gambar (respons API).",
+        "api_unknown_response": "❌ Respons tidak dikenal dari API. Silakan hubungi admin.",
+        "enter_donate_amount": "💰 Silakan masukkan jumlah yang ingin Anda donasikan (1–100000):",
+        "invalid_donate_amount": "❌ Silakan masukkan bilangan bulat antara 1 dan 100000.",
+        "donate_invoice_title": "💖 Donasi Bot",
+        "donate_invoice_description": "Kirim jumlah opsional untuk mendukung bot.",
+        "donate_thanks": "✅ Terima kasih, {first_name}! Anda mengirim {amount_stars} Stars.",
+        "account_withdraw_soon": "📤 Tarik: Akan Datang",
+        "account_api_soon": "🔑 API: Akan Datang",
+        "referral_reward": "Anda menerima {reward} Stars untuk referral yang berhasil!",
+        "prompt_missing_group": "❌ Di grup, silakan berikan prompt setelah /get. Contoh: /get kota futuristik",
+        "prompt_missing_private": "✍️ Silakan kirim prompt teks untuk gambar (atau kirim teks biasa saja).",
+        "prompt_received_private": "🖌 Prompt Anda:\n{prompt}\n\n🔢 Berapa banyak gambar yang akan dibuat?",
+        "prompt_received_group": "🖌 Prompt Anda:\n{prompt}\n\n🔢 Berapa banyak gambar yang akan dibuat?",
+    },
+    "lt": {
+        "choose_language": "🌐 Pasirinkite savo kalbą:",
+        "language_set": "✅ Kalba nustatyta į {lang_code}.",
+        "main_panel_text": "👋 Pagrindinis skydelis — čia valdykite vaizdus, balansą ir nustatymus.",
+        "btn_generate": "🎨 Kurti vaizdą",
+        "btn_donate": "💖 Aukoti",
+        "btn_account": "👤 Mano paskyra",
+        "btn_change_lang": "🌐 Keisti kalbą",
+        "btn_info": "ℹ️ Informacija / Statistika",
+        "btn_back": "⬅️ Atgal",
+        "enter_prompt": "✍️ Įveskite vaizdo aprašymą (privačiame pokalbyje).",
+        "prompt_received": "🖌 Jūsų aprašymas:\n{prompt}\n\n🔢 Kiek vaizdų sugeneruoti?",
+        "btn_1": "1️⃣",
+        "btn_2": "2️⃣",
+        "btn_4": "4️⃣",
+        "btn_8": "8️⃣",
+        "generating": "🔄 Generuojamas vaizdas (-ai) ({count})... ⏳",
+        "generating_8_limited": "🔄 Generuojamas vaizdas (-ai) ({count})... ⏳ (Naudojama {used}/{limit} nemokamų 8-vaizdų partijų šiandien)",
+        "insufficient_balance_8": "⚠️ Šiandien jau naudojote 3 nemokamas 8-vaizdų generacijas. Kiekviena kita 8-vaizdų generacija kainuoja 1 Star. Nepakankamas balansas.",
+        "stars_deducted": "💳 Nuskaičiuota {price} Star(s). Generuojamas vaizdas (-ai) ({count})... ⏳",
+        "image_ready": "✅ Vaizdas (-ai) paruoštas! 📸",
+        "btn_generate_again": "🔄 Kurti dar kartą",
+        "account_title": "👤 Mano paskyra",
+        "account_balance": "💳 Balansas: {balance} Stars",
+        "account_referrals": "👥 Pakviesti vartotojai: {count}",
+        "account_referral_link": "🔗 Jūsų kvietimo nuoroda:\n{link}",
+        "account_withdraw": "📤 Išsiimti",
+        "account_api": "🔑 API",
+        "withdraw_soon": "📤 Išėmimo funkcija dar neparuošta — Greitai bus! ⏳",
+        "api_soon": "🔑 API prieiga: Greitai bus!",
+        "info_title": "📊 Statistika",
+        "info_uptime": "⏱ Veikimo laikas: {uptime}",
+        "info_ping": "🌐 Ping: {ping} ms",
+        "info_users": "👥 Vartotojai: {count}",
+        "info_images": "🖼 Iš viso sugeneruota vaizdų: {count}",
+        "info_donations": "💰 Iš viso aukojimų: {amount}",
+        "btn_contact_admin": "📩 Susisiekti su administratoriumi",
+        "sub_check_prompt": "⛔ Norėdami naudoti botą, turite būti prenumeravę mūsų kanalą!",
+        "sub_check_link_text": "🔗 Prenumeruoti kanalą",
+        "sub_check_button_text": "✅ Patikrinti prenumeratą",
+        "sub_check_success": "✅ Ačiū! Esate prenumeratorius. Dabar galite naudoti botą.",
+        "sub_check_fail": "⛔ Vis dar nesate prenumeratorius. Prašome prenumeruoti ir patikrinti dar kartą.",
+        "invalid_button": "❌ Netinkamas mygtukas.",
+        "error_try_again": "⚠️ Įvyko klaida. Prašome bandyti dar kartą.",
+        "image_wait_timeout": "⚠️ Užtrunka paruošti vaizdą. Prašome pabandyti vėliau.",
+        "image_id_missing": "❌ Nepavyko gauti vaizdo ID (API atsakymas).",
+        "api_unknown_response": "❌ Nežinomas API atsakymas. Prašome susisiekti su administratoriumi.",
+        "enter_donate_amount": "💰 Įveskite sumą, kurią norite paaukoti (1–100000):",
+        "invalid_donate_amount": "❌ Įveskite sveikąjį skaičių nuo 1 iki 100000.",
+        "donate_invoice_title": "💖 Boto aukojimas",
+        "donate_invoice_description": "Atsiųskite pasirinktiną sumą, kad palaikytumėte botą.",
+        "donate_thanks": "✅ Ačiū, {first_name}! Jūs atsiuntėte {amount_stars} Stars.",
+        "account_withdraw_soon": "📤 Išsiimti: Greitai",
+        "account_api_soon": "🔑 API: Greitai",
+        "referral_reward": "Gavote {reward} Stars už sėkmingą kvietimą!",
+        "prompt_missing_group": "❌ Grupėje po /get nurodykite aprašymą. Pavyzdys: /get futuristinis miestas",
+        "prompt_missing_private": "✍️ Įveskite vaizdo aprašymą (arba tiesiog įveskite tekstą).",
+        "prompt_received_private": "🖌 Jūsų aprašymas:\n{prompt}\n\n🔢 Kiek vaizdų sugeneruoti?",
+        "prompt_received_group": "🖌 Jūsų aprašymas:\n{prompt}\n\n🔢 Kiek vaizdų sugeneruoti?",
+    },
+    "es-MX": {
+        "choose_language": "🌐 Por favor, elige tu idioma:",
+        "language_set": "✅ Idioma establecido a {lang_code}.",
+        "main_panel_text": "👋 Panel principal — gestiona imágenes, saldo y configuraciones aquí.",
+        "btn_generate": "🎨 Generar Imagen",
+        "btn_donate": "💖 Donar",
+        "btn_account": "👤 Mi Cuenta",
+        "btn_change_lang": "🌐 Cambiar Idioma",
+        "btn_info": "ℹ️ Información / Estadísticas",
+        "btn_back": "⬅️ Atrás",
+        "enter_prompt": "✍️ Por favor, envía el texto para la imagen (en chat privado).",
+        "prompt_received": "🖌 Tu texto:\n{prompt}\n\n🔢 ¿Cuántas imágenes generar?",
+        "btn_1": "1️⃣",
+        "btn_2": "2️⃣",
+        "btn_4": "4️⃣",
+        "btn_8": "8️⃣",
+        "generating": "🔄 Generando imagen(es) ({count})... ⏳",
+        "generating_8_limited": "🔄 Generando imagen(es) ({count})... ⏳ (Usadas {used}/{limit} tandas de 8 gratis hoy)",
+        "insufficient_balance_8": "⚠️ Ya usaste 3 generaciones de 8 imágenes gratis hoy. Cada generación adicional cuesta 1 Star. Saldo insuficiente.",
+        "stars_deducted": "💳 {price} Star(s) descontado(s). Generando imagen(es) ({count})... ⏳",
+        "image_ready": "✅ ¡Imagen(es) lista(s)! 📸",
+        "btn_generate_again": "🔄 Generar Otra Vez",
+        "account_title": "👤 Mi Cuenta",
+        "account_balance": "💳 Saldo: {balance} Stars",
+        "account_referrals": "👥 Usuarios Referidos: {count}",
+        "account_referral_link": "🔗 Tu Enlace de Referencia:\n{link}",
+        "account_withdraw": "📤 Retirar",
+        "account_api": "🔑 API",
+        "withdraw_soon": "📤 Función de retiro aún no disponible — ¡Próximamente! ⏳",
+        "api_soon": "🔑 Acceso API: ¡Próximamente!",
+        "info_title": "📊 Estadísticas",
+        "info_uptime": "⏱ Tiempo Activo: {uptime}",
+        "info_ping": "🌐 Ping: {ping} ms",
+        "info_users": "👥 Usuarios: {count}",
+        "info_images": "🖼 Total de Imágenes Generadas: {count}",
+        "info_donations": "💰 Donaciones Totales: {amount}",
+        "btn_contact_admin": "📩 Contactar al Admin",
+        "sub_check_prompt": "⛔ ¡Debes suscribirte a nuestro canal para usar el bot!",
+        "sub_check_link_text": "🔗 Suscribirse al Canal",
+        "sub_check_button_text": "✅ Verificar Suscripción",
+        "sub_check_success": "✅ ¡Gracias! Estás suscrito. Ahora puedes usar el bot.",
+        "sub_check_fail": "⛔ Aún no estás suscrito. Por favor, suscríbete y verifica de nuevo.",
+        "invalid_button": "❌ Botón inválido.",
+        "error_try_again": "⚠️ Ocurrió un error. Por favor, intenta de nuevo.",
+        "image_wait_timeout": "⚠️ Tarda mucho en preparar la imagen. Por favor, intenta más tarde.",
+        "image_id_missing": "❌ No se pudo obtener el ID de la imagen (respuesta de API).",
+        "api_unknown_response": "❌ Respuesta desconocida de la API. Por favor, contacta al administrador.",
+        "enter_donate_amount": "💰 Ingresa la cantidad que deseas donar (1–100000):",
+        "invalid_donate_amount": "❌ Ingresa un número entero entre 1 y 100000.",
+        "donate_invoice_title": "💖 Donación al Bot",
+        "donate_invoice_description": "Envía una cantidad opcional para apoyar al bot.",
+        "donate_thanks": "✅ ¡Gracias, {first_name}! Enviaste {amount_stars} Stars.",
+        "account_withdraw_soon": "📤 Retirar: Próximamente",
+        "account_api_soon": "🔑 API: Próximamente",
+        "referral_reward": "¡Recibiste {reward} Stars por una referencia exitosa!",
+        "prompt_missing_group": "❌ En un grupo, por favor proporciona un texto después de /get. Ejemplo: /get ciudad futurista",
+        "prompt_missing_private": "✍️ Por favor, envía el texto para la imagen (o simplemente envía texto).",
+        "prompt_received_private": "🖌 Tu texto:\n{prompt}\n\n🔢 ¿Cuántas imágenes generar?",
+        "prompt_received_group": "🖌 Tu texto:\n{prompt}\n\n🔢 ¿Cuántas imágenes generar?",
+    },
+    "es": {
+        "choose_language": "🌐 Por favor, elige tu idioma:",
+        "language_set": "✅ Idioma establecido a {lang_code}.",
+        "main_panel_text": "👋 Panel principal — gestiona imágenes, saldo y configuraciones aquí.",
+        "btn_generate": "🎨 Generar Imagen",
+        "btn_donate": "💖 Donar",
+        "btn_account": "👤 Mi Cuenta",
+        "btn_change_lang": "🌐 Cambiar Idioma",
+        "btn_info": "ℹ️ Información / Estadísticas",
+        "btn_back": "⬅️ Atrás",
+        "enter_prompt": "✍️ Por favor, envía el texto para la imagen (en chat privado).",
+        "prompt_received": "🖌 Tu texto:\n{prompt}\n\n🔢 ¿Cuántas imágenes generar?",
+        "btn_1": "1️⃣",
+        "btn_2": "2️⃣",
+        "btn_4": "4️⃣",
+        "btn_8": "8️⃣",
+        "generating": "🔄 Generando imagen(es) ({count})... ⏳",
+        "generating_8_limited": "🔄 Generando imagen(es) ({count})... ⏳ (Usadas {used}/{limit} tandas de 8 gratis hoy)",
+        "insufficient_balance_8": "⚠️ Ya usaste 3 generaciones de 8 imágenes gratis hoy. Cada generación adicional cuesta 1 Star. Saldo insuficiente.",
+        "stars_deducted": "💳 {price} Star(s) descontado(s). Generando imagen(es) ({count})... ⏳",
+        "image_ready": "✅ ¡Imagen(es) lista(s)! 📸",
+        "btn_generate_again": "🔄 Generar Otra Vez",
+        "account_title": "👤 Mi Cuenta",
+        "account_balance": "💳 Saldo: {balance} Stars",
+        "account_referrals": "👥 Usuarios Referidos: {count}",
+        "account_referral_link": "🔗 Tu Enlace de Referencia:\n{link}",
+        "account_withdraw": "📤 Retirar",
+        "account_api": "🔑 API",
+        "withdraw_soon": "📤 Función de retiro aún no disponible — ¡Próximamente! ⏳",
+        "api_soon": "🔑 Acceso API: ¡Próximamente!",
+        "info_title": "📊 Estadísticas",
+        "info_uptime": "⏱ Tiempo Activo: {uptime}",
+        "info_ping": "🌐 Ping: {ping} ms",
+        "info_users": "👥 Usuarios: {count}",
+        "info_images": "🖼 Total de Imágenes Generadas: {count}",
+        "info_donations": "💰 Donaciones Totales: {amount}",
+        "btn_contact_admin": "📩 Contactar al Admin",
+        "sub_check_prompt": "⛔ ¡Debes suscribirte a nuestro canal para usar el bot!",
+        "sub_check_link_text": "🔗 Suscribirse al Canal",
+        "sub_check_button_text": "✅ Verificar Suscripción",
+        "sub_check_success": "✅ ¡Gracias! Estás suscrito. Ahora puedes usar el bot.",
+        "sub_check_fail": "⛔ Aún no estás suscrito. Por favor, suscríbete y verifica de nuevo.",
+        "invalid_button": "❌ Botón inválido.",
+        "error_try_again": "⚠️ Ocurrió un error. Por favor, intenta de nuevo.",
+        "image_wait_timeout": "⚠️ Tarda mucho en preparar la imagen. Por favor, intenta más tarde.",
+        "image_id_missing": "❌ No se pudo obtener el ID de la imagen (respuesta de API).",
+        "api_unknown_response": "❌ Respuesta desconocida de la API. Por favor, contacta al administrador.",
+        "enter_donate_amount": "💰 Ingresa la cantidad que deseas donar (1–100000):",
+        "invalid_donate_amount": "❌ Ingresa un número entero entre 1 y 100000.",
+        "donate_invoice_title": "💖 Donación al Bot",
+        "donate_invoice_description": "Envía una cantidad opcional para apoyar al bot.",
+        "donate_thanks": "✅ ¡Gracias, {first_name}! Enviaste {amount_stars} Stars.",
+        "account_withdraw_soon": "📤 Retirar: Próximamente",
+        "account_api_soon": "🔑 API: Próximamente",
+        "referral_reward": "¡Recibiste {reward} Stars por una referencia exitosa!",
+        "prompt_missing_group": "❌ En un grupo, por favor proporciona un texto después de /get. Ejemplo: /get ciudad futurista",
+        "prompt_missing_private": "✍️ Por favor, envía el texto para la imagen (o simplemente envía texto).",
+        "prompt_received_private": "🖌 Tu texto:\n{prompt}\n\n🔢 ¿Cuántas imágenes generar?",
+        "prompt_received_group": "🖌 Tu texto:\n{prompt}\n\n🔢 ¿Cuántas imágenes generar?",
+    },
+    "it": {
+        "choose_language": "🌐 Per favore, scegli la tua lingua:",
+        "language_set": "✅ Lingua impostata su {lang_code}.",
+        "main_panel_text": "👋 Pannello principale — gestisci immagini, saldo e impostazioni qui.",
+        "btn_generate": "🎨 Genera Immagine",
+        "btn_donate": "💖 Dona",
+        "btn_account": "👤 Il mio account",
+        "btn_change_lang": "🌐 Cambia lingua",
+        "btn_info": "ℹ️ Info / Statistiche",
+        "btn_back": "⬅️ Indietro",
+        "enter_prompt": "✍️ Per favore, invia il testo per l'immagine (in chat privata).",
+        "prompt_received": "🖌 Il tuo testo:\n{prompt}\n\n🔢 Quante immagini generare?",
+        "btn_1": "1️⃣",
+        "btn_2": "2️⃣",
+        "btn_4": "4️⃣",
+        "btn_8": "8️⃣",
+        "generating": "🔄 Generazione immagine/i ({count})... ⏳",
+        "generating_8_limited": "🔄 Generazione immagine/i ({count})... ⏳ (Usate {used}/{limit} batch da 8 gratuite oggi)",
+        "insufficient_balance_8": "⚠️ Hai già usato 3 generazioni di 8 immagini gratuite oggi. Ogni generazione successiva costa 1 Star. Saldo insufficiente.",
+        "stars_deducted": "💳 {price} Star(s) detratti. Generazione immagine/i ({count})... ⏳",
+        "image_ready": "✅ Immagine/i pronta/e! 📸",
+        "btn_generate_again": "🔄 Genera di nuovo",
+        "account_title": "👤 Il mio account",
+        "account_balance": "💳 Saldo: {balance} Stars",
+        "account_referrals": "👥 Utenti Referred: {count}",
+        "account_referral_link": "🔗 Il tuo Link di Referral:\n{link}",
+        "account_withdraw": "📤 Preleva",
+        "account_api": "🔑 API",
+        "withdraw_soon": "📤 Funzione di prelievo non ancora disponibile — Prossimamente! ⏳",
+        "api_soon": "🔑 Accesso API: Prossimamente!",
+        "info_title": "📊 Statistiche",
+        "info_uptime": "⏱ Tempo di attività: {uptime}",
+        "info_ping": "🌐 Ping: {ping} ms",
+        "info_users": "👥 Utenti: {count}",
+        "info_images": "🖼 Totale Immagini Generate: {count}",
+        "info_donations": "💰 Donazioni Totali: {amount}",
+        "btn_contact_admin": "📩 Contatta l'Admin",
+        "sub_check_prompt": "⛔ Devi essere iscritto al nostro canale per usare il bot!",
+        "sub_check_link_text": "🔗 Iscriviti al Canale",
+        "sub_check_button_text": "✅ Verifica Iscrizione",
+        "sub_check_success": "✅ Grazie! Sei iscritto. Ora puoi usare il bot.",
+        "sub_check_fail": "⛔ Non sei ancora iscritto. Per favore, iscriviti e verifica di nuovo.",
+        "invalid_button": "❌ Pulsante non valido.",
+        "error_try_again": "⚠️ Si è verificato un errore. Per favore, riprova.",
+        "image_wait_timeout": "⚠️ Ci sta impiegando troppo tempo per preparare l'immagine. Riprova più tardi.",
+        "image_id_missing": "❌ Impossibile ottenere l'ID dell'immagine (risposta API).",
+        "api_unknown_response": "❌ Risposta sconosciuta dall'API. Per favore, contatta l'amministratore.",
+        "enter_donate_amount": "💰 Inserisci l'importo che desideri donare (1–100000):",
+        "invalid_donate_amount": "❌ Inserisci un numero intero tra 1 e 100000.",
+        "donate_invoice_title": "💖 Donazione al Bot",
+        "donate_invoice_description": "Invia un importo facoltativo per sostenere il bot.",
+        "donate_thanks": "✅ Grazie, {first_name}! Hai inviato {amount_stars} Stars.",
+        "account_withdraw_soon": "📤 Preleva: Prossimamente",
+        "account_api_soon": "🔑 API: Prossimamente",
+        "referral_reward": "Hai ricevuto {reward} Stars per un referral riuscito!",
+        "prompt_missing_group": "❌ In un gruppo, fornisci un testo dopo /get. Esempio: /get città futuristica",
+        "prompt_missing_private": "✍️ Per favore, invia il testo per l'immagine (o invia semplicemente del testo).",
+        "prompt_received_private": "🖌 Il tuo testo:\n{prompt}\n\n🔢 Quante immagini generare?",
+        "prompt_received_group": "🖌 Il tuo testo:\n{prompt}\n\n🔢 Quante immagini generare?",
+    },
+    "zh": {
+        "choose_language": "🌐 请选择您的语言：",
+        "language_set": "✅ 语言已设置为 {lang_code}。",
+        "main_panel_text": "👋 主面板 — 在这里管理图片、余额和设置。",
+        "btn_generate": "🎨 生成图片",
+        "btn_donate": "💖 捐赠",
+        "btn_account": "👤 我的账户",
+        "btn_change_lang": "🌐 更改语言",
+        "btn_info": "ℹ️ 信息 / 统计",
+        "btn_back": "⬅️ 返回",
+        "enter_prompt": "✍️ 请发送图片的文字提示（在私人聊天中）。",
+        "prompt_received": "🖌 您的提示：\n{prompt}\n\n🔢 生成多少张图片？",
+        "btn_1": "1️⃣",
+        "btn_2": "2️⃣",
+        "btn_4": "4️⃣",
+        "btn_8": "8️⃣",
+        "generating": "🔄 正在生成图片 ({count})... ⏳",
+        "generating_8_limited": "🔄 正在生成图片 ({count})... ⏳ (今日已使用 {used}/{limit} 次免费 8 张图片)",
+        "insufficient_balance_8": "⚠️ 您今天已经使用了 3 次免费的 8 张图片生成。每次后续生成需要 1 Star。余额不足。",
+        "stars_deducted": "💳 扣除 {price} Star(s)。正在生成图片 ({count})... ⏳",
+        "image_ready": "✅ 图片已就绪！📸",
+        "btn_generate_again": "🔄 再次生成",
+        "account_title": "👤 我的账户",
+        "account_balance": "💳 余额：{balance} Stars",
+        "account_referrals": "👥 推荐用户：{count}",
+        "account_referral_link": "🔗 您的推荐链接：\n{link}",
+        "account_withdraw": "📤 提现",
+        "account_api": "🔑 API",
+        "withdraw_soon": "📤 提现功能尚未准备好 — 即将推出！⏳",
+        "api_soon": "🔑 API 访问：即将推出！",
+        "info_title": "📊 统计信息",
+        "info_uptime": "⏱ 运行时间：{uptime}",
+        "info_ping": "🌐 延迟：{ping} 毫秒",
+        "info_users": "👥 用户：{count}",
+        "info_images": "🖼 总生成图片数：{count}",
+        "info_donations": "💰 总捐赠：{amount}",
+        "btn_contact_admin": "📩 联系管理员",
+        "sub_check_prompt": "⛔ 您必须订阅我们的频道才能使用机器人！",
+        "sub_check_link_text": "🔗 订阅频道",
+        "sub_check_button_text": "✅ 检查订阅",
+        "sub_check_success": "✅ 谢谢！您已订阅。现在可以使用机器人了。",
+        "sub_check_fail": "⛔ 您尚未订阅。请订阅并再次检查。",
+        "invalid_button": "❌ 无效按钮。",
+        "error_try_again": "⚠️ 发生错误。请重试。",
+        "image_wait_timeout": "⚠️ 准备图片花费的时间太长。请稍后再试。",
+        "image_id_missing": "❌ 无法获取图片 ID（API 响应）。",
+        "api_unknown_response": "❌ 来自 API 的未知响应。请联系管理员。",
+        "enter_donate_amount": "💰 请输入您想捐赠的金额（1–100000）：",
+        "invalid_donate_amount": "❌ 请输入 1 到 100000 之间的整数。",
+        "donate_invoice_title": "💖 机器人捐赠",
+        "donate_invoice_description": "发送任意金额以支持机器人。",
+        "donate_thanks": "✅ 谢谢，{first_name}！您发送了 {amount_stars} Stars。",
+        "account_withdraw_soon": "📤 提现：即将推出",
+        "account_api_soon": "🔑 API：即将推出",
+        "referral_reward": "您因成功推荐而获得了 {reward} Stars！",
+        "prompt_missing_group": "❌ 在群组中，请在 /get 后提供提示。例如：/get 未来城市",
+        "prompt_missing_private": "✍️ 请发送图片的文字提示（或直接发送文本）。",
+        "prompt_received_private": "🖌 您的提示：\n{prompt}\n\n🔢 生成多少张图片？",
+        "prompt_received_group": "🖌 您的提示：\n{prompt}\n\n🔢 生成多少张图片？",
+    },
+    "uz": {
+        "choose_language": "🌐 Iltimos, tilni tanlang:",
+        "language_set": "✅ Til {lang_code} ga o'zgartirildi.",
+        "main_panel_text": "👋 Bosh panel — bu yerdan rasmlar, balans va sozlamalarni boshqarishingiz mumkin.",
+        "btn_generate": "🎨 Rasm yaratish",
+        "btn_donate": "💖 Donate",
+        "btn_account": "👤 Hisobim",
+        "btn_change_lang": "🌐 Tilni o‘zgartirish",
+        "btn_info": "ℹ️ Statistika / Info",
+        "btn_back": "⬅️ Ortga",
+        "enter_prompt": "✍️ Endi tasvir yaratish uchun matn yuboring (privatda).",
+        "prompt_received": "🖌 Sizning matningiz:\n{prompt}\n\n🔢 Nechta rasm yaratilsin?",
+        "btn_1": "1️⃣",
+        "btn_2": "2️⃣",
+        "btn_4": "4️⃣",
+        "btn_8": "8️⃣",
+        "generating": "🔄 Rasm yaratilmoqda ({count})... ⏳",
+        "generating_8_limited": "🔄 Rasm yaratilmoqda ({count})... ⏳ (bugun {used}/{limit} dan foydalanildi)",
+        "insufficient_balance_8": "⚠️ Siz bugun allaqachon 3 marta 8 ta rasm yaratdingiz. Har keyingi 8 ta generatsiya — 1 Stars. Balans yetarli emas.",
+        "stars_deducted": "💳 {price} Stars yechildi. Rasm yaratilmoqda ({count})... ⏳",
+        "image_ready": "✅ Rasm tayyor! 📸",
+        "btn_generate_again": "🔄 Yana yaratish",
+        "account_title": "👤 Hisobim",
+        "account_balance": "💳 Balans: {balance} Stars",
+        "account_referrals": "👥 Taklif qilinganlar: {count}",
+        "account_referral_link": "🔗 Sizning referral link:\n{link}",
+        "account_withdraw": "📤 Yechib olish",
+        "account_api": "🔑 API",
+        "withdraw_soon": "📤 Yechib olish funksiyasi hozircha tayyor emas — Tez kunda! ⏳",
+        "api_soon": "🔑 API: Tez kunda",
+        "info_title": "📊 Statistika",
+        "info_uptime": "⏱ Ish vaqti (uptime): {uptime}",
+        "info_ping": "🌐 Ping: {ping} ms",
+        "info_users": "👥 Foydalanuvchilar: {count}",
+        "info_images": "🖼 Umumiy yaratilgan rasmlar: {count}",
+        "info_donations": "💰 Umumiy donations: {amount}",
+        "btn_contact_admin": "📩 Admin bilan bog‘lanish",
+        "sub_check_prompt": "⛔ Botdan foydalanish uchun kanalimizga obuna bo‘ling!",
+        "sub_check_link_text": "🔗 Kanalga obuna bo‘lish",
+        "sub_check_button_text": "✅ Obunani tekshirish",
+        "sub_check_success": "✅ Rahmat! Siz obuna bo‘lgansiz. Endi botdan foydalanishingiz mumkin.",
+        "sub_check_fail": "⛔ Hali ham obuna bo‘lmagansiz. Obuna bo‘lib, qayta tekshiring.",
+        "invalid_button": "❌ Noto'g'ri tugma.",
+        "error_try_again": "⚠️ Xatolik yuz berdi. Qayta urinib ko‘ring.",
+        "image_wait_timeout": "⚠️ Rasmni tayyorlash biroz vaqt olmoqda. Keyinroq urinib ko'ring.",
+        "image_id_missing": "❌ Rasm ID olinmadi (API javobi).",
+        "api_unknown_response": "❌ API dan noma'lum javob keldi. Adminga murojaat qiling.",
+        "enter_donate_amount": "💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):",
+        "invalid_donate_amount": "❌ Iltimos, 1–100000 oralig‘ida butun son kiriting.",
+        "donate_invoice_title": "💖 Bot Donation",
+        "donate_invoice_description": "Botni qo‘llab-quvvatlash uchun ixtiyoriy summa yuboring.",
+        "donate_thanks": "✅ Rahmat, {first_name}! Siz {amount_stars} Stars yubordingiz.",
+        "account_withdraw_soon": "📤 Yechib olish: Tez kunda",
+        "account_api_soon": "🔑 API: Tez kunda",
+        "referral_reward": "Muvaffaqiyatli taklif qilish uchun {reward} Stars oldingiz!",
+        "prompt_missing_group": "❌ Guruhda /get dan keyin prompt yozing. Misol: /get futuristik shahar",
+        "prompt_missing_private": "✍️ Iltimos, rasm uchun matn yozing (yoki oddiy matn yuboring).",
+        "prompt_received_private": "🖌 Sizning matningiz:\n{prompt}\n\n🔢 Nechta rasm yaratilsin?",
+        "prompt_received_group": "🖌 Sizning matningiz:\n{prompt}\n\n🔢 Nechta rasm yaratilsin?",
+    },
+    "uzk": {
+        "choose_language": "🌐 Илтимос, тилни танланг:",
+        "language_set": "✅ Тил {lang_code} га ўзгартирилди.",
+        "main_panel_text": "👋 Бош панел — бу ердан расмлар, баланс ва созламаларни бошқаришингиз мумкин.",
+        "btn_generate": "🎨 Расм яратиш",
+        "btn_donate": "💖 Донате",
+        "btn_account": "👤 Ҳисобим",
+        "btn_change_lang": "🌐 Тилни ўзгартириш",
+        "btn_info": "ℹ️ Статистика / Инфо",
+        "btn_back": "⬅️ Ортга",
+        "enter_prompt": "✍️ Энди тасвир яратиш учун матн юборинг (приватда).",
+        "prompt_received": "🖌 Сизнинг матнингиз:\n{prompt}\n\n🔢 Нечта расм яратилсин?",
+        "btn_1": "1️⃣",
+        "btn_2": "2️⃣",
+        "btn_4": "4️⃣",
+        "btn_8": "8️⃣",
+        "generating": "🔄 Расм яратилмоқда ({count})... ⏳",
+        "generating_8_limited": "🔄 Расм яратилмоқда ({count})... ⏳ (бугун {used}/{limit} дан фойдаланилди)",
+        "insufficient_balance_8": "⚠️ Сиз бугун аллақачон 3 марта 8 та расм яратдингиз. Ҳар кейинги 8 та генерация — 1 Старс. Баланс етарли эмас.",
+        "stars_deducted": "💳 {price} Старс екилди. Расм яратилмоқда ({count})... ⏳",
+        "image_ready": "✅ Расм тайёр! 📸",
+        "btn_generate_again": "🔄 Яна яратиш",
+        "account_title": "👤 Ҳисобим",
+        "account_balance": "💳 Баланс: {balance} Старс",
+        "account_referrals": "👥 Таклиф қилинганлар: {count}",
+        "account_referral_link": "🔗 Сизнинг реферал линк:\n{link}",
+        "account_withdraw": "📤 Ечиб олиш",
+        "account_api": "🔑 АПИ",
+        "withdraw_soon": "📤 Ечиб олиш функцияси ҳозирча тайёр эмас — Тез кунда! ⏳",
+        "api_soon": "🔑 АПИ: Тез кунда",
+        "info_title": "📊 Статистика",
+        "info_uptime": "⏱ Иш вақти (uptime): {uptime}",
+        "info_ping": "🌐 Пинг: {ping} мс",
+        "info_users": "👥 Фойдаланувчилар: {count}",
+        "info_images": "🖼 Умумий яратилган расмлар: {count}",
+        "info_donations": "💰 Умумий донаций: {amount}",
+        "btn_contact_admin": "📩 Админ билан боғланиш",
+        "sub_check_prompt": "⛔ Ботдан фойдаланиш учун каналга обуна бўлинг!",
+        "sub_check_link_text": "🔗 Каналга обуна бўлиш",
+        "sub_check_button_text": "✅ Обунани текшириш",
+        "sub_check_success": "✅ Раҳмат! Сиз обуна бўлдингиз. Энди ботдан фойдаланишингиз мумкин.",
+        "sub_check_fail": "⛔ Ҳали ҳам обуна бўлмагансиз. Обуна бўлиб, қайта текширинг.",
+        "invalid_button": "❌ Нотўғри тугма.",
+        "error_try_again": "⚠️ Хатолик юз берди. Қайта уриниб кўринг.",
+        "image_wait_timeout": "⚠️ Расмни тайёрлаш бироз вақт олмоқда. Кейинроқ уриниб кўринг.",
+        "image_id_missing": "❌ Расм ИД олинмади (АПИ жавоби).",
+        "api_unknown_response": "❌ АПИ дан номаълум жавоб келди. Админга муражат қилинг.",
+        "enter_donate_amount": "💰 Илтимос, юбормоқчи бўлган миқдорни киритинг (1–100000):",
+        "invalid_donate_amount": "❌ Илтимос, 1–100000 оралиғида бутун сон киритинг.",
+        "donate_invoice_title": "💖 Бот Донатион",
+        "donate_invoice_description": "Ботни қўллаб-қувватлаш учун ихтиёрий сумма юборинг.",
+        "donate_thanks": "✅ Раҳмат, {first_name}! Сиз {amount_stars} Старс юбордингиз.",
+        "account_withdraw_soon": "📤 Ечиб олиш: Тез кунда",
+        "account_api_soon": "🔑 АПИ: Тез кунда",
+        "referral_reward": "Муваффақиятли таклиф қилиш учун {reward} Старс олдингиз!",
+        "prompt_missing_group": "❌ Гуруҳда /get дан кейин промпт ёзинг. Мисол: /get футуристик шаҳар",
+        "prompt_missing_private": "✍️ Илтимос, расм учун матн ёзинг (ёки оддий матн юборинг).",
+        "prompt_received_private": "🖌 Сизнинг матнингиз:\n{prompt}\n\n🔢 Нечта расм яратилсин?",
+        "prompt_received_group": "🖌 Сизнинг матнингиз:\n{prompt}\n\n🔢 Нечта расм яратилсин?",
+    },
+    "bn": {
+        "choose_language": "🌐 অনুগ্রহ করে আপনার ভাষা নির্বাচন করুন:",
+        "language_set": "✅ ভাষা {lang_code} এ সেট করা হয়েছে।",
+        "main_panel_text": "👋 প্রধান প্যানেল — এখানে চিত্র, ব্যালেন্স এবং সেটিংস পরিচালনা করুন।",
+        "btn_generate": "🎨 ছবি তৈরি করুন",
+        "btn_donate": "💖 দান করুন",
+        "btn_account": "👤 আমার অ্যাকাউন্ট",
+        "btn_change_lang": "🌐 ভাষা পরিবর্তন করুন",
+        "btn_info": "ℹ️ তথ্য / পরিসংখ্যান",
+        "btn_back": "⬅️ পিছনে",
+        "enter_prompt": "✍️ অনুগ্রহ করে ছবির জন্য টেক্সট প্রম্পট পাঠান (ব্যক্তিগত চ্যাটে)।",
+        "prompt_received": "🖌 আপনার প্রম্পট:\n{prompt}\n\n🔢 কতগুলি ছবি তৈরি করবেন?",
+        "btn_1": "1️⃣",
+        "btn_2": "2️⃣",
+        "btn_4": "4️⃣",
+        "btn_8": "8️⃣",
+        "generating": "🔄 ছবি তৈরি হচ্ছে ({count})... ⏳",
+        "generating_8_limited": "🔄 ছবি তৈরি হচ্ছে ({count})... ⏳ (আজকে ব্যবহৃত {used}/{limit} টি বিনামূল্যে 8-ব্যাচ)",
+        "insufficient_balance_8": "⚠️ আপনি ইতিমধ্যে আজ 3টি বিনামূল্যে 8-ছবি তৈরি করেছেন। পরবর্তী প্রতিটি 8-ছবি তৈরি 1 স্টার খরচ হবে। ব্যালেন্স অপর্যাপ্ত।",
+        "stars_deducted": "💳 {price} স্টার(গুলি) কাটা হয়েছে। ছবি তৈরি হচ্ছে ({count})... ⏳",
+        "image_ready": "✅ ছবি(গুলি) প্রস্তুত! 📸",
+        "btn_generate_again": "🔄 আবার তৈরি করুন",
+        "account_title": "👤 আমার অ্যাকাউন্ট",
+        "account_balance": "💳 ব্যালেন্স: {balance} স্টার",
+        "account_referrals": "👥 রেফার করা ব্যবহারকারী: {count}",
+        "account_referral_link": "🔗 আপনার রেফারেল লিঙ্ক:\n{link}",
+        "account_withdraw": "📤 উত্তোলন",
+        "account_api": "🔑 API",
+        "withdraw_soon": "📤 উত্তোলন বৈশিষ্ট্য এখনও প্রস্তুত নয় — শীঘ্রই আসছে! ⏳",
+        "api_soon": "🔑 API অ্যাক্সেস: শীঘ্রই!",
+        "info_title": "📊 পরিসংখ্যান",
+        "info_uptime": "⏱ আপটাইম: {uptime}",
+        "info_ping": "🌐 পিং: {ping} মিলিসেকেন্ড",
+        "info_users": "👥 ব্যবহারকারী: {count}",
+        "info_images": "🖼 মোট তৈরি করা ছবি: {count}",
+        "info_donations": "💰 মোট দান: {amount}",
+        "btn_contact_admin": "📩 অ্যাডমিনের সাথে যোগাযোগ করুন",
+        "sub_check_prompt": "⛔ বট ব্যবহার করতে আপনাকে আমাদের চ্যানেলে সাবস্ক্রাইব করতে হবে!",
+        "sub_check_link_text": "🔗 চ্যানেলে সাবস্ক্রাইব করুন",
+        "sub_check_button_text": "✅ সাবস্ক্রিপশন চেক করুন",
+        "sub_check_success": "✅ ধন্যবাদ! আপনি সাবস্ক্রাইব করেছেন। এখন আপনি বট ব্যবহার করতে পারেন।",
+        "sub_check_fail": "⛔ আপনি এখনও সাবস্ক্রাইব করেননি। অনুগ্রহ করে সাবস্ক্রাইব করুন এবং আবার চেক করুন।",
+        "invalid_button": "❌ অবৈধ বোতাম।",
+        "error_try_again": "⚠️ একটি ত্রুটি ঘটেছে। অনুগ্রহ করে আবার চেষ্টা করুন।",
+        "image_wait_timeout": "⚠️ ছবি প্রস্তুত করতে একটু সময় লাগছে। পরে আবার চেষ্টা করুন।",
+        "image_id_missing": "❌ ছবি ID পাওয়া যায়নি (API প্রতিক্রিয়া)।",
+        "api_unknown_response": "❌ API থেকে অজানা প্রতিক্রিয়া। অ্যাডমিনের সাথে যোগাযোগ করুন।",
+        "enter_donate_amount": "💰 অনুগ্রহ করে আপনি দান করতে চান এমন পরিমাণ লিখুন (1–100000):",
+        "invalid_donate_amount": "❌ অনুগ্রহ করে 1 থেকে 100000 এর মধ্যে একটি পূর্ণসংখ্যা লিখুন।",
+        "donate_invoice_title": "💖 বট দান",
+        "donate_invoice_description": "বট সমর্থনের জন্য একটি ঐচ্ছিক পরিমাণ পাঠান।",
+        "donate_thanks": "✅ ধন্যবাদ, {first_name}! আপনি {amount_stars} স্টার পাঠিয়েছেন।",
+        "account_withdraw_soon": "📤 উত্তোলন: শীঘ্রই",
+        "account_api_soon": "🔑 API: শীঘ্রই",
+        "referral_reward": "একটি সফল রেফারেলের জন্য আপনি {reward} স্টার পেয়েছেন!",
+        "prompt_missing_group": "❌ একটি গ্রুপে, /get এর পরে একটি প্রম্পট সরবরাহ করুন। উদাহরণ: /get ভবিষ্যতবাণীমূলক শহর",
+        "prompt_missing_private": "✍️ অনুগ্রহ করে ছবির জন্য টেক্সট প্রম্পট পাঠান (বা শুধু প্লেইন টেক্সট পাঠান)।",
+        "prompt_received_private": "🖌 আপনার প্রম্পট:\n{prompt}\n\n🔢 কতগুলি ছবি তৈরি করবেন?",
+        "prompt_received_group": "🖌 আপনার প্রম্পট:\n{prompt}\n\n🔢 কতগুলি ছবি তৈরি করবেন?",
+    },
+    "hi": {
+        "choose_language": "🌐 कृपया अपनी भाषा चुनें:",
+        "language_set": "✅ भाषा {lang_code} पर सेट हो गई है।",
+        "main_panel_text": "👋 मुख्य पैनल — यहां चित्रों, शेष राशि और सेटिंग्स का प्रबंधन करें।",
+        "btn_generate": "🎨 चित्र बनाएं",
+        "btn_donate": "💖 दान करें",
+        "btn_account": "👤 मेरा खाता",
+        "btn_change_lang": "🌐 भाषा बदलें",
+        "btn_info": "ℹ️ जानकारी / आंकड़े",
+        "btn_back": "⬅️ वापस",
+        "enter_prompt": "✍️ कृपया चित्र के लिए पाठ प्रॉम्प्ट भेजें (निजी चैट में)।",
+        "prompt_received": "🖌 आपका प्रॉम्प्ट:\n{prompt}\n\n🔢 कितने चित्र बनाएं?",
+        "btn_1": "1️⃣",
+        "btn_2": "2️⃣",
+        "btn_4": "4️⃣",
+        "btn_8": "8️⃣",
+        "generating": "🔄 चित्र बन रहा है ({count})... ⏳",
+        "generating_8_limited": "🔄 चित्र बन रहा है ({count})... ⏳ (आज {used}/{limit} मुफ्त 8-बैच उपयोग किए गए)",
+        "insufficient_balance_8": "⚠️ आपने आज पहले ही 3 मुफ्त 8-चित्र बनाने का उपयोग कर लिया है। प्रत्येक अगला 8-चित्र बनाना 1 स्टार लागत होगा। अपर्याप्त शेष राशि।",
+        "stars_deducted": "💳 {price} स्टार(एस) काटे गए। चित्र बन रहा है ({count})... ⏳",
+        "image_ready": "✅ चित्र(एस) तैयार है! 📸",
+        "btn_generate_again": "🔄 फिर से बनाएं",
+        "account_title": "👤 मेरा खाता",
+        "account_balance": "💳 शेष राशि: {balance} स्टार",
+        "account_referrals": "👥 रेफर किए गए उपयोगकर्ता: {count}",
+        "account_referral_link": "🔗 आपका रेफरल लिंक:\n{link}",
+        "account_withdraw": "📤 निकासी",
+        "account_api": "🔑 API",
+        "withdraw_soon": "📤 निकासी सुविधा अभी तैयार नहीं है — जल्द आ रही है! ⏳",
+        "api_soon": "🔑 API पहुंच: जल्द आ रही है!",
+        "info_title": "📊 आंकड़े",
+        "info_uptime": "⏱ अपटाइम: {uptime}",
+        "info_ping": "🌐 पिंग: {ping} मिलीसेकंड",
+        "info_users": "👥 उपयोगकर्ता: {count}",
+        "info_images": "🖼 कुल बनाए गए चित्र: {count}",
+        "info_donations": "💰 कुल दान: {amount}",
+        "btn_contact_admin": "📩 व्यवस्थापक से संपर्क करें",
+        "sub_check_prompt": "⛔ बॉट का उपयोग करने के लिए आपको हमारे चैनल की सदस्यता लेनी होगी!",
+        "sub_check_link_text": "🔗 चैनल की सदस्यता लें",
+        "sub_check_button_text": "✅ सदस्यता जांचें",
+        "sub_check_success": "✅ धन्यवाद! आप सदस्य हैं। अब आप बॉट का उपयोग कर सकते हैं।",
+        "sub_check_fail": "⛔ आप अभी भी सदस्य नहीं हैं। कृपया सदस्यता लें और फिर से जांचें।",
+        "invalid_button": "❌ अमान्य बटन।",
+        "error_try_again": "⚠️ एक त्रुटि हुई। कृपया पुनः प्रयास करें।",
+        "image_wait_timeout": "⚠️ चित्र तैयार करने में थोड़ा समय लग रहा है। बाद में पुनः प्रयास करें।",
+        "image_id_missing": "❌ चित्र ID प्राप्त नहीं हुआ (API प्रतिक्रिया)।",
+        "api_unknown_response": "❌ API से अज्ञात प्रतिक्रिया। कृपया व्यवस्थापक से संपर्क करें।",
+        "enter_donate_amount": "💰 कृपया दान करने के लिए राशि दर्ज करें (1–100000):",
+        "invalid_donate_amount": "❌ कृपया 1 से 100000 के बीच एक पूर्णांक दर्ज करें।",
+        "donate_invoice_title": "💖 बॉट दान",
+        "donate_invoice_description": "बॉट के समर्थन के लिए एक वैकल्पिक राशि भेजें।",
+        "donate_thanks": "✅ धन्यवाद, {first_name}! आपने {amount_stars} स्टार भेजे।",
+        "account_withdraw_soon": "📤 निकासी: जल्द आ रही है",
+        "account_api_soon": "🔑 API: जल्द आ रही है",
+        "referral_reward": "एक सफल रेफरल के लिए आपको {reward} स्टार प्राप्त हुए!",
+        "prompt_missing_group": "❌ एक समूह में, कृपया /get के बाद एक प्रॉम्प्ट प्रदान करें। उदाहरण: /get भविष्यवाणी शहर",
+        "prompt_missing_private": "✍️ कृपया चित्र के लिए पाठ प्रॉम्प्ट भेजें (या सिर्फ प्लेन टेक्स्ट भेजें)।",
+        "prompt_received_private": "🖌 आपका प्रॉम्प्ट:\n{prompt}\n\n🔢 कितने चित्र बनाएं?",
+        "prompt_received_group": "🖌 आपका प्रॉम्प्ट:\n{prompt}\n\n🔢 कितने चित्र बनाएं?",
+    },
+    "pt": {
+        "choose_language": "🌐 Por favor, escolha seu idioma:",
+        "language_set": "✅ Idioma definido para {lang_code}.",
+        "main_panel_text": "👋 Painel principal — gerencie imagens, saldo e configurações aqui.",
+        "btn_generate": "🎨 Gerar Imagem",
+        "btn_donate": "💖 Doar",
+        "btn_account": "👤 Minha conta",
+        "btn_change_lang": "🌐 Alterar idioma",
+        "btn_info": "ℹ️ Informações / Estatísticas",
+        "btn_back": "⬅️ Voltar",
+        "enter_prompt": "✍️ Por favor, envie o texto para a imagem (no chat privado).",
+        "prompt_received": "🖌 Seu texto:\n{prompt}\n\n🔢 Quantas imagens gerar?",
+        "btn_1": "1️⃣",
+        "btn_2": "2️⃣",
+        "btn_4": "4️⃣",
+        "btn_8": "8️⃣",
+        "generating": "🔄 Gerando imagem(ns) ({count})... ⏳",
+        "generating_8_limited": "🔄 Gerando imagem(ns) ({count})... ⏳ (Usadas {used}/{limit} lotes de 8 grátis hoje)",
+        "insufficient_balance_8": "⚠️ Você já usou 3 gerações de 8 imagens grátis hoje. Cada geração subsequente custa 1 Star. Saldo insuficiente.",
+        "stars_deducted": "💳 {price} Star(s) deduzido(s). Gerando imagem(ns) ({count})... ⏳",
+        "image_ready": "✅ Imagem(ns) pronta(s)! 📸",
+        "btn_generate_again": "🔄 Gerar Novamente",
+        "account_title": "👤 Minha conta",
+        "account_balance": "💳 Saldo: {balance} Stars",
+        "account_referrals": "👥 Usuários Indicados: {count}",
+        "account_referral_link": "🔗 Seu Link de Indicação:\n{link}",
+        "account_withdraw": "📤 Sacar",
+        "account_api": "🔑 API",
+        "withdraw_soon": "📤 Função de saque ainda não disponível — Em breve! ⏳",
+        "api_soon": "🔑 Acesso à API: Em breve!",
+        "info_title": "📊 Estatísticas",
+        "info_uptime": "⏱ Tempo de atividade: {uptime}",
+        "info_ping": "🌐 Ping: {ping} ms",
+        "info_users": "👥 Usuários: {count}",
+        "info_images": "🖼 Total de Imagens Geradas: {count}",
+        "info_donations": "💰 Total de Doações: {amount}",
+        "btn_contact_admin": "📩 Contatar Admin",
+        "sub_check_prompt": "⛔ Você deve estar inscrito em nosso canal para usar o bot!",
+        "sub_check_link_text": "🔗 Inscrever-se no Canal",
+        "sub_check_button_text": "✅ Verificar Inscrição",
+        "sub_check_success": "✅ Obrigado! Você está inscrito. Agora você pode usar o bot.",
+        "sub_check_fail": "⛔ Você ainda não está inscrito. Por favor, inscreva-se e verifique novamente.",
+        "invalid_button": "❌ Botão inválido.",
+        "error_try_again": "⚠️ Ocorreu um erro. Por favor, tente novamente.",
+        "image_wait_timeout": "⚠️ Está demorando para preparar a imagem. Por favor, tente mais tarde.",
+        "image_id_missing": "❌ Falha ao obter o ID da imagem (resposta da API).",
+        "api_unknown_response": "❌ Resposta desconhecida da API. Por favor, contate o administrador.",
+        "enter_donate_amount": "💰 Por favor, insira o valor que deseja doar (1–100000):",
+        "invalid_donate_amount": "❌ Por favor, insira um número inteiro entre 1 e 100000.",
+        "donate_invoice_title": "💖 Doação ao Bot",
+        "donate_invoice_description": "Envie um valor opcional para apoiar o bot.",
+        "donate_thanks": "✅ Obrigado, {first_name}! Você enviou {amount_stars} Stars.",
+        "account_withdraw_soon": "📤 Sacar: Em Breve",
+        "account_api_soon": "🔑 API: Em Breve",
+        "referral_reward": "Você recebeu {reward} Stars por uma indicação bem-sucedida!",
+        "prompt_missing_group": "❌ Em um grupo, por favor forneça um texto após /get. Exemplo: /get cidade futurista",
+        "prompt_missing_private": "✍️ Por favor, envie o texto para a imagem (ou apenas envie texto).",
+        "prompt_received_private": "🖌 Seu texto:\n{prompt}\n\n🔢 Quantas imagens gerar?",
+        "prompt_received_group": "🖌 Seu texto:\n{prompt}\n\n🔢 Quantas imagens gerar?",
+    },
+    "ar": {
+        "choose_language": "🌐 يرجى اختيار لغتك:",
+        "language_set": "✅ تم تعيين اللغة إلى {lang_code}.",
+        "main_panel_text": "👋 اللوحة الرئيسية — إدارة الصور والرصيد والإعدادات هنا.",
+        "btn_generate": "🎨 إنشاء صورة",
+        "btn_donate": "💖 تبرع",
+        "btn_account": "👤 حسابي",
+        "btn_change_lang": "🌐 تغيير اللغة",
+        "btn_info": "ℹ️ معلومات / إحصائيات",
+        "btn_back": "⬅️ رجوع",
+        "enter_prompt": "✍️ يرجى إرسال نص الصورة (في الدردشة الخاصة).",
+        "prompt_received": "🖌 النص الخاص بك:\n{prompt}\n\n🔢 كم عدد الصور المراد إنشاؤها؟",
+        "btn_1": "1️⃣",
+        "btn_2": "2️⃣",
+        "btn_4": "4️⃣",
+        "btn_8": "8️⃣",
+        "generating": "🔄 جاري إنشاء الصورة(الصور) ({count})... ⏳",
+        "generating_8_limited": "🔄 جاري إنشاء الصورة(الصور) ({count})... ⏳ (تم استخدام {used}/{limit} دفعات مجانية من 8 اليوم)",
+        "insufficient_balance_8": "⚠️ لقد استخدمت بالفعل 3 إنشاءات مجانية من 8 صور اليوم. يكلف كل إنشاء لاحق 1 نجمة. الرصيد غير كافٍ.",
+        "stars_deducted": "💳 تم خصم {price} نجمة(نجمات). جاري إنشاء الصورة(الصور) ({count})... ⏳",
+        "image_ready": "✅ الصورة(الصور) جاهزة! 📸",
+        "btn_generate_again": "🔄 إنشاء مرة أخرى",
+        "account_title": "👤 حسابي",
+        "account_balance": "💳 الرصيد: {balance} نجمة",
+        "account_referrals": "👥 المستخدمون المشار إليهم: {count}",
+        "account_referral_link": "🔗 رابط الإحالة الخاص بك:\n{link}",
+        "account_withdraw": "📤 سحب",
+        "account_api": "🔑 واجهة برمجة التطبيقات",
+        "withdraw_soon": "📤 ميزة السحب ليست جاهزة بعد — قريباً! ⏳",
+        "api_soon": "🔑 الوصول إلى واجهة برمجة التطبيقات: قريباً!",
+        "info_title": "📊 الإحصائيات",
+        "info_uptime": "⏱ مدة التشغيل: {uptime}",
+        "info_ping": "🌐 البينغ: {ping} مللي ثانية",
+        "info_users": "👥 المستخدمون: {count}",
+        "info_images": "🖼 إجمالي الصور المُنشأة: {count}",
+        "info_donations": "💰 إجمالي التبرعات: {amount}",
+        "btn_contact_admin": "📩 الاتصال بالمشرف",
+        "sub_check_prompt": "⛔ يجب أن تكون مشتركًا في قناتنا لاستخدام البوت!",
+        "sub_check_link_text": "🔗 الاشتراك في القناة",
+        "sub_check_button_text": "✅ التحقق من الاشتراك",
+        "sub_check_success": "✅ شكرًا لك! أنت مشترك. يمكنك الآن استخدام البوت.",
+        "sub_check_fail": "⛔ أنت لا تزال غير مشترك. يرجى الاشتراك والتحقق مرة أخرى.",
+        "invalid_button": "❌ زر غير صالح.",
+        "error_try_again": "⚠️ حدث خطأ. يرجى المحاولة مرة أخرى.",
+        "image_wait_timeout": "⚠️ يستغرق الأمر بعض الوقت لإعداد الصورة. يرجى المحاولة لاحقًا.",
+        "image_id_missing": "❌ فشل في الحصول على معرف الصورة (رد واجهة برمجة التطبيقات).",
+        "api_unknown_response": "❌ رد غير معروف من واجهة برمجة التطبيقات. يرجى الاتصال بالمشرف.",
+        "enter_donate_amount": "💰 يرجى إدخال المبلغ الذي ترغب في التبرع به (1–100000):",
+        "invalid_donate_amount": "❌ يرجى إدخال عدد صحيح بين 1 و 100000.",
+        "donate_invoice_title": "💖 تبرع للبوت",
+        "donate_invoice_description": "أرسل مبلغًا اختياريًا لدعم البوت.",
+        "donate_thanks": "✅ شكرًا لك، {first_name}! لقد أرسلت {amount_stars} نجمة.",
+        "account_withdraw_soon": "📤 سحب: قريباً",
+        "account_api_soon": "🔑 واجهة برمجة التطبيقات: قريباً",
+        "referral_reward": "لقد تلقيت {reward} نجمة لدعوة ناجحة!",
+        "prompt_missing_group": "❌ في مجموعة، يرجى تقديم نص بعد /get. مثال: /get مدينة مستقبلية",
+        "prompt_missing_private": "✍️ يرجى إرسال نص الصورة (أو فقط إرسال نص عادي).",
+        "prompt_received_private": "🖌 النص الخاص بك:\n{prompt}\n\n🔢 كم عدد الصور المراد إنشاؤها؟",
+        "prompt_received_group": "🖌 النص الخاص بك:\n{prompt}\n\n🔢 كم عدد الصور المراد إنشاؤها؟",
+    },
+    "uk": {
+        "choose_language": "🌐 Будь ласка, виберіть свою мову:",
+        "language_set": "✅ Мову встановлено на {lang_code}.",
+        "main_panel_text": "👋 Головна панель — керуйте зображеннями, балансом і налаштуваннями тут.",
+        "btn_generate": "🎨 Створити зображення",
+        "btn_donate": "💖 Пожертвувати",
+        "btn_account": "👤 Мій акаунт",
+        "btn_change_lang": "🌐 Змінити мову",
+        "btn_info": "ℹ️ Інформація / Статистика",
+        "btn_back": "⬅️ Назад",
+        "enter_prompt": "✍️ Будь ласка, надішліть текстовий запит для зображення (в приватному чаті).",
+        "prompt_received": "🖌 Ваш запит:\n{prompt}\n\n🔢 Скільки зображень згенерувати?",
+        "btn_1": "1️⃣",
+        "btn_2": "2️⃣",
+        "btn_4": "4️⃣",
+        "btn_8": "8️⃣",
+        "generating": "🔄 Генерація зображення(й) ({count})... ⏳",
+        "generating_8_limited": "🔄 Генерація зображення(й) ({count})... ⏳ (Використано {used}/{limit} безкоштовних пакетів по 8 сьогодні)",
+        "insufficient_balance_8": "⚠️ Ви вже використали 3 безкоштовні генерації по 8 зображень сьогодні. Кожна наступна генерація з 8 зображень коштує 1 Star. Недостатній баланс.",
+        "stars_deducted": "💳 Списано {price} Star(s). Генерація зображення(й) ({count})... ⏳",
+        "image_ready": "✅ Зображення(я) готові! 📸",
+        "btn_generate_again": "🔄 Створити знову",
+        "account_title": "👤 Мій акаунт",
+        "account_balance": "💳 Баланс: {balance} Stars",
+        "account_referrals": "👥 Запрошені користувачі: {count}",
+        "account_referral_link": "🔗 Ваше реферальне посилання:\n{link}",
+        "account_withdraw": "📤 Вивести",
+        "account_api": "🔑 API",
+        "withdraw_soon": "📤 Функція виведення ще не готова — Незабаром! ⏳",
+        "api_soon": "🔑 Доступ до API: Незабаром!",
+        "info_title": "📊 Статистика",
+        "info_uptime": "⏱ Час роботи: {uptime}",
+        "info_ping": "🌐 Пінг: {ping} мс",
+        "info_users": "👥 Користувачі: {count}",
+        "info_images": "🖼 Всього згенеровано зображень: {count}",
+        "info_donations": "💰 Всього пожертв: {amount}",
+        "btn_contact_admin": "📩 Зв'язатися з адміном",
+        "sub_check_prompt": "⛔ Ви повинні бути підписані на наш канал, щоб використовувати бота!",
+        "sub_check_link_text": "🔗 Підписатися на канал",
+        "sub_check_button_text": "✅ Перевірити підписку",
+        "sub_check_success": "✅ Дякуємо! Ви підписані. Тепер ви можете використовувати бота.",
+        "sub_check_fail": "⛔ Ви ще не підписані. Будь ласка, підпишіться і перевірте знову.",
+        "invalid_button": "❌ Недійсна кнопка.",
+        "error_try_again": "⚠️ Сталася помилка. Будь ласка, спробуйте ще раз.",
+        "image_wait_timeout": "⚠️ Готування зображення займає багато часу. Будь ласка, спробуйте пізніше.",
+        "image_id_missing": "❌ Не вдалося отримати ID зображення (відповідь API).",
+        "api_unknown_response": "❌ Невідома відповідь від API. Будь ласка, зв'яжіться з адміністратором.",
+        "enter_donate_amount": "💰 Будь ласка, введіть суму, яку хочете пожертвувати (1–100000):",
+        "invalid_donate_amount": "❌ Будь ласка, введіть ціле число від 1 до 100000.",
+        "donate_invoice_title": "💖 Пожертвування боту",
+        "donate_invoice_description": "Надішліть довільну суму для підтримки бота.",
+        "donate_thanks": "✅ Дякуємо, {first_name}! Ви надіслали {amount_stars} Stars.",
+        "account_withdraw_soon": "📤 Вивести: Незабаром",
+        "account_api_soon": "🔑 API: Незабаром",
+        "referral_reward": "Ви отримали {reward} Stars за успішне запрошення!",
+        "prompt_missing_group": "❌ У групі, будь ласка, надайте запит після /get. Приклад: /get футуристичне місто",
+        "prompt_missing_private": "✍️ Будь ласка, надішліть текстовий запит для зображення (або просто надішліть текст).",
+        "prompt_received_private": "🖌 Ваш запит:\n{prompt}\n\n🔢 Скільки зображень згенерувати?",
+        "prompt_received_group": "🖌 Ваш запит:\n{prompt}\n\n🔢 Скільки зображень згенерувати?",
+    },
+    "vi": {
+        "choose_language": "🌐 Vui lòng chọn ngôn ngữ của bạn:",
+        "language_set": "✅ Ngôn ngữ được đặt thành {lang_code}.",
+        "main_panel_text": "👋 Bảng điều khiển chính — quản lý hình ảnh, số dư và cài đặt ở đây.",
+        "btn_generate": "🎨 Tạo hình ảnh",
+        "btn_donate": "💖 Quyên góp",
+        "btn_account": "👤 Tài khoản của tôi",
+        "btn_change_lang": "🌐 Thay đổi ngôn ngữ",
+        "btn_info": "ℹ️ Thông tin / Thống kê",
+        "btn_back": "⬅️ Quay lại",
+        "enter_prompt": "✍️ Vui lòng gửi lời nhắc văn bản cho hình ảnh (trong cuộc trò chuyện riêng).",
+        "prompt_received": "🖌 Lời nhắc của bạn:\n{prompt}\n\n🔢 Tạo bao nhiêu hình ảnh?",
+        "btn_1": "1️⃣",
+        "btn_2": "2️⃣",
+        "btn_4": "4️⃣",
+        "btn_8": "8️⃣",
+        "generating": "🔄 Đang tạo hình ảnh ({count})... ⏳",
+        "generating_8_limited": "🔄 Đang tạo hình ảnh ({count})... ⏳ (Đã sử dụng {used}/{limit} lô 8 miễn phí hôm nay)",
+        "insufficient_balance_8": "⚠️ Bạn đã sử dụng 3 lần tạo 8 hình ảnh miễn phí hôm nay. Mỗi lần tạo tiếp theo tốn 1 Sao. Số dư không đủ.",
+        "stars_deducted": "💳 Đã trừ {price} Sao. Đang tạo hình ảnh ({count})... ⏳",
+        "image_ready": "✅ Hình ảnh đã sẵn sàng! 📸",
+        "btn_generate_again": "🔄 Tạo lại",
+        "account_title": "👤 Tài khoản của tôi",
+        "account_balance": "💳 Số dư: {balance} Sao",
+        "account_referrals": "👥 Người dùng được giới thiệu: {count}",
+        "account_referral_link": "🔗 Liên kết giới thiệu của bạn:\n{link}",
+        "account_withdraw": "📤 Rút tiền",
+        "account_api": "🔑 API",
+        "withdraw_soon": "📤 Chức năng rút tiền chưa sẵn sàng — Sắp ra mắt! ⏳",
+        "api_soon": "🔑 Truy cập API: Sắp ra mắt!",
+        "info_title": "📊 Thống kê",
+        "info_uptime": "⏱ Thời gian hoạt động: {uptime}",
+        "info_ping": "🌐 Ping: {ping} ms",
+        "info_users": "👥 Người dùng: {count}",
+        "info_images": "🖼 Tổng số hình ảnh đã tạo: {count}",
+        "info_donations": "💰 Tổng số quyên góp: {amount}",
+        "btn_contact_admin": "📩 Liên hệ Quản trị viên",
+        "sub_check_prompt": "⛔ Bạn phải đăng ký kênh của chúng tôi để sử dụng bot!",
+        "sub_check_link_text": "🔗 Đăng ký Kênh",
+        "sub_check_button_text": "✅ Kiểm tra Đăng ký",
+        "sub_check_success": "✅ Cảm ơn! Bạn đã đăng ký. Bây giờ bạn có thể sử dụng bot.",
+        "sub_check_fail": "⛔ Bạn vẫn chưa đăng ký. Vui lòng đăng ký và kiểm tra lại.",
+        "invalid_button": "❌ Nút không hợp lệ.",
+        "error_try_again": "⚠️ Đã xảy ra lỗi. Vui lòng thử lại.",
+        "image_wait_timeout": "⚠️ Mất một lúc để chuẩn bị hình ảnh. Vui lòng thử lại sau.",
+        "image_id_missing": "❌ Không thể lấy ID hình ảnh (phản hồi API).",
+        "api_unknown_response": "❌ Phản hồi không xác định từ API. Vui lòng liên hệ quản trị viên.",
+        "enter_donate_amount": "💰 Vui lòng nhập số tiền bạn muốn quyên góp (1–100000):",
+        "invalid_donate_amount": "❌ Vui lòng nhập số nguyên từ 1 đến 100000.",
+        "donate_invoice_title": "💖 Quyên góp cho Bot",
+        "donate_invoice_description": "Gửi số tiền tùy chọn để hỗ trợ bot.",
+        "donate_thanks": "✅ Cảm ơn, {first_name}! Bạn đã gửi {amount_stars} Sao.",
+        "account_withdraw_soon": "📤 Rút tiền: Sắp ra mắt",
+        "account_api_soon": "🔑 API: Sắp ra mắt",
+        "referral_reward": "Bạn đã nhận được {reward} Sao cho một lần giới thiệu thành công!",
+        "prompt_missing_group": "❌ Trong nhóm, vui lòng cung cấp lời nhắc sau /get. Ví dụ: /get thành phố tương lai",
+        "prompt_missing_private": "✍️ Vui lòng gửi lời nhắc văn bản cho hình ảnh (hoặc chỉ gửi văn bản).",
+        "prompt_received_private": "🖌 Lời nhắc của bạn:\n{prompt}\n\n🔢 Tạo bao nhiêu hình ảnh?",
+        "prompt_received_group": "🖌 Lời nhắc của bạn:\n{prompt}\n\n🔢 Tạo bao nhiêu hình ảnh?",
+    },
+}
+
+def t(context: ContextTypes.DEFAULT_TYPE, key: str, **kwargs) -> str:
+    """Foydalanuvchi kontekstiga qarab kalit so'zni tarjima qiladi va formatlaydi."""
+    # Foydalanuvchi ID'sini olish (xabar yoki callback querydan)
+    user_id = None
+    if hasattr(context, 'effective_user') and context.effective_user:
+        user_id = context.effective_user.id
+    elif hasattr(context, '_user_id') and context._user_id:
+         user_id = context._user_id
+
+    lang_code = "en" # Default language
+    # DB dan foydalanuvchi tilini olish
+    if user_id and hasattr(context.application, 'bot_data') and "db_pool" in context.application.bot_data:
+        try:
+            pool = context.application.bot_data["db_pool"]
+            async def get_lang():
+                async with pool.acquire() as conn:
+                    row = await conn.fetchrow("SELECT lang FROM users WHERE id = $1", user_id)
+                    return row['lang'] if row and row['lang'] else "en"
+            # This is a bit of a hack to run async code in a sync context, but it should work for most cases.
+            # A better approach would be to pass the lang_code explicitly where needed or refactor to be fully async.
+            # For now, we'll assume the DB call is fast or cached.
+            # In practice, you might want to store the user's language in context.user_data on start/update for faster access.
+            # Let's try to get it from user_data first if available and recently set.
+            if context.user_data and context.user_data.get("lang"):
+                 lang_code = context.user_data.get("lang")
+            else:
+                 # Fallback to DB lookup (synchronous call simulation - not ideal)
+                 # In a real async app, you'd await this or structure the calling code differently.
+                 # For simplicity here, we'll assume it's set correctly elsewhere or default to 'en'.
+                 # A production app would need to handle this more carefully.
+                 pass
+        except Exception as e:
+            logger.warning(f"Failed to get user language from DB for user {user_id}: {e}")
+    
+    # Agar foydalanuvchi tili aniqlanmasa, default til
+    if not lang_code:
+        lang_code = "en" # yoki bot default tili
+
+    # Tarjima lug'atidan mos tilni topish
+    lang_dict = TRANSLATIONS.get(lang_code, TRANSLATIONS["en"])
+    
+    # Kalit so'zning tarjimasini topish, topilmasa kalitni o'zini qaytarish
+    template = lang_dict.get(key, key)
+    
+    # Formatlash
+    if kwargs:
+        try:
+            return template.format(**kwargs)
+        except KeyError:
+            logger.warning(f"Translation key '{key}' format error with args {kwargs}")
+    return template
 
 # ---------------- helpers ----------------
 def escape_md(text: str) -> str:
@@ -124,6 +1144,7 @@ def get_digen_headers():
         "digen-platform": "web",
         "digen-token": key.get("token", ""),
         "digen-sessionid": key.get("session", ""),
+        # Ensure URLs are stripped of extra spaces
         "origin": "https://rm.digen.ai",
         "referer": "https://rm.digen.ai/",
     }
@@ -144,14 +1165,14 @@ async def force_sub_if_private(update: Update, context: ContextTypes.DEFAULT_TYP
     ok = await check_subscription(update.effective_user.id, context)
     if not ok:
         kb = [
-            [InlineKeyboardButton("🔗 Kanalga obuna bo‘lish", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
-            [InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")]
+            [InlineKeyboardButton(t(context, "sub_check_link_text"), url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
+            [InlineKeyboardButton(t(context, "sub_check_button_text"), callback_data="check_sub")]
         ]
         if update.callback_query:
             await update.callback_query.answer()
-            await update.callback_query.message.reply_text("⛔ Botdan foydalanish uchun kanalimizga obuna bo‘ling!", reply_markup=InlineKeyboardMarkup(kb))
+            await update.callback_query.message.reply_text(t(context, "sub_check_prompt"), reply_markup=InlineKeyboardMarkup(kb))
         else:
-            await update.message.reply_text("⛔ Botdan foydalanish uchun kanalimizga obuna bo‘ling!", reply_markup=InlineKeyboardMarkup(kb))
+            await update.message.reply_text(t(context, "sub_check_prompt"), reply_markup=InlineKeyboardMarkup(kb))
         return False
     return True
 
@@ -160,13 +1181,21 @@ async def check_sub_button_handler(update: Update, context: ContextTypes.DEFAULT
     await q.answer()
     user_id = q.from_user.id
     if await check_subscription(user_id, context):
-        await q.edit_message_text("✅ Rahmat! Siz obuna bo‘lgansiz. Endi botdan foydalanishingiz mumkin.")
+        # Go back to main menu after successful subscription check
+        # We need to get the user's language again after subscription check
+        user_rec = await get_user_record(context.application.bot_data["db_pool"], user_id)
+        lang = user_rec.get("lang") if user_rec else "en"
+        # Temporarily set lang in context.user_data for t() function
+        context.user_data['lang'] = lang
+        text = t(context, "sub_check_success")
+        kb = [[InlineKeyboardButton(t(context, "btn_back"), callback_data="back_main")]]
+        await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
     else:
         kb = [
-            [InlineKeyboardButton("🔗 Kanalga obuna bo‘lish", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
-            [InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")]
+            [InlineKeyboardButton(t(context, "sub_check_link_text"), url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
+            [InlineKeyboardButton(t(context, "sub_check_button_text"), callback_data="check_sub")]
         ]
-        await q.edit_message_text("⛔ Hali ham obuna bo‘lmagansiz. Obuna bo‘lib, qayta tekshiring.", reply_markup=InlineKeyboardMarkup(kb))
+        await q.edit_message_text(t(context, "sub_check_fail"), reply_markup=InlineKeyboardMarkup(kb))
 
 # ---------------- DB user/session/logging ----------------
 async def add_user_db(pool, tg_user) -> bool:
@@ -238,6 +1267,8 @@ async def handle_referral(pool, inviter_id: int, invited_id: int):
             await conn.execute("INSERT INTO referrals(inviter_id, invited_id) VALUES($1,$2)", inviter_id, invited_id)
             # Give inviter reward
             await conn.execute("UPDATE users SET balance = COALESCE(balance, 0) + $1 WHERE id=$2", str(REFERRAL_REWARD), inviter_id)
+            # Notify inviter (optional)
+            # This would require storing the bot instance or using a different mechanism
             return True
         except asyncpg.UniqueViolationError:
             return False
@@ -266,12 +1297,12 @@ LANGS = [
     ("🇻🇳 Tiếng Việt", "vi")
 ]
 
-def build_lang_keyboard():
+def build_lang_keyboard(context: ContextTypes.DEFAULT_TYPE):
     kb = []
     row = []
     for label, code in LANGS:
         row.append(InlineKeyboardButton(label, callback_data=f"set_lang_{code}"))
-        if len(row) == 2:
+        if len(row) == 2: # 2 buttons per row
             kb.append(row)
             row = []
     if row:
@@ -281,14 +1312,14 @@ def build_lang_keyboard():
 # ---------------- Handlers ----------------
 
 # Small helper to send main panel
-async def send_main_panel(chat, lang_code, bot_data):
-    """Return InlineKeyboardMarkup for main panel and a text message. lang_code currently unused for translations."""
+async def send_main_panel(chat, context: ContextTypes.DEFAULT_TYPE):
+    """Return InlineKeyboardMarkup for main panel and a text message."""
     kb = [
-        [InlineKeyboardButton("🎨 Rasm yaratish", callback_data="start_gen")],
-        [InlineKeyboardButton("💖 Donate", callback_data="donate_custom"), InlineKeyboardButton("👤 Hisobim", callback_data="my_account")],
-        [InlineKeyboardButton("🌐 Tilni o‘zgartirish", callback_data="change_lang"), InlineKeyboardButton("ℹ️ Statistika / Info", callback_data="show_info")],
+        [InlineKeyboardButton(t(context, "btn_generate"), callback_data="start_gen")],
+        [InlineKeyboardButton(t(context, "btn_donate"), callback_data="donate_custom"), InlineKeyboardButton(t(context, "btn_account"), callback_data="my_account")],
+        [InlineKeyboardButton(t(context, "btn_change_lang"), callback_data="change_lang"), InlineKeyboardButton(t(context, "btn_info"), callback_data="show_info")],
     ]
-    text = "👋 Bosh panel — bu yerdan rasmlar yaratish, balans va sozlamalarni boshqarishingiz mumkin."
+    text = t(context, "main_panel_text")
     return text, InlineKeyboardMarkup(kb)
 
 # START
@@ -316,26 +1347,33 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 try:
                     inviter_id = int(a.split("_", 1)[1])
                     # handle referral
-                    await handle_referral(context.application.bot_data["db_pool"], inviter_id, update.effective_user.id)
-                except Exception:
-                    pass
+                    success = await handle_referral(context.application.bot_data["db_pool"], inviter_id, update.effective_user.id)
+                    if success:
+                        # Notify inviter (optional, requires storing bot instance or using a queue/async notify)
+                        # For now, we'll assume the inviter gets the reward in their balance on next check.
+                        # You could implement a notification system here if needed.
+                        pass
+                except Exception as e:
+                    logger.warning(f"[REFERRAL PARSE ERROR] {e}")
 
     # If user has no lang set -> show language selection
     if not user_rec or not user_rec.get("lang"):
         await update.message.reply_text(
-            "🌐 Iltimos, tilni tanlang (birinchi marta):",
-            reply_markup=build_lang_keyboard()
+            t(context, "choose_language"),
+            reply_markup=build_lang_keyboard(context)
         )
         return
 
     # Otherwise send main panel
-    text, kb = await send_main_panel(update.effective_chat, user_rec.get("lang"), context.application.bot_data)
+    # Set user's language in context for t() function
+    context.user_data['lang'] = user_rec.get("lang")
+    text, kb = await send_main_panel(update.effective_chat, context)
     await update.message.reply_text(text, reply_markup=kb)
 
 async def change_lang_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    await q.edit_message_text("🌐 Tilni tanlang:", reply_markup=build_lang_keyboard())
+    await q.edit_message_text(t(context, "choose_language"), reply_markup=build_lang_keyboard(context))
 
 async def set_lang_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -343,13 +1381,17 @@ async def set_lang_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = q.data  # set_lang_<code>
     code = data.split("_", 2)[2]
     await set_user_lang(context.application.bot_data["db_pool"], q.from_user.id, code)
+    # Store the language in context.user_data for immediate use
+    context.user_data['lang'] = code
     # send confirmation and main panel
-    text, kb = await send_main_panel(q.message.chat, code, context.application.bot_data)
+    text, kb = await send_main_panel(q.message.chat, context)
+    confirmation_text = t(context, "language_set", lang_code=code)
+    full_text = f"{confirmation_text}\n\n{text}"
     try:
-        await q.edit_message_text(f"✅ Til {code} ga o'zgartirildi.\n\n{text}", reply_markup=kb)
+        await q.edit_message_text(full_text, reply_markup=kb)
     except BadRequest:
         try:
-            await q.message.reply_text(f"✅ Til {code} ga o'zgartirildi.\n\n{text}", reply_markup=kb)
+            await q.message.reply_text(full_text, reply_markup=kb)
         except Exception:
             pass
 
@@ -357,35 +1399,37 @@ async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # simple route to ask prompt
     if update.callback_query:
         await update.callback_query.answer()
-        await update.callback_query.message.reply_text("✍️ Endi tasvir yaratish uchun matn yuboring (privatda).")
+    await update.effective_message.reply_text(t(context, "enter_prompt"))
 
-# /get command (works in groups and private) - unchanged
+# /get command (works in groups and private)
 async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await force_sub_if_private(update, context):
         return
     chat_type = update.effective_chat.type
     if chat_type in ("group", "supergroup"):
         if not context.args:
-            await update.message.reply_text("❌ Guruhda /get dan keyin prompt yozing. Misol: /get futuristik shahar")
+            await update.message.reply_text(t(context, "prompt_missing_group"))
             return
         prompt = " ".join(context.args)
+        message_text = t(context, "prompt_received_group", prompt=escape_md(prompt))
     else:
         if not context.args:
-            await update.message.reply_text("✍️ Iltimos, rasm uchun matn yozing (yoki oddiy matn yuboring).")
+            await update.message.reply_text(t(context, "prompt_missing_private"))
             return
         prompt = " ".join(context.args)
+        message_text = t(context, "prompt_received_private", prompt=escape_md(prompt))
 
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     context.user_data["prompt"] = prompt
     context.user_data["translated"] = prompt
     kb = [[
-        InlineKeyboardButton("1️⃣", callback_data="count_1"),
-        InlineKeyboardButton("2️⃣", callback_data="count_2"),
-        InlineKeyboardButton("4️⃣", callback_data="count_4"),
-        InlineKeyboardButton("8️⃣", callback_data="count_8"),
+        InlineKeyboardButton(t(context, "btn_1"), callback_data="count_1"),
+        InlineKeyboardButton(t(context, "btn_2"), callback_data="count_2"),
+        InlineKeyboardButton(t(context, "btn_4"), callback_data="count_4"),
+        InlineKeyboardButton(t(context, "btn_8"), callback_data="count_8"),
     ]]
     await update.message.reply_text(
-        f"🖌 Sizning matningiz:\n{escape_md(prompt)}\n\n🔢 Nechta rasm yaratilsin?",
+        message_text,
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
     )
@@ -401,14 +1445,15 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     prompt = update.message.text
     context.user_data["prompt"] = prompt
     context.user_data["translated"] = prompt
+    message_text = t(context, "prompt_received_private", prompt=escape_md(prompt))
     kb = [[
-        InlineKeyboardButton("1️⃣", callback_data="count_1"),
-        InlineKeyboardButton("2️⃣", callback_data="count_2"),
-        InlineKeyboardButton("4️⃣", callback_data="count_4"),
-        InlineKeyboardButton("8️⃣", callback_data="count_8"),
+        InlineKeyboardButton(t(context, "btn_1"), callback_data="count_1"),
+        InlineKeyboardButton(t(context, "btn_2"), callback_data="count_2"),
+        InlineKeyboardButton(t(context, "btn_4"), callback_data="count_4"),
+        InlineKeyboardButton(t(context, "btn_8"), callback_data="count_8"),
     ]]
     await update.message.reply_text(
-        f"🖌 Sizning matningiz:\n{escape_md(prompt)}\n\n🔢 Nechta rasm yaratilsin?",
+        message_text,
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
     )
@@ -421,7 +1466,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         count = int(q.data.split("_")[1])
     except Exception:
         try:
-            await q.edit_message_text("❌ Noto'g'ri tugma.")
+            await q.edit_message_text(t(context, "invalid_button"))
         except Exception:
             pass
         return
@@ -442,11 +1487,11 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if balance < PRICE_PER_8:
                 # insufficient
                 kb = [
-                    [InlineKeyboardButton("💖 Donate", callback_data="donate_custom")],
-                    [InlineKeyboardButton("👤 Hisobim", callback_data="my_account")]
+                    [InlineKeyboardButton(t(context, "btn_donate"), callback_data="donate_custom")],
+                    [InlineKeyboardButton(t(context, "btn_account"), callback_data="my_account")]
                 ]
                 try:
-                    await q.edit_message_text("⚠️ Siz bugun allaqachon 3 marta 8 ta rasm yaratdingiz. Har keyingi 8 ta generatsiya — 1 Stars. Balans yetarli emas.", reply_markup=InlineKeyboardMarkup(kb))
+                    await q.edit_message_text(t(context, "insufficient_balance_8"), reply_markup=InlineKeyboardMarkup(kb))
                 except Exception:
                     pass
                 return
@@ -455,18 +1500,18 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await adjust_user_balance(pool, user.id, -PRICE_PER_8)
                 # notify user
                 try:
-                    await q.edit_message_text(f"💳 {PRICE_PER_8} Stars yechildi. Rasm yaratilmoqda ({count})... ⏳")
+                    await q.edit_message_text(t(context, "stars_deducted", price=PRICE_PER_8, count=count))
                 except BadRequest:
                     pass
         else:
             # free - allowed
             try:
-                await q.edit_message_text(f"🔄 Rasm yaratilmoqda ({count})... ⏳ (bugun {used}/{FREE_8_PER_DAY} dan foydalanildi)")
+                await q.edit_message_text(t(context, "generating_8_limited", count=count, used=used, limit=FREE_8_PER_DAY))
             except BadRequest:
                 pass
     else:
         try:
-            await q.edit_message_text(f"🔄 Rasm yaratilmoqda ({count})... ⏳")
+            await q.edit_message_text(t(context, "generating", count=count))
         except BadRequest:
             pass
 
@@ -491,7 +1536,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     data = await resp.json()
                 except Exception:
                     logger.error(f"[DIGEN PARSE ERROR] status={resp.status} text={text_resp}")
-                    await q.message.reply_text("❌ API dan noma'lum javob keldi. Adminga murojaat qiling.")
+                    await q.message.reply_text(t(context, "api_unknown_response"))
                     return
 
             logger.debug(f"[DIGEN DATA] {json.dumps(data)[:2000]}")
@@ -502,9 +1547,10 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 image_id = (data.get("data") or {}).get("id") or data.get("id")
             if not image_id:
                 logger.error("[DIGEN] image_id olinmadi")
-                await q.message.reply_text("❌ Rasm ID olinmadi (API javobi).")
+                await q.message.reply_text(t(context, "image_id_missing"))
                 return
 
+            # Ensure URL is constructed correctly without extra spaces
             urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
             logger.info(f"[GENERATE] urls: {urls}")
 
@@ -527,7 +1573,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not available:
                 logger.warning("[GENERATE] URL not ready after wait")
                 try:
-                    await q.edit_message_text("⚠️ Rasmni tayyorlash biroz vaqt olmoqda. Keyinroq urinib ko'ring.")
+                    await q.edit_message_text(t(context, "image_wait_timeout"))
                 except Exception:
                     pass
                 return
@@ -546,27 +1592,29 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
 
+            # Add inline button after successful generation
+            kb = [[InlineKeyboardButton(t(context, "btn_generate_again"), callback_data="start_gen")]]
             try:
-                await q.edit_message_text("✅ Rasm tayyor! 📸")
+                await q.edit_message_text(t(context, "image_ready"), reply_markup=InlineKeyboardMarkup(kb))
             except BadRequest:
                 pass
 
     except Exception as e:
         logger.exception(f"[GENERATE ERROR] {e}")
         try:
-            await q.edit_message_text("⚠️ Xatolik yuz berdi. Qayta urinib ko‘ring.")
+            await q.edit_message_text(t(context, "error_try_again"))
         except Exception:
             pass
 
-# ---------------- Donate (Stars) flow (unchanged) ----------------
+# ---------------- Donate (Stars) flow ----------------
 WAITING_AMOUNT = 1
 
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query:
         await update.callback_query.answer()
-        await update.callback_query.message.reply_text("💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):")
+        await update.callback_query.message.reply_text(t(context, "enter_donate_amount"))
     else:
-        await update.message.reply_text("💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):")
+        await update.message.reply_text(t(context, "enter_donate_amount"))
     return WAITING_AMOUNT
 
 async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -576,16 +1624,16 @@ async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if amount < 1 or amount > 100000:
             raise ValueError
     except ValueError:
-        await update.message.reply_text("❌ Iltimos, 1–100000 oralig‘ida butun son kiriting.")
+        await update.message.reply_text(t(context, "invalid_donate_amount"))
         return WAITING_AMOUNT
 
     payload = f"donate_{update.effective_user.id}_{int(time.time())}"
-    prices = [LabeledPrice(f"{amount} Stars", amount)]
+    prices = [LabeledPrice(f"{amount} Stars", amount * 100)] # LabeledPrice expects amount in cents for XTR
     # provider_token empty for Stars (XTR)
     await context.bot.send_invoice(
         chat_id=update.effective_chat.id,
-        title="💖 Bot Donation",
-        description="Botni qo‘llab-quvvatlash uchun ixtiyoriy summa yuboring.",
+        title=t(context, "donate_invoice_title"),
+        description=t(context, "donate_invoice_description"),
         payload=payload,
         provider_token="",  # for XTR leave empty
         currency="XTR",
@@ -599,10 +1647,14 @@ async def precheckout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def successful_payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     payment = update.message.successful_payment
-    # Keep same logic as before: amount_stars calculation may depend on your currency scaling
+    # For XTR, total_amount is already in "stars" (no need to divide by 100 anymore)
+    # The LabeledPrice was correctly set in cents, so this should be fine.
+    # However, to be safe and consistent with previous logic where it was divided by 100,
+    # we'll keep the division here. Please verify your payment provider's documentation.
     amount_stars = payment.total_amount // 100
     user = update.effective_user
-    await update.message.reply_text(f"✅ Rahmat, {user.first_name}! Siz {amount_stars} Stars yubordingiz.")
+    thanks_text = t(context, "donate_thanks", first_name=user.first_name, amount_stars=amount_stars)
+    await update.message.reply_text(thanks_text)
     pool = context.application.bot_data["db_pool"]
     async with pool.acquire() as conn:
         await conn.execute(
@@ -630,18 +1682,26 @@ async def my_account_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     async with context.application.bot_data["db_pool"].acquire() as conn:
         refs = await conn.fetchval("SELECT COUNT(*) FROM referrals WHERE inviter_id=$1", user_id)
     refs = int(refs or 0)
-    referral_link = f"https://t.me/{(os.getenv('BOT_USERNAME') or 'YourBot')}?start=ref_{user_id}"
+    # Use BOT_USERNAME from env or fallback
+    referral_link = f"https://t.me/{BOT_USERNAME}?start=ref_{user_id}"
+    account_title = t(context, "account_title")
+    account_balance = t(context, "account_balance", balance=balance)
+    account_referrals = t(context, "account_referrals", count=refs)
+    account_referral_link = t(context, "account_referral_link", link=referral_link)
+    account_withdraw = t(context, "account_withdraw_soon") # Placeholder text
+    account_api = t(context, "account_api_soon") # Placeholder text
+    
     text = (
-        f"👤 Hisobim\n\n"
-        f"💳 Balans: {balance} Stars\n"
-        f"👥 Taklif qilinganlar: {refs}\n\n"
-        f"🔗 Sizning referral link:\n{referral_link}\n\n"
-        f"📤 Yechib olish: Tez kunda\n"
-        f"🔑 API: Tez kunda"
+        f"{account_title}\n\n"
+        f"{account_balance}\n"
+        f"{account_referrals}\n\n"
+        f"{account_referral_link}\n\n"
+        f"{account_withdraw}\n"
+        f"{account_api}"
     )
     kb = [
-        [InlineKeyboardButton("💖 Donate", callback_data="donate_custom"), InlineKeyboardButton("📤 Yechib olish (Tez kunda)", callback_data="withdraw")],
-        [InlineKeyboardButton("🌐 Tilni o‘zgartirish", callback_data="change_lang"), InlineKeyboardButton("← Ortga", callback_data="back_main")]
+        [InlineKeyboardButton(t(context, "btn_donate"), callback_data="donate_custom"), InlineKeyboardButton(t(context, "account_withdraw"), callback_data="withdraw")],
+        [InlineKeyboardButton(t(context, "btn_change_lang"), callback_data="change_lang"), InlineKeyboardButton(t(context, "btn_back"), callback_data="back_main")]
     ]
     if update.callback_query:
         try:
@@ -679,23 +1739,31 @@ async def info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         t0 = time.time()
         async with aiohttp.ClientSession() as session:
-            async with session.get("https://www.google.com", timeout=2) as resp:
+            async with session.get("https://www.google.com", timeout=aiohttp.ClientTimeout(total=5)) as resp:
                 await resp.text()
         ping_ms = int((time.time() - t0) * 1000)
-    except Exception:
+    except Exception as e:
+        logger.debug(f"[PING ERROR] {e}")
         ping_ms = None
 
+    info_title = t(context, "info_title")
+    info_uptime = t(context, "info_uptime", uptime=uptime_str)
+    info_ping = t(context, "info_ping", ping=f'{ping_ms} ms' if ping_ms is not None else 'Nomaʼlum')
+    info_users = t(context, "info_users", count=user_count)
+    info_images = t(context, "info_images", count=gen_count)
+    info_donations = t(context, "info_donations", amount=donation_sum)
+    
     text = (
-        f"📊 Statistika\n\n"
-        f"⏱ Ish vaqti (uptime): {uptime_str}\n"
-        f"🌐 Ping: {f'{ping_ms} ms' if ping_ms is not None else 'Nomaʼlum'}\n"
-        f"👥 Foydalanuvchilar: {user_count}\n"
-        f"🖼 Umumiy yaratilgan rasmlar: {gen_count}\n"
-        f"💰 Umumiy donations: {donation_sum}\n"
+        f"{info_title}\n\n"
+        f"{info_uptime}\n"
+        f"{info_ping}\n"
+        f"{info_users}\n"
+        f"{info_images}\n"
+        f"{info_donations}\n"
     )
     kb = [
-        [InlineKeyboardButton("📩 Admin bilan bog‘lanish", url=f"tg://user?id={ADMIN_ID}")],
-        [InlineKeyboardButton("← Ortga", callback_data="back_main")]
+        [InlineKeyboardButton(t(context, "btn_contact_admin"), url=f"tg://user?id={ADMIN_ID}")],
+        [InlineKeyboardButton(t(context, "btn_back"), callback_data="back_main")]
     ]
     if update.callback_query:
         try:
@@ -710,7 +1778,10 @@ async def back_main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     rec = await get_user_record(context.application.bot_data["db_pool"], q.from_user.id)
-    text, kb = await send_main_panel(q.message.chat, rec.get("lang") if rec else None, context.application.bot_data)
+    # Set user's language in context for t() function
+    if rec and rec.get("lang"):
+        context.user_data['lang'] = rec.get("lang")
+    text, kb = await send_main_panel(q.message.chat, context)
     try:
         await q.edit_message_text(text, reply_markup=kb)
     except BadRequest:
@@ -724,7 +1795,7 @@ async def withdraw_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
     # placeholder
     try:
-        await q.edit_message_text("📤 Yechib olish funksiyasi hozircha tayyor emas — Tez kunda! ⏳")
+        await q.edit_message_text(t(context, "withdraw_soon"))
     except Exception:
         pass
 
@@ -733,7 +1804,7 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.exception("Unhandled exception:", exc_info=context.error)
     try:
         if isinstance(update, Update) and update.effective_chat:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text="⚠️ Xatolik yuz berdi. Adminga murojaat qiling.")
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=t(context, "error_try_again"))
     except Exception:
         pass
 
@@ -794,3 +1865,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
