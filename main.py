@@ -179,6 +179,26 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
             tg_user.id, tg_user.username if tg_user.username else None,
             prompt, translated, image_id, count, now
         )
+# ... generate_cb() ichida, log_generation() dan keyin:
+await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
+
+# 🔔 Admin notification
+try:
+    admin_text = (
+        f"👤 <b>Yangi Generatsiya</b>\n"
+        f"🆔 <code>{user.id}</code>\n"
+        f"👥 @{user.username or 'no_username'}\n"
+        f"🖊 Prompt: <code>{escape_md(prompt)}</code>\n"
+        f"📸 Rasmlar soni: {count}\n"
+        f"🕒 {utc_now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+    )
+    await context.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=admin_text,
+        parse_mode="HTML"
+    )
+except Exception as e:
+    logger.warning(f"[ADMIN NOTIFY ERROR] {e}")
 
 # ---------------- Handlers ----------------
 
