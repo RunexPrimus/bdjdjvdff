@@ -44,6 +44,8 @@ if not DATABASE_URL:
     logger.error("DATABASE_URL muhim! ENV ga qo'ying.")
     raise SystemExit(1)
 
+WAITING_AMOUNT = 1  # donate uchun state
+
 # ---------------- helpers ----------------
 def escape_md(text: str) -> str:
     if not text:
@@ -169,15 +171,10 @@ async def add_user_db(pool, tg_user):
                                tg_user.id, tg_user.username if tg_user.username else None, now, now)
         await conn.execute("INSERT INTO sessions(user_id, started_at) VALUES($1,$2)", tg_user.id, now)
 
-async def log_generation(pool, tg_user, prompt, translated, image_id, count):
-    now = utc_now()
+async def log_donation(pool, tg_user, stars, payload):
     async with pool.acquire() as conn:
-        await conn.execute(
-            "INSERT INTO generations(user_id, username, prompt, translated_prompt, image_id, image_count, created_at) "
-            "VALUES($1,$2,$3,$4,$5,$6,$7)",
-            tg_user.id, tg_user.username if tg_user.username else None,
-            prompt, translated, image_id, count, now
-        )
+        await conn.execute("INSERT INTO donations(user_id, username, stars, payload) VALUES($1,$2,$3,$4)",
+                           tg_user.id, tg_user.username, stars, payload)
 
 # ---------------- Handlers ----------------
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -227,45 +224,47 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
-# ---------------- Donate Conversation ----------------
-WAITING_AMOUNT = 1
-
+# ---------------- Donate ----------------
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query:
         await update.callback_query.answer()
-        await update.callback_query.message.reply_text("💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):")
+        chat = update.callback_query.message.chat_id
     else:
-        await update.message.reply_text("💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):")
+        chat = update.effective_chat.id
+    await context.bot.send_message(chat, "💖 Necha ⭐ yubormoqchisiz?\nMasalan: 10")
     return WAITING_AMOUNT
 
 async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        stars = int(update.message.text)
+        stars = int(update.message.text.strip())
+        if stars <= 0:
+            raise ValueError
     except ValueError:
-        await update.message.reply_text("❌ Raqam kiriting.")
+        await update.message.reply_text("❌ To‘g‘ri raqam kiriting!")
         return WAITING_AMOUNT
 
-    if stars < 1 or stars > 100000:
-        await update.message.reply_text("❌ 1 dan 100000 gacha bo‘lishi kerak.")
-        return WAITING_AMOUNT
-
+    payload = f"donate-{update.effective_user.id}-{int(time.time())}"
+    prices = [LabeledPrice(label="Donate", amount=stars)]
     await update.message.reply_invoice(
-        title="Botni qo‘llab-quvvatlash",
-        description=f"Siz {stars} ⭐ yubormoqchisiz",
-        payload=f"donate_{stars}",
-        provider_token=os.getenv("PROVIDER_TOKEN", ""),
+        title="Botga donate",
+        description="Sizning yordamingiz botni rivojlantiradi.",
+        payload=payload,
+        provider_token="",  # Telegram Stars ishlatadi, token kerak emas
         currency="XTR",
-        prices=[LabeledPrice(label="Stars", amount=stars)]
+        prices=prices
     )
+    context.user_data["donate_payload"] = payload
+    context.user_data["donate_stars"] = stars
     return ConversationHandler.END
 
 async def precheckout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.pre_checkout_query
-    await query.answer(ok=True)
+    await update.pre_checkout_query.answer(ok=True)
 
 async def successful_payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    payment = update.message.successful_payment
-    await update.message.reply_text(f"✅ Rahmat! Siz {payment.total_amount} ⭐ yubordingiz.")
+    payload = context.user_data.get("donate_payload")
+    stars = context.user_data.get("donate_stars")
+    await log_donation(context.application.bot_data["db_pool"], update.effective_user, stars, payload)
+    await update.message.reply_text(f"✅ Rahmat! Siz {stars}⭐ yubordingiz!")
 
 # ---------------- Admin commands ----------------
 async def ping_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
