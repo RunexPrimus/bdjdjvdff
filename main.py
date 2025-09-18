@@ -223,8 +223,131 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]]
     await update.message.reply_text(
         f"🖌 Sizning matningiz:\n{escape_md(prompt)}\n\n🔢 Nechta rasm yaratilsin?",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(kb)
+async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    try:
+        count = int(q.data.split("_")[1])
+    except Exception:
+        try:
+            await q.edit_message_text("❌ Noto'g'ri tugma.")
+        except Exception:
+            pass
+        return
+
+    user = q.from_user
+    prompt = context.user_data.get("prompt", "")
+    translated = context.user_data.get("translated", prompt)
+
+    try:
+        await q.edit_message_text(f"🔄 Rasm yaratilmoqda ({count})... ⏳")
+    except BadRequest:
+        pass
+
+    payload = {
+        "prompt": translated,
+        "image_size": "512x512",
+        "width": 512,
+        "height": 512,
+        "lora_id": "",
+        "batch_size": count,
+        "reference_images": [],
+        "strength": ""
+    }
+
+    headers = get_digen_headers()
+    sess_timeout = aiohttp.ClientTimeout(total=180)
+    try:
+        async with aiohttp.ClientSession(timeout=sess_timeout) as session:
+            async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
+                text_resp = await resp.text()
+                logger.info(f"[DIGEN] status={resp.status}")
+                try:
+                    data = await resp.json()
+                except Exception:
+                    logger.error(f"[DIGEN PARSE ERROR] status={resp.status} text={text_resp}")
+                    await q.message.reply_text("❌ API dan noma'lum javob keldi.")
+                    return
+
+            image_id = None
+            if isinstance(data, dict):
+                image_id = (data.get("data") or {}).get("id") or data.get("id")
+            if not image_id:
+                logger.error("[DIGEN] image_id olinmadi")
+                await q.message.reply_text("❌ Rasm ID olinmadi (API javobi).")
+                return
+
+            urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
+            logger.info(f"[GENERATE] urls: {urls}")
+
+            # Wait first image ready
+            available = False
+            waited = 0
+            while waited < 60:
+                try:
+                    async with session.get(urls[0]) as chk:
+                        if chk.status == 200:
+                            available = True
+                            break
+                except Exception:
+                    pass
+                await asyncio.sleep(1.5)
+                waited += 1.5
+
+            if not available:
+                await q.edit_message_text("⚠️ Rasm tayyor bo‘lmadi. Keyinroq urinib ko‘ring.")
+                return
+
+            # ✅ Foydalanuvchiga rasm yuborish
+            try:
+                media = [InputMediaPhoto(u) for u in urls]
+                await q.message.reply_media_group(media)
+            except TelegramError:
+                for u in urls:
+                    try:
+                        await q.message.reply_photo(u)
+                    except Exception:
+                        pass
+
+            await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
+
+            # ✅ Admin xabar (rasmlar bilan)
+            try:
+                admin_caption = (
+                    f"👤 <b>Yangi Generatsiya</b>\n"
+                    f"🆔 <code>{user.id}</code>\n"
+                    f"👥 @{user.username or 'no_username'}\n"
+                    f"🖊 Prompt: <code>{prompt}</code>\n"
+                    f"📸 Rasmlar soni: {count}\n"
+                    f"🕒 {utc_now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                )
+                # agar 1 ta bo'lsa — send_photo, agar ko'p bo'lsa — media_group
+                if count == 1:
+                    await context.bot.send_photo(
+                        chat_id=ADMIN_ID,
+                        photo=urls[0],
+                        caption=admin_caption,
+                        parse_mode="HTML"
+                    )
+                else:
+                    media_admin = [InputMediaPhoto(urls[i]) for i in range(count)]
+                    media_admin[0].caption = admin_caption
+                    media_admin[0].parse_mode = "HTML"
+                    await context.bot.send_media_group(chat_id=ADMIN_ID, media=media_admin)
+            except Exception as e:
+                logger.warning(f"[ADMIN NOTIFY ERROR] {e}")
+
+            try:
+                await q.edit_message_text("✅ Rasm tayyor! 📸")
+            except BadRequest:
+                pass
+
+    except Exception as e:
+        logger.exception(f"[GENERATE ERROR] {e}")
+        try:
+            await q.edit_message_text("⚠️ Xatolik yuz berdi. Qayta urinib ko‘ring.")
+        except Exception:
+            pass
     )
 
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -248,99 +371,6 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
-async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-    try:
-        count = int(q.data.split("_")[1])
-    except Exception:
-        await q.edit_message_text("❌ Noto‘g‘ri tugma.")
-        return
-
-    user = q.from_user
-    prompt = context.user_data.get("prompt", "")
-    translated = context.user_data.get("translated", prompt)
-
-    try:
-        await q.edit_message_text(f"🔄 Rasm yaratilmoqda ({count})... ⏳")
-    except BadRequest:
-        pass
-
-    payload = {
-        "prompt": translated,
-        "image_size": "512x512",
-        "width": 512,
-        "height": 512,
-        "lora_id": "",
-        "batch_size": count,
-        "reference_images": [],
-        "strength": ""
-    }
-    headers = get_digen_headers()
-    sess_timeout = aiohttp.ClientTimeout(total=180)
-
-    try:
-        async with aiohttp.ClientSession(timeout=sess_timeout) as session:
-            async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
-                text_resp = await resp.text()
-                try:
-                    data = await resp.json()
-                except Exception:
-                    await q.message.reply_text("❌ API javobini o‘qib bo‘lmadi.")
-                    return
-
-            image_id = (data.get("data") or {}).get("id") or data.get("id")
-            if not image_id:
-                await q.message.reply_text("❌ Rasm ID olinmadi.")
-                return
-
-            urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
-
-            available = False
-            waited = 0
-            while waited < 60:
-                try:
-                    async with session.get(urls[0]) as chk:
-                        if chk.status == 200:
-                            available = True
-                            break
-                except:
-                    pass
-                await asyncio.sleep(1.5)
-                waited += 1.5
-
-            if not available:
-                await q.edit_message_text("⚠️ Rasm tayyor bo‘lmadi.")
-                return
-
-            try:
-                media = [InputMediaPhoto(u) for u in urls]
-                for i in range(0, len(media), 10):
-                    await q.message.reply_media_group(media[i:i+10])
-            except TelegramError:
-                for u in urls:
-                    await q.message.reply_photo(u)
-
-            await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
-
-            try:
-                admin_text = (
-                    f"👤 <b>Yangi Generatsiya</b>\n"
-                    f"🆔 <code>{user.id}</code>\n"
-                    f"👥 @{user.username or 'no_username'}\n"
-                    f"🖊 Prompt: <code>{escape_md(prompt)}</code>\n"
-                    f"📸 Rasmlar soni: {count}\n"
-                    f"🕒 {utc_now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
-                )
-                await context.bot.send_message(chat_id=ADMIN_ID, text=admin_text, parse_mode="HTML")
-            except Exception as e:
-                logger.warning(f"[ADMIN NOTIFY ERROR] {e}")
-
-            await q.edit_message_text("✅ Rasm tayyor! 📸")
-
-    except Exception as e:
-        logger.exception(f"[GENERATE ERROR] {e}")
-        await q.edit_message_text("⚠️ Xatolik yuz berdi.")
 
 # ---------------- Donate ----------------
 WAITING_AMOUNT = 1
