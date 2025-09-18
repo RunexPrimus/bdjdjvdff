@@ -1,6 +1,3 @@
-```python
-#!/usr/bin/env python3
-# main.py
 import logging
 import aiohttp
 import asyncio
