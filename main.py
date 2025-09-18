@@ -200,34 +200,9 @@ async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     await update.callback_query.message.reply_text("✍️ Endi tasvir yaratish uchun matn yuboring.")
 
-async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await force_sub_if_private(update, context):
-        return
-    if context.application.user_data.get(update.effective_user.id, {}).get("donate_mode"):
-        return  # donate rejimida prompt qabul qilmaymiz
-    if not context.args:
-        await update.message.reply_text("✍️ Iltimos, rasm uchun matn yozing.")
-        return
-    prompt = " ".join(context.args)
-    await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
-    context.user_data["prompt"] = prompt
-    context.user_data["translated"] = prompt
-    kb = [[
-        InlineKeyboardButton("1️⃣", callback_data="count_1"),
-        InlineKeyboardButton("2️⃣", callback_data="count_2"),
-        InlineKeyboardButton("4️⃣", callback_data="count_4"),
-        InlineKeyboardButton("8️⃣", callback_data="count_8"),
-    ]]
-    await update.message.reply_text(
-        f"🖌 Sizning matningiz:\n{escape_md(prompt)}\n\n🔢 Nechta rasm yaratilsin?",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
-
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # ❌ Agar donate state-da bo'lsa prompt sifatida ishlamaydi
-    if context.application.user_data.get(update.effective_user.id, {}).get("donate_mode"):
-        return
+    if context.user_data.get("donate_mode"):
+        return  # donate rejimida prompt qabul qilmaymiz
     if update.effective_chat.type != "private":
         return
     if not await force_sub_if_private(update, context):
@@ -257,15 +232,10 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text("❌ Noto‘g‘ri tugma.")
         return
 
-    user = q.from_user
     prompt = context.user_data.get("prompt", "")
     translated = context.user_data.get("translated", prompt)
 
-    try:
-        await q.edit_message_text(f"🔄 Rasm yaratilmoqda ({count})... ⏳")
-    except BadRequest:
-        pass
-
+    status_msg = await q.edit_message_text(f"🔄 Rasm yaratilmoqda ({count})... 0%")
     payload = {
         "prompt": translated,
         "image_size": "512x512",
@@ -282,22 +252,26 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         async with aiohttp.ClientSession(timeout=sess_timeout) as session:
             async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
-                try:
-                    data = await resp.json()
-                except Exception:
-                    await q.message.reply_text("❌ API javobini o‘qib bo‘lmadi.")
-                    return
+                data = await resp.json()
 
             image_id = (data.get("data") or {}).get("id") or data.get("id")
             if not image_id:
-                await q.message.reply_text("❌ Rasm ID olinmadi.")
+                await status_msg.edit_text("❌ Rasm ID olinmadi.")
                 return
 
             urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
-
             available = False
             waited = 0
+            progress = 0
+
             while waited < 60:
+                new_progress = int((waited / 60) * 100)
+                if new_progress - progress >= 5:
+                    progress = new_progress
+                    try:
+                        await status_msg.edit_text(f"🔄 Rasm yaratilmoqda ({count})... {progress}%")
+                    except:
+                        pass
                 try:
                     async with session.get(urls[0]) as chk:
                         if chk.status == 200:
@@ -309,49 +283,36 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 waited += 1.5
 
             if not available:
-                await q.edit_message_text("⚠️ Rasm tayyor bo‘lmadi.")
+                await status_msg.edit_text("⚠️ Rasm tayyor bo‘lmadi.")
                 return
 
+            media = [InputMediaPhoto(u) for u in urls]
             try:
-                media = [InputMediaPhoto(u) for u in urls]
                 for i in range(0, len(media), 10):
                     await q.message.reply_media_group(media[i:i+10])
-            except TelegramError:
+            except:
                 for u in urls:
                     await q.message.reply_photo(u)
 
-            await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
-
-            try:
-                admin_text = (
-                    f"👤 <b>Yangi Generatsiya</b>\n"
-                    f"🆔 <code>{user.id}</code>\n"
-                    f"👥 @{user.username or 'no_username'}\n"
-                    f"🖊 Prompt: <code>{escape_md(prompt)}</code>\n"
-                    f"📸 Rasmlar soni: {count}\n"
-                    f"🕒 {utc_now().strftime('%Y-%m-%d %H:%M:%S UTC')}"
-                )
-                await context.bot.send_message(chat_id=ADMIN_ID, text=admin_text, parse_mode="HTML")
-            except Exception as e:
-                logger.warning(f"[ADMIN NOTIFY ERROR] {e}")
-
-            await q.edit_message_text("✅ Rasm tayyor! 📸")
+            await log_generation(context.application.bot_data["db_pool"], q.from_user, prompt, translated, image_id, count)
+            await status_msg.edit_text("✅ Rasm tayyor! 📸")
 
     except Exception as e:
         logger.exception(f"[GENERATE ERROR] {e}")
-        await q.edit_message_text("⚠️ Xatolik yuz berdi.")
+        await status_msg.edit_text("⚠️ Xatolik yuz berdi.")
 
 # ---------------- Donate ----------------
 WAITING_AMOUNT = 1
 
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("[DONATE] donate_start chaqirildi!")
-    context.application.user_data.setdefault(update.effective_user.id, {})["donate_mode"] = True
+    context.user_data["donate_mode"] = True
+    text = "💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):"
     if update.callback_query:
         await update.callback_query.answer()
-        await update.callback_query.message.reply_text("💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):")
+        await update.callback_query.message.reply_text(text)
     else:
-        await update.message.reply_text("💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):")
+        await update.message.reply_text(text)
     return WAITING_AMOUNT
 
 async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -374,7 +335,7 @@ async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
         currency="XTR",
         prices=prices
     )
-    context.application.user_data[update.effective_user.id]["donate_mode"] = False
+    context.user_data["donate_mode"] = False
     return ConversationHandler.END
 
 async def precheckout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -415,7 +376,6 @@ def build_app():
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
     app.add_handler(CallbackQueryHandler(check_sub_button_handler, pattern="check_sub"))
-    app.add_handler(CommandHandler("get", cmd_get))
 
     donate_conv = ConversationHandler(
         entry_points=[
