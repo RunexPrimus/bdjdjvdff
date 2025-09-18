@@ -1,6 +1,3 @@
-```python
-#!/usr/bin/env python3
-# main.py
 import logging
 import aiohttp
 import asyncio
@@ -1812,4 +1809,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-``
