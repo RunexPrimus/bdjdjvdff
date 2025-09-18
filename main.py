@@ -6,19 +6,23 @@ import os
 import json
 import random
 import time
+import uuid
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
+from typing import Optional, Dict, Any, Tuple
+from dataclasses import dataclass
 
 import asyncpg
 from telegram import (
     Update, InlineKeyboardMarkup, InlineKeyboardButton,
-    InputMediaPhoto, LabeledPrice
+    InputMediaPhoto, LabeledPrice, User, Message
 )
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler,
-    ContextTypes, filters, ConversationHandler, PreCheckoutQueryHandler
+    ContextTypes, filters, ConversationHandler, PreCheckoutQueryHandler, JobQueue
 )
 from telegram.error import BadRequest, TelegramError
+from telegram.constants import ParseMode
 
 # ---------------- LOG ----------------
 logging.basicConfig(
@@ -33,11 +37,9 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@SizningKanal")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1001234567890"))
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))  # e.g. '[{"token":"...","session":"..."}]'
-# Ensure DIGEN_URL ends without trailing spaces
 DIGEN_URL = os.getenv("DIGEN_URL", "https://api.digen.ai/v2/tools/text_to_image").strip()
 DATABASE_URL = os.getenv("DATABASE_URL")
-# Get BOT_USERNAME from environment or derive from BOT_TOKEN if needed (optional)
-BOT_USERNAME = os.getenv("BOT_USERNAME", BOT_TOKEN.split(':')[0] if BOT_TOKEN and ':' in BOT_TOKEN else "YourBot")
+BOT_USERNAME = os.getenv("BOT_USERNAME", "")
 
 if not BOT_TOKEN:
     logger.error("BOT_TOKEN muhim! ENV ga qo'ying.")
@@ -45,6 +47,22 @@ if not BOT_TOKEN:
 if not DATABASE_URL:
     logger.error("DATABASE_URL muhim! ENV ga qo'ying.")
     raise SystemExit(1)
+if not BOT_USERNAME:
+    logger.warning("BOT_USERNAME not set. Referral links might be incorrect.")
+
+# ---------------- STATE MANAGEMENT ----------------
+# Conversation states
+DONATE_AMOUNT = 1
+ADMIN_BROADCAST_MESSAGE = 1
+ADMIN_BAN_USER_ID = 1
+ADMIN_UNBAN_USER_ID = 1
+
+# User data keys
+USER_DATA_LANG = "lang"
+USER_DATA_PROMPT = "prompt"
+USER_DATA_TRANSLATED = "translated"
+USER_DATA_LAST_PROGRESS_MSG_ID = "last_progress_msg_id"
+USER_DATA_PROGRESS_JOB = "progress_job"
 
 # ---------------- TRANSLATIONS ----------------
 TRANSLATIONS = {
@@ -1010,47 +1028,10 @@ TRANSLATIONS = {
     },
 }
 
-def t(context: ContextTypes.DEFAULT_TYPE, key: str, **kwargs) -> str:
-    """Foydalanuvchi kontekstiga qarab kalit so'zni tarjima qiladi va formatlaydi."""
-    # Foydalanuvchi ID'sini olish (xabar yoki callback querydan)
-    user_id = None
-    if hasattr(context, 'effective_user') and context.effective_user:
-        user_id = context.effective_user.id
-    elif hasattr(context, '_user_id') and context._user_id:
-         user_id = context._user_id
-
-    lang_code = "en" # Default language
-    # DB dan foydalanuvchi tilini olish
-    if user_id and hasattr(context.application, 'bot_data') and "db_pool" in context.application.bot_data:
-        try:
-            pool = context.application.bot_data["db_pool"]
-            # This is a bit of a hack to run async code in a sync context, but it should work for most cases.
-            # A better approach would be to pass the lang_code explicitly where needed or refactor to be fully async.
-            # For now, we'll assume the DB call is fast or cached.
-            # In practice, you might want to store the user's language in context.user_data on start/update for faster access.
-            # Let's try to get it from user_data first if available and recently set.
-            if context.user_data and context.user_data.get("lang"):
-                 lang_code = context.user_data.get("lang")
-            else:
-                 # Fallback to DB lookup (synchronous call simulation - not ideal)
-                 # In a real async app, you'd await this or structure the calling code differently.
-                 # For simplicity here, we'll assume it's set correctly elsewhere or default to 'en'.
-                 # A production app would need to handle this more carefully.
-                 pass
-        except Exception as e:
-            logger.warning(f"Failed to get user language from DB for user {user_id}: {e}")
-    
-    # Agar foydalanuvchi tili aniqlanmasa, default til
-    if not lang_code:
-        lang_code = "en" # yoki bot default tili
-
-    # Tarjima lug'atidan mos tilni topish
+def t(lang_code: str, key: str, **kwargs) -> str:
+    """Tarjima qilish funksiyasi."""
     lang_dict = TRANSLATIONS.get(lang_code, TRANSLATIONS["en"])
-    
-    # Kalit so'zning tarjimasini topish, topilmasa kalitni o'zini qaytarish
-    template = lang_dict.get(key, key)
-    
-    # Formatlash
+    template = lang_dict.get(key, key) # Agar kalit mavjud bo'lmasa, o'zini qaytaradi
     if kwargs:
         try:
             return template.format(**kwargs)
@@ -1058,18 +1039,20 @@ def t(context: ContextTypes.DEFAULT_TYPE, key: str, **kwargs) -> str:
             logger.warning(f"Translation key '{key}' format error with args {kwargs}")
     return template
 
+# ---------------- MAINTENANCE MODE ----------------
+MAINTENANCE_MODE = False # Global flag
+
 # ---------------- helpers ----------------
-def escape_md(text: str) -> str:
+def escape_html(text: str) -> str:
+    """HTML belgilarni escape qilish."""
     if not text:
         return ""
-    return re.sub(r'([_*\[\]()~>#+\-=|{}.!])', r'\\\1', text)
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 def utc_now():
     return datetime.now(timezone.utc)
 
 # ---------------- DB schema ----------------
-# Note: users.lang default is NULL so we can force language selection on first start
-# Also, add a migration to add the 'lang' column if it doesn't exist
 CREATE_TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
@@ -1082,7 +1065,8 @@ CREATE TABLE IF NOT EXISTS users (
     first_seen TIMESTAMPTZ,
     last_seen TIMESTAMPTZ,
     lang TEXT,
-    balance NUMERIC DEFAULT 0
+    balance NUMERIC DEFAULT 0,
+    is_banned BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -1117,17 +1101,18 @@ CREATE TABLE IF NOT EXISTS referrals (
     invited_id BIGINT UNIQUE,
     created_at TIMESTAMPTZ DEFAULT now()
 );
-"""
 
-# SQL to add 'lang' column if it doesn't exist (PostgreSQL specific)
-ADD_LANG_COLUMN_SQL = """
+-- Add columns if they don't exist (PostgreSQL specific)
 DO $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_name='users' AND column_name='lang'
-    ) THEN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='lang') THEN
         ALTER TABLE users ADD COLUMN lang TEXT;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='balance') THEN
+        ALTER TABLE users ADD COLUMN balance NUMERIC DEFAULT 0;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='is_banned') THEN
+        ALTER TABLE users ADD COLUMN is_banned BOOLEAN DEFAULT FALSE;
     END IF;
 END
 $$;
@@ -1136,15 +1121,11 @@ $$;
 async def init_db(pool):
     async with pool.acquire() as conn:
         await conn.execute(CREATE_TABLES_SQL)
-        # Try to add the 'lang' column if it doesn't exist
-        try:
-            await conn.execute(ADD_LANG_COLUMN_SQL)
-            logger.info("Checked/Added 'lang' column to 'users' table.")
-        except Exception as e:
-            logger.warning(f"Could not add 'lang' column: {e}. It might already exist or the DB user lacks permissions.")
         row = await conn.fetchrow("SELECT value FROM meta WHERE key = 'start_time'")
         if not row:
             await conn.execute("INSERT INTO meta(key, value) VALUES($1, $2)", "start_time", str(int(time.time())))
+        # Check and set maintenance mode flag from DB if needed, or default to False
+        # For simplicity, we'll use the global variable for now.
 
 # ---------------- Digen headers ----------------
 def get_digen_headers():
@@ -1158,35 +1139,43 @@ def get_digen_headers():
         "digen-platform": "web",
         "digen-token": key.get("token", ""),
         "digen-sessionid": key.get("session", ""),
-        # Ensure URLs are stripped of extra spaces
         "origin": "https://rm.digen.ai",
         "referer": "https://rm.digen.ai/",
     }
 
-# ---------------- subscription check (optional) ----------------
+# ---------------- subscription check ----------------
 async def check_subscription(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    if not CHANNEL_ID or not CHANNEL_USERNAME:
+        logger.warning("CHANNEL_ID or CHANNEL_USERNAME not set, skipping subscription check.")
+        return True # Agar kanal sozlanmagan bo'lsa, tekshirmasdan o'tkazib yuboramiz
     try:
         member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
         return member.status in ("member", "administrator", "creator")
     except Exception as e:
         logger.debug(f"[SUB CHECK ERROR] {e}")
-        # If can't check, return False to show prompt.
         return False
 
 async def force_sub_if_private(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     if update.effective_chat.type != "private":
         return True
-    ok = await check_subscription(update.effective_user.id, context)
+    user_id = update.effective_user.id
+    # Check if user is banned
+    user_rec = await get_user_record(context.application.bot_data["db_pool"], user_id)
+    if user_rec and user_rec.get("is_banned"):
+        await update.message.reply_text("🚫 Siz botdan foydalanishdan chetlatilgansiz.")
+        return False
+        
+    ok = await check_subscription(user_id, context)
     if not ok:
         kb = [
-            [InlineKeyboardButton(t(context, "sub_check_link_text"), url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
-            [InlineKeyboardButton(t(context, "sub_check_button_text"), callback_data="check_sub")]
+            [InlineKeyboardButton(t(get_user_language(context, user_id), "sub_check_link_text"), url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
+            [InlineKeyboardButton(t(get_user_language(context, user_id), "sub_check_button_text"), callback_data="check_sub")]
         ]
         if update.callback_query:
             await update.callback_query.answer()
-            await update.callback_query.message.reply_text(t(context, "sub_check_prompt"), reply_markup=InlineKeyboardMarkup(kb))
+            await update.callback_query.message.reply_text(t(get_user_language(context, user_id), "sub_check_prompt"), reply_markup=InlineKeyboardMarkup(kb))
         else:
-            await update.message.reply_text(t(context, "sub_check_prompt"), reply_markup=InlineKeyboardMarkup(kb))
+            await update.message.reply_text(t(get_user_language(context, user_id), "sub_check_prompt"), reply_markup=InlineKeyboardMarkup(kb))
         return False
     return True
 
@@ -1194,57 +1183,58 @@ async def check_sub_button_handler(update: Update, context: ContextTypes.DEFAULT
     q = update.callback_query
     await q.answer()
     user_id = q.from_user.id
+    # Check if user is banned (redundant but safe)
+    user_rec = await get_user_record(context.application.bot_data["db_pool"], user_id)
+    if user_rec and user_rec.get("is_banned"):
+        await q.edit_message_text("🚫 Siz botdan foydalanishdan chetlatilgansiz.")
+        return
+        
     if await check_subscription(user_id, context):
-        # Go back to main menu after successful subscription check
-        # We need to get the user's language again after subscription check
-        user_rec = await get_user_record(context.application.bot_data["db_pool"], user_id)
-        lang = user_rec.get("lang") if user_rec else "en"
-        # Temporarily set lang in context.user_data for t() function
-        context.user_data['lang'] = lang
-        text = t(context, "sub_check_success")
-        kb = [[InlineKeyboardButton(t(context, "btn_back"), callback_data="back_main")]]
-        await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
+        lang_code = get_user_language(context, user_id)
+        text, kb = await send_main_panel(q.message.chat, lang_code, context.application.bot_data)
+        await q.edit_message_text(text, reply_markup=kb)
     else:
+        lang_code = get_user_language(context, user_id)
         kb = [
-            [InlineKeyboardButton(t(context, "sub_check_link_text"), url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
-            [InlineKeyboardButton(t(context, "sub_check_button_text"), callback_data="check_sub")]
+            [InlineKeyboardButton(t(lang_code, "sub_check_link_text"), url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
+            [InlineKeyboardButton(t(lang_code, "sub_check_button_text"), callback_data="check_sub")]
         ]
-        await q.edit_message_text(t(context, "sub_check_fail"), reply_markup=InlineKeyboardMarkup(kb))
+        await q.edit_message_text(t(lang_code, "sub_check_fail"), reply_markup=InlineKeyboardMarkup(kb))
 
 # ---------------- DB user/session/logging ----------------
-async def add_user_db(pool, tg_user) -> bool:
-    """
-    Ensure user exists. Returns True if user was newly created.
-    """
+async def add_user_db(pool, tg_user: User) -> bool:
     now = utc_now()
     async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT id FROM users WHERE id = $1", tg_user.id)
         if row:
-            await conn.execute("UPDATE users SET username=$1, last_seen=$2 WHERE id=$3",
-                               tg_user.username if tg_user.username else None, now, tg_user.id)
+            await conn.execute(
+                "UPDATE users SET username=$1, last_seen=$2 WHERE id=$3",
+                tg_user.username if tg_user.username else None, now, tg_user.id
+            )
             created = False
         else:
-            await conn.execute("INSERT INTO users(id, username, first_seen, last_seen) VALUES($1,$2,$3,$4)",
-                               tg_user.id, tg_user.username if tg_user.username else None, now, now)
+            # Yangi foydalanuvchi, default til 'uz' bo'ladi, lekin keyin foydalanuvchi tanlaydi
+            await conn.execute(
+                "INSERT INTO users(id, username, first_seen, last_seen, lang) VALUES($1,$2,$3,$4,$5)",
+                tg_user.id, tg_user.username if tg_user.username else None, now, now, None # lang hozircha NULL
+            )
             created = True
         await conn.execute("INSERT INTO sessions(user_id, started_at) VALUES($1,$2)", tg_user.id, now)
     return created
 
-async def get_user_record(pool, user_id):
+async def get_user_record(pool, user_id: int):
     async with pool.acquire() as conn:
         return await conn.fetchrow("SELECT * FROM users WHERE id=$1", user_id)
 
-async def set_user_lang(pool, user_id, lang_code):
+async def set_user_lang(pool, user_id: int, lang_code: str):
     async with pool.acquire() as conn:
-        # Use a simple UPDATE. If the column doesn't exist, the query will fail, which is handled by the error handler.
         await conn.execute("UPDATE users SET lang=$1 WHERE id=$2", lang_code, user_id)
 
-async def adjust_user_balance(pool, user_id, delta: Decimal):
+async def adjust_user_balance(pool, user_id: int, delta: Decimal):
     async with pool.acquire() as conn:
-        # Use numeric arithmetic
         await conn.execute("UPDATE users SET balance = (COALESCE(balance, 0) + $1) WHERE id=$2", str(delta), user_id)
 
-async def log_generation(pool, tg_user, prompt, translated, image_id, count):
+async def log_generation(pool, tg_user: User, prompt: str, translated: str, image_id: str, count: int):
     now = utc_now()
     async with pool.acquire() as conn:
         await conn.execute(
@@ -1254,13 +1244,29 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
             prompt, translated, image_id, count, now
         )
 
+async def ban_user(pool, user_id: int) -> bool:
+    """Foydalanuvchini ban qilish."""
+    async with pool.acquire() as conn:
+        result = await conn.execute("UPDATE users SET is_banned = TRUE WHERE id = $1", user_id)
+        return result != "UPDATE 0"
+
+async def unban_user(pool, user_id: int) -> bool:
+    """Foydalanuvchini bandan chiqarish."""
+    async with pool.acquire() as conn:
+        result = await conn.execute("UPDATE users SET is_banned = FALSE WHERE id = $1", user_id)
+        return result != "UPDATE 0"
+
+async def is_user_banned(pool, user_id: int) -> bool:
+    """Foydalanuvchi ban qilinganligini tekshirish."""
+    user_rec = await get_user_record(pool, user_id)
+    return user_rec.get("is_banned") if user_rec else False
+
 # ---------------- Limits / Referral helpers ----------------
 FREE_8_PER_DAY = 3
-PRICE_PER_8 = Decimal("1")      # 1 Stars
+PRICE_PER_8 = Decimal("1")
 REFERRAL_REWARD = Decimal("0.25")
 
-async def get_8_used_today(pool, user_id) -> int:
-    # Count generations where image_count == 8 and created_at >= start of UTC day
+async def get_8_used_today(pool, user_id: int) -> int:
     now = utc_now()
     start_day = datetime(year=now.year, month=now.month, day=now.day, tzinfo=timezone.utc)
     async with pool.acquire() as conn:
@@ -1271,7 +1277,6 @@ async def get_8_used_today(pool, user_id) -> int:
     return int(cnt or 0)
 
 async def handle_referral(pool, inviter_id: int, invited_id: int):
-    # Add referral only if not exists
     if inviter_id == invited_id:
         return False
     async with pool.acquire() as conn:
@@ -1280,10 +1285,9 @@ async def handle_referral(pool, inviter_id: int, invited_id: int):
             return False
         try:
             await conn.execute("INSERT INTO referrals(inviter_id, invited_id) VALUES($1,$2)", inviter_id, invited_id)
-            # Give inviter reward
             await conn.execute("UPDATE users SET balance = COALESCE(balance, 0) + $1 WHERE id=$2", str(REFERRAL_REWARD), inviter_id)
-            # Notify inviter (optional)
-            # This would require storing the bot instance or using a different mechanism
+            # Notify inviter (optional, requires storing bot instance or using a queue/async notify)
+            # For now, we'll assume the inviter gets the reward in their balance on next check.
             return True
         except asyncpg.UniqueViolationError:
             return False
@@ -1292,7 +1296,6 @@ async def handle_referral(pool, inviter_id: int, invited_id: int):
             return False
 
 # ---------------- UI: languages ----------------
-# 15 languages + Uzbek (Cyrillic)
 LANGS = [
     ("🇺🇸 English", "en"),
     ("🇷🇺 Русский", "ru"),
@@ -1312,230 +1315,371 @@ LANGS = [
     ("🇻🇳 Tiếng Việt", "vi")
 ]
 
-def build_lang_keyboard(context: ContextTypes.DEFAULT_TYPE):
+def build_lang_keyboard(lang_code: str):
     kb = []
     row = []
     for label, code in LANGS:
         row.append(InlineKeyboardButton(label, callback_data=f"set_lang_{code}"))
-        if len(row) == 2: # 2 buttons per row
+        if len(row) == 2:
             kb.append(row)
             row = []
     if row:
         kb.append(row)
     return InlineKeyboardMarkup(kb)
 
-# ---------------- Handlers ----------------
+# ---------------- Language Helper ----------------
+def get_user_language(context: ContextTypes.DEFAULT_TYPE, user_id: int) -> str:
+    """Foydalanuvchining tilini aniqlash."""
+    # 1. context.user_data dan urinib ko'rish
+    if context.user_data and USER_DATA_LANG in context.user_data:
+        return context.user_data[USER_DATA_LANG]
+    
+    # 2. DB dan urinib ko'rish
+    # Bu yerda biz hech qachon await qilmasdan ishlamaymiz, shuning uchun bu faqat oxirgi chora.
+    # Aslida, bu funksiya faqat context.user_data dan o'qiydi.
+    # Tilni o'rnatishda context.user_data va DB ni yangilash kerak.
+    
+    # 3. Default
+    return "en" # yoki botning standart tili
 
-# Small helper to send main panel
-async def send_main_panel(chat, context: ContextTypes.DEFAULT_TYPE):
-    """Return InlineKeyboardMarkup for main panel and a text message."""
+# ---------------- Handlers ----------------
+async def send_main_panel(chat, lang_code: str, bot_data: dict):
     kb = [
-        [InlineKeyboardButton(t(context, "btn_generate"), callback_data="start_gen")],
-        [InlineKeyboardButton(t(context, "btn_donate"), callback_data="donate_custom"), InlineKeyboardButton(t(context, "btn_account"), callback_data="my_account")],
-        [InlineKeyboardButton(t(context, "btn_change_lang"), callback_data="change_lang"), InlineKeyboardButton(t(context, "btn_info"), callback_data="show_info")],
+        [InlineKeyboardButton(t(lang_code, "btn_generate"), callback_data="start_gen")],
+        [InlineKeyboardButton(t(lang_code, "btn_donate"), callback_data="donate_custom"), InlineKeyboardButton(t(lang_code, "btn_account"), callback_data="my_account")],
+        [InlineKeyboardButton(t(lang_code, "btn_change_lang"), callback_data="change_lang"), InlineKeyboardButton(t(lang_code, "btn_info"), callback_data="show_info")],
     ]
-    text = t(context, "main_panel_text")
+    # Agar foydalanuvchi admin bo'lsa, admin panel tugmasini qo'shamiz
+    # Bu yerda ADMIN_ID global o'zgaruvchi sifatida aniqlangan
+    # if chat.id == ADMIN_ID: # Bu noto'g'ri, chat.id foydalanuvchi ID'si emas
+    # To'g'riroq: foydalanuvchi ID'sini olish
+    # if hasattr(chat, 'id'): user_id = chat.id
+    # else: user_id = None
+    # if user_id and user_id == ADMIN_ID:
+    #     kb.append([InlineKeyboardButton(t(lang_code, "btn_admin"), callback_data="admin_panel")])
+    
+    text = t(lang_code, "main_panel_text")
     return text, InlineKeyboardMarkup(kb)
 
 # START
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global MAINTENANCE_MODE
+    if MAINTENANCE_MODE:
+        user_lang = get_user_language(context, update.effective_user.id)
+        await update.message.reply_text(t(user_lang, "maintenance_message"))
+        return
+
     if not await force_sub_if_private(update, context):
         return
 
-    # Add user and detect if new
     created = await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     user_rec = await get_user_record(context.application.bot_data["db_pool"], update.effective_user.id)
-    # Handle referral if present and user is new
-    args = []
-    if update.message and update.message.text:
-        parts = update.message.text.strip().split()
-        if len(parts) > 1:
-            args = parts[1:]
-    # Also use context.args if available (CommandHandler provides it)
-    if context.args:
-        args = context.args
-
+    
+    # Referralni tekshirish
+    args = context.args or []
     if created and args:
-        # look for ref_<id>
         for a in args:
             if a.startswith("ref_"):
                 try:
                     inviter_id = int(a.split("_", 1)[1])
-                    # handle referral
-                    success = await handle_referral(context.application.bot_data["db_pool"], inviter_id, update.effective_user.id)
-                    if success:
-                        # Notify inviter (optional, requires storing bot instance or using a queue/async notify)
-                        # For now, we'll assume the inviter gets the reward in their balance on next check.
-                        # You could implement a notification system here if needed.
-                        pass
+                    if inviter_id != update.effective_user.id: # O'zini o'zini taklif qilishni oldini olish
+                        success = await handle_referral(context.application.bot_data["db_pool"], inviter_id, update.effective_user.id)
+                        if success:
+                            # Taklif qiluvchiga xabar berish (ixtiyoriy)
+                            # Bu murakkabroq, chunki biz taklif qiluvchi online ekanligini bilmaymiz
+                            # Hoynahoy, uni balansi keyingi kirishda ko'rinadi
+                            pass
                 except Exception as e:
                     logger.warning(f"[REFERRAL PARSE ERROR] {e}")
 
-    # If user has no lang set -> show language selection
+    # Agar foydalanuvchi tilini tanlamagan bo'lsa
     if not user_rec or not user_rec.get("lang"):
+        user_lang = "en" # Tilni tanlashda foydalanish uchun vaqtincha
+        context.user_data[USER_DATA_LANG] = user_lang # context.user_data ni ham yangilaymiz
         await update.message.reply_text(
-            t(context, "choose_language"),
-            reply_markup=build_lang_keyboard(context)
+            t(user_lang, "choose_language"),
+            reply_markup=build_lang_keyboard(user_lang)
         )
         return
 
-    # Otherwise send main panel
-    # Set user's language in context for t() function
-    context.user_data['lang'] = user_rec.get("lang")
-    text, kb = await send_main_panel(update.effective_chat, context)
-    await update.message.reply_text(text, reply_markup=kb)
+    # Aks holda, bosh panelni ko'rsatamiz
+    lang_code = user_rec["lang"]
+    context.user_data[USER_DATA_LANG] = lang_code # context.user_data ni yangilash
+    text, kb = await send_main_panel(update.effective_chat, lang_code, context.application.bot_data)
+    await update.message.reply_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
 
 async def change_lang_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    await q.edit_message_text(t(context, "choose_language"), reply_markup=build_lang_keyboard(context))
+    user_lang = get_user_language(context, q.from_user.id)
+    await q.edit_message_text(t(user_lang, "choose_language"), reply_markup=build_lang_keyboard(user_lang))
 
 async def set_lang_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global MAINTENANCE_MODE
+    if MAINTENANCE_MODE:
+        q = update.callback_query
+        await q.answer()
+        user_lang = get_user_language(context, q.from_user.id)
+        await q.edit_message_text(t(user_lang, "maintenance_message"))
+        return
+        
     q = update.callback_query
     await q.answer()
-    data = q.data  # set_lang_<code>
+    data = q.data
     code = data.split("_", 2)[2]
+    
+    # DB ga tilni saqlash
+    await set_user_lang(context.application.bot_data["db_pool"], q.from_user.id, code)
+    # context.user_data ni yangilash
+    context.user_data[USER_DATA_LANG] = code
+    
+    # Tasdiqlash xabarini yuborish va bosh menyuga qaytish
+    text, kb = await send_main_panel(q.message.chat, code, context.application.bot_data)
+    confirmation_text = t(code, "main_panel_text") # Asosiy matnni o'zini ishlatamiz
+    full_text = f"✅ Til {code} ga o'zgartirildi.\n\n{confirmation_text}"
     try:
-        await set_user_lang(context.application.bot_data["db_pool"], q.from_user.id, code)
-        # Store the language in context.user_data for immediate use
-        context.user_data['lang'] = code
-        # send confirmation and main panel
-        text, kb = await send_main_panel(q.message.chat, context)
-        confirmation_text = t(context, "language_set", lang_code=code)
-        full_text = f"{confirmation_text}\n\n{text}"
+        await q.edit_message_text(full_text, reply_markup=kb, parse_mode=ParseMode.HTML)
+    except BadRequest:
         try:
-            await q.edit_message_text(full_text, reply_markup=kb)
-        except BadRequest:
-            try:
-                await q.message.reply_text(full_text, reply_markup=kb)
-            except Exception:
-                pass
-    except Exception as e:
-        logger.error(f"Error setting language for user {q.from_user.id}: {e}")
-        try:
-            await q.edit_message_text(t(context, "error_try_again"))
+            await q.message.reply_text(full_text, reply_markup=kb, parse_mode=ParseMode.HTML)
         except Exception:
             pass
 
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # simple route to ask prompt
+    global MAINTENANCE_MODE
+    if MAINTENANCE_MODE:
+        q = update.callback_query if update.callback_query else None
+        if q:
+            await q.answer()
+        user_lang = get_user_language(context, update.effective_user.id if update.effective_user else (q.from_user.id if q else 0))
+        msg = q.message if q else update.message
+        if msg:
+            await msg.reply_text(t(user_lang, "maintenance_message"))
+        return
+
     if update.callback_query:
         await update.callback_query.answer()
-    await update.effective_message.reply_text(t(context, "enter_prompt"))
+    user_lang = get_user_language(context, update.effective_user.id)
+    await update.effective_message.reply_text(t(user_lang, "enter_prompt"))
 
-# /get command (works in groups and private)
+# /get command
 async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global MAINTENANCE_MODE
+    if MAINTENANCE_MODE:
+        user_lang = get_user_language(context, update.effective_user.id)
+        await update.message.reply_text(t(user_lang, "maintenance_message"))
+        return
+
     if not await force_sub_if_private(update, context):
         return
     chat_type = update.effective_chat.type
     if chat_type in ("group", "supergroup"):
         if not context.args:
-            await update.message.reply_text(t(context, "prompt_missing_group"))
+            user_lang = get_user_language(context, update.effective_user.id)
+            await update.message.reply_text(t(user_lang, "prompt_missing_group"))
             return
         prompt = " ".join(context.args)
-        message_text = t(context, "prompt_received_group", prompt=escape_md(prompt))
     else:
         if not context.args:
-            await update.message.reply_text(t(context, "prompt_missing_private"))
+            user_lang = get_user_language(context, update.effective_user.id)
+            await update.message.reply_text(t(user_lang, "prompt_missing_private"))
             return
         prompt = " ".join(context.args)
-        message_text = t(context, "prompt_received_private", prompt=escape_md(prompt))
 
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
-    context.user_data["prompt"] = prompt
-    context.user_data["translated"] = prompt
+    context.user_data[USER_DATA_PROMPT] = prompt
+    context.user_data[USER_DATA_TRANSLATED] = prompt
+    user_lang = get_user_language(context, update.effective_user.id)
+    message_text = t(user_lang, "prompt_received", prompt=escape_html(prompt))
     kb = [[
-        InlineKeyboardButton(t(context, "btn_1"), callback_data="count_1"),
-        InlineKeyboardButton(t(context, "btn_2"), callback_data="count_2"),
-        InlineKeyboardButton(t(context, "btn_4"), callback_data="count_4"),
-        InlineKeyboardButton(t(context, "btn_8"), callback_data="count_8"),
+        InlineKeyboardButton(t(user_lang, "btn_1"), callback_data="count_1"),
+        InlineKeyboardButton(t(user_lang, "btn_2"), callback_data="count_2"),
+        InlineKeyboardButton(t(user_lang, "btn_4"), callback_data="count_4"),
+        InlineKeyboardButton(t(user_lang, "btn_8"), callback_data="count_8"),
     ]]
-    await update.message.reply_text(
-        message_text,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
+    await update.message.reply_text(message_text, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(kb))
 
 # Private plain text -> prompt
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global MAINTENANCE_MODE
+    if MAINTENANCE_MODE:
+        user_lang = get_user_language(context, update.effective_user.id)
+        await update.message.reply_text(t(user_lang, "maintenance_message"))
+        return
+
     if update.effective_chat.type != "private":
         return
-    # If conversation for donate is active, PTB will route to conversation handler first.
     if not await force_sub_if_private(update, context):
         return
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     prompt = update.message.text
-    context.user_data["prompt"] = prompt
-    context.user_data["translated"] = prompt
-    message_text = t(context, "prompt_received_private", prompt=escape_md(prompt))
+    context.user_data[USER_DATA_PROMPT] = prompt
+    context.user_data[USER_DATA_TRANSLATED] = prompt
+    user_lang = get_user_language(context, update.effective_user.id)
+    message_text = t(user_lang, "prompt_received", prompt=escape_html(prompt))
     kb = [[
-        InlineKeyboardButton(t(context, "btn_1"), callback_data="count_1"),
-        InlineKeyboardButton(t(context, "btn_2"), callback_data="count_2"),
-        InlineKeyboardButton(t(context, "btn_4"), callback_data="count_4"),
-        InlineKeyboardButton(t(context, "btn_8"), callback_data="count_8"),
+        InlineKeyboardButton(t(user_lang, "btn_1"), callback_data="count_1"),
+        InlineKeyboardButton(t(user_lang, "btn_2"), callback_data="count_2"),
+        InlineKeyboardButton(t(user_lang, "btn_4"), callback_data="count_4"),
+        InlineKeyboardButton(t(user_lang, "btn_8"), callback_data="count_8"),
     ]]
-    await update.message.reply_text(
-        message_text,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
+    await update.message.reply_text(message_text, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup(kb))
 
-# GENERATE (robust) with limit checks for 8-image batches
+# ---------------- Progress Simulation ----------------
+async def simulate_progress(context: ContextTypes.DEFAULT_TYPE):
+    """Progressni yangilash uchun job."""
+    job = context.job
+    if not job or not job.data:
+        return
+    data = job.data
+    chat_id = data.get('chat_id')
+    message_id = data.get('message_id')
+    count = data.get('count')
+    used = data.get('used', None)
+    limit = data.get('limit', None)
+    price_deducted = data.get('price_deducted', None)
+    lang_code = data.get('lang_code')
+    progress = data.get('progress', 0)
+    
+    if not chat_id or not message_id or not lang_code:
+        return
+
+    progress = min(progress + random.randint(5, 15), 95) # 5-15% qo'shiladi, maks 95%
+    data['progress'] = progress
+    
+    try:
+        if count == 8 and used is not None and limit is not None:
+            if price_deducted:
+                text = t(lang_code, "stars_deducted_progress", price=price_deducted, count=count, progress=progress)
+            else:
+                text = t(lang_code, "generating_8_limited_progress", count=count, progress=progress, used=used, limit=limit)
+        else:
+            if price_deducted:
+                text = t(lang_code, "stars_deducted_progress", price=price_deducted, count=count, progress=progress)
+            else:
+                text = t(lang_code, "generating_progress", count=count, progress=progress)
+                
+        await context.bot.edit_message_text(chat_id=chat_id, message_id=message_id, text=text)
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            logger.warning(f"Progress update error: {e}")
+    except Exception as e:
+        logger.warning(f"Unexpected progress update error: {e}")
+
+# GENERATE
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global MAINTENANCE_MODE
+    if MAINTENANCE_MODE:
+        q = update.callback_query
+        await q.answer()
+        user_lang = get_user_language(context, q.from_user.id)
+        await q.edit_message_text(t(user_lang, "maintenance_message"))
+        return
+
     q = update.callback_query
     await q.answer()
     try:
         count = int(q.data.split("_")[1])
     except Exception:
+        user_lang = get_user_language(context, q.from_user.id)
         try:
-            await q.edit_message_text(t(context, "invalid_button"))
+            await q.edit_message_text(t(user_lang, "invalid_button"))
         except Exception:
             pass
         return
 
     user = q.from_user
-    prompt = context.user_data.get("prompt", "")
-    translated = context.user_data.get("translated", prompt)
+    prompt = context.user_data.get(USER_DATA_PROMPT, "")
+    translated = context.user_data.get(USER_DATA_TRANSLATED, prompt)
 
-    # check 8-image limits
+    # Check if user is banned
+    user_rec = await get_user_record(context.application.bot_data["db_pool"], user.id)
+    if user_rec and user_rec.get("is_banned"):
+        user_lang = get_user_language(context, user.id)
+        try:
+            await q.edit_message_text("🚫 Siz botdan foydalanishdan chetlatilgansiz.")
+        except Exception:
+            pass
+        return
+
+    # 8-image limits
     if count == 8:
         pool = context.application.bot_data["db_pool"]
         used = await get_8_used_today(pool, user.id)
         if used >= FREE_8_PER_DAY:
-            # need 1 Stars to proceed
-            # check user's balance
             rec = await get_user_record(pool, user.id)
             balance = Decimal(rec.get("balance") or 0)
             if balance < PRICE_PER_8:
-                # insufficient
                 kb = [
-                    [InlineKeyboardButton(t(context, "btn_donate"), callback_data="donate_custom")],
-                    [InlineKeyboardButton(t(context, "btn_account"), callback_data="my_account")]
+                    [InlineKeyboardButton(t(get_user_language(context, user.id), "btn_donate"), callback_data="donate_custom")],
+                    [InlineKeyboardButton(t(get_user_language(context, user.id), "btn_account"), callback_data="my_account")]
                 ]
+                user_lang = get_user_language(context, user.id)
                 try:
-                    await q.edit_message_text(t(context, "insufficient_balance_8"), reply_markup=InlineKeyboardMarkup(kb))
+                    await q.edit_message_text(t(user_lang, "insufficient_balance_8"), reply_markup=InlineKeyboardMarkup(kb))
                 except Exception:
                     pass
                 return
             else:
-                # deduct price
                 await adjust_user_balance(pool, user.id, -PRICE_PER_8)
-                # notify user
-                try:
-                    await q.edit_message_text(t(context, "stars_deducted", price=PRICE_PER_8, count=count))
-                except BadRequest:
-                    pass
+                # Start progress simulation with price deducted info
+                user_lang = get_user_language(context, user.id)
+                progress_text = t(user_lang, "stars_deducted", price=PRICE_PER_8, count=count)
+                progress_msg = await q.edit_message_text(progress_text)
+                
+                # Schedule progress updates
+                job_queue: JobQueue = context.job_queue
+                if job_queue:
+                    job_data = {
+                        'chat_id': progress_msg.chat_id,
+                        'message_id': progress_msg.message_id,
+                        'count': count,
+                        'price_deducted': str(PRICE_PER_8),
+                        'lang_code': user_lang,
+                        'progress': 0
+                    }
+                    job = job_queue.run_repeating(simulate_progress, interval=2, first=2, data=job_data)
+                    # Store job reference to cancel later
+                    context.user_data[USER_DATA_PROGRESS_JOB] = job
+                    context.user_data[USER_DATA_LAST_PROGRESS_MSG_ID] = progress_msg.message_id
         else:
-            # free - allowed
-            try:
-                await q.edit_message_text(t(context, "generating_8_limited", count=count, used=used, limit=FREE_8_PER_DAY))
-            except BadRequest:
-                pass
+            # Free - allowed, start progress simulation
+            user_lang = get_user_language(context, user.id)
+            progress_text = t(user_lang, "generating_8_limited", count=count, used=used, limit=FREE_8_PER_DAY)
+            progress_msg = await q.edit_message_text(progress_text)
+            
+            job_queue: JobQueue = context.job_queue
+            if job_queue:
+                job_data = {
+                    'chat_id': progress_msg.chat_id,
+                    'message_id': progress_msg.message_id,
+                    'count': count,
+                    'used': used,
+                    'limit': FREE_8_PER_DAY,
+                    'lang_code': user_lang,
+                    'progress': 0
+                }
+                job = job_queue.run_repeating(simulate_progress, interval=2, first=2, data=job_data)
+                context.user_data[USER_DATA_PROGRESS_JOB] = job
+                context.user_data[USER_DATA_LAST_PROGRESS_MSG_ID] = progress_msg.message_id
     else:
-        try:
-            await q.edit_message_text(t(context, "generating", count=count))
-        except BadRequest:
-            pass
+        # For 1, 2, 4 images, start progress simulation
+        user_lang = get_user_language(context, user.id)
+        progress_text = t(user_lang, "generating", count=count)
+        progress_msg = await q.edit_message_text(progress_text)
+        
+        job_queue: JobQueue = context.job_queue
+        if job_queue:
+            job_data = {
+                'chat_id': progress_msg.chat_id,
+                'message_id': progress_msg.message_id,
+                'count': count,
+                'lang_code': user_lang,
+                'progress': 0
+            }
+            job = job_queue.run_repeating(simulate_progress, interval=2, first=2, data=job_data)
+            context.user_data[USER_DATA_PROGRESS_JOB] = job
+            context.user_data[USER_DATA_LAST_PROGRESS_MSG_ID] = progress_msg.message_id
 
     payload = {
         "prompt": translated,
@@ -1558,25 +1702,33 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     data = await resp.json()
                 except Exception:
                     logger.error(f"[DIGEN PARSE ERROR] status={resp.status} text={text_resp}")
-                    await q.message.reply_text(t(context, "api_unknown_response"))
+                    user_lang = get_user_language(context, user.id)
+                    await q.message.reply_text(t(user_lang, "api_unknown_response"))
+                    # Cancel progress job if it exists
+                    if USER_DATA_PROGRESS_JOB in context.user_data:
+                        job = context.user_data.pop(USER_DATA_PROGRESS_JOB)
+                        job.schedule_removal()
                     return
 
             logger.debug(f"[DIGEN DATA] {json.dumps(data)[:2000]}")
 
-            # try multiple possible locations for id
             image_id = None
             if isinstance(data, dict):
                 image_id = (data.get("data") or {}).get("id") or data.get("id")
             if not image_id:
                 logger.error("[DIGEN] image_id olinmadi")
-                await q.message.reply_text(t(context, "image_id_missing"))
+                user_lang = get_user_language(context, user.id)
+                await q.message.reply_text(t(user_lang, "image_id_missing"))
+                # Cancel progress job if it exists
+                if USER_DATA_PROGRESS_JOB in context.user_data:
+                    job = context.user_data.pop(USER_DATA_PROGRESS_JOB)
+                    job.schedule_removal()
                 return
 
-            # Ensure URL is constructed correctly without extra spaces
             urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
             logger.info(f"[GENERATE] urls: {urls}")
 
-            # wait loop for first image
+            # Wait loop for first image
             available = False
             max_wait = 60
             waited = 0
@@ -1594,13 +1746,23 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             if not available:
                 logger.warning("[GENERATE] URL not ready after wait")
+                user_lang = get_user_language(context, user.id)
                 try:
-                    await q.edit_message_text(t(context, "image_wait_timeout"))
+                    await q.edit_message_text(t(user_lang, "image_wait_timeout"))
                 except Exception:
                     pass
+                # Cancel progress job if it exists
+                if USER_DATA_PROGRESS_JOB in context.user_data:
+                    job = context.user_data.pop(USER_DATA_PROGRESS_JOB)
+                    job.schedule_removal()
                 return
 
-            # send media group, fallback to single photos
+            # Cancel progress job before sending final message
+            if USER_DATA_PROGRESS_JOB in context.user_data:
+                job = context.user_data.pop(USER_DATA_PROGRESS_JOB)
+                job.schedule_removal()
+            
+            # Send media group or single photos
             try:
                 media = [InputMediaPhoto(u) for u in urls]
                 await q.message.reply_media_group(media)
@@ -1614,50 +1776,99 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
 
-            # Add inline button after successful generation
-            kb = [[InlineKeyboardButton(t(context, "btn_generate_again"), callback_data="start_gen")]]
-            try:
-                await q.edit_message_text(t(context, "image_ready"), reply_markup=InlineKeyboardMarkup(kb))
-            except BadRequest:
-                pass
+            # Send final "ready" message with "Generate Again" button
+            user_lang = get_user_language(context, user.id)
+            kb = [[InlineKeyboardButton(t(user_lang, "btn_generate_again"), callback_data="start_gen")]]
+            # Edit the last progress message if we have its ID
+            last_progress_msg_id = context.user_data.pop(USER_DATA_LAST_PROGRESS_MSG_ID, None)
+            if last_progress_msg_id:
+                try:
+                    await context.bot.edit_message_text(
+                        chat_id=q.message.chat_id,
+                        message_id=last_progress_msg_id,
+                        text=t(user_lang, "image_ready"),
+                        reply_markup=InlineKeyboardMarkup(kb)
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to edit progress message: {e}")
+                    # If editing fails, send a new message
+                    await q.message.reply_text(t(user_lang, "image_ready"), reply_markup=InlineKeyboardMarkup(kb))
+            else:
+                await q.message.reply_text(t(user_lang, "image_ready"), reply_markup=InlineKeyboardMarkup(kb))
 
     except Exception as e:
         logger.exception(f"[GENERATE ERROR] {e}")
+        user_lang = get_user_language(context, user.id)
         try:
-            await q.edit_message_text(t(context, "error_try_again"))
+            await q.edit_message_text(t(user_lang, "error_try_again"))
         except Exception:
             pass
+        # Cancel progress job if it exists
+        if USER_DATA_PROGRESS_JOB in context.user_data:
+            job = context.user_data.pop(USER_DATA_PROGRESS_JOB)
+            job.schedule_removal()
 
 # ---------------- Donate (Stars) flow ----------------
-WAITING_AMOUNT = 1
-
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global MAINTENANCE_MODE
+    if MAINTENANCE_MODE:
+        q = update.callback_query if update.callback_query else None
+        if q:
+            await q.answer()
+        user_lang = get_user_language(context, update.effective_user.id if update.effective_user else (q.from_user.id if q else 0))
+        msg = q.message if q else update.message
+        if msg:
+            await msg.reply_text(t(user_lang, "maintenance_message"))
+        return
+
     if update.callback_query:
         await update.callback_query.answer()
-        await update.callback_query.message.reply_text(t(context, "enter_donate_amount"))
+        user_lang = get_user_language(context, update.callback_query.from_user.id)
+        await update.callback_query.message.reply_text(t(user_lang, "enter_donate_amount"))
     else:
-        await update.message.reply_text(t(context, "enter_donate_amount"))
-    return WAITING_AMOUNT
+        user_lang = get_user_language(context, update.effective_user.id)
+        await update.message.reply_text(t(user_lang, "enter_donate_amount"))
+    return DONATE_AMOUNT
 
 async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global MAINTENANCE_MODE
+    if MAINTENANCE_MODE:
+        user_lang = get_user_language(context, update.effective_user.id)
+        await update.message.reply_text(t(user_lang, "maintenance_message"))
+        return ConversationHandler.END
+
     txt = update.message.text.strip()
     try:
         amount = int(txt)
         if amount < 1 or amount > 100000:
             raise ValueError
     except ValueError:
-        await update.message.reply_text(t(context, "invalid_donate_amount"))
-        return WAITING_AMOUNT
+        user_lang = get_user_language(context, update.effective_user.id)
+        await update.message.reply_text(t(user_lang, "invalid_donate_amount"))
+        # Foydalanuvchi noto'g'ri qiymat kiritgani uchun bosh menyuga qaytish
+        # Bu yerda ConversationHandler.END qaytariladi, lekin foydalanuvchi xabar yozganidan keyin
+        # bosh menyuga qaytish uchun yangi handler kerak.
+        # Oddiy holatda, foydalanuvchidan yana miqdor so'raladi.
+        # Agar foydalanuvchi /start yoki boshqa buyruq bersa, ConversationHandler to'xtaydi.
+        # Shunchaki ConversationHandler.END qaytarsak, foydalanuvchi "invalid" xabarini oladi va yana kiritishni davom ettiradi.
+        # Bosh menyuga qaytish uchun maxsus handler kerak bo'ladi yoki conversationni boshqacha boshqarish kerak.
+        # Hozirgi kodda, foydalanuvchi to'g'ri qiymat kiritmaguncha conversation davom etadi.
+        # Agar foydalanuvchi conversationdan chiqishni hohlasa, /start buyrug'i ishlatishi mumkin.
+        # Bu oddiy Telegram bot conversation logikasidir.
+        # Agar foydalanuvchi bosh menyuga qaytishni xohlasa, /start ni bosishi kerak.
+        # Shuning uchun, bu yerda hech narsa qaytarmasak, conversation davom etadi.
+        # return ConversationHandler.END # Bu foydalanuvchini conversationdan chiqaradi, lekin bu xohlanmaydi.
+        return DONATE_AMOUNT # Yana miqdor so'raladi
 
-    payload = f"donate_{update.effective_user.id}_{int(time.time())}"
-    prices = [LabeledPrice(f"{amount} Stars", amount * 100)] # LabeledPrice expects amount in cents for XTR
-    # provider_token empty for Stars (XTR)
+    payload = f"donate_{update.effective_user.id}_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+    prices = [LabeledPrice(f"{amount} Stars", amount * 100)] # XTR uchun centlarda
+    user_lang = get_user_language(context, update.effective_user.id)
     await context.bot.send_invoice(
         chat_id=update.effective_chat.id,
-        title=t(context, "donate_invoice_title"),
-        description=t(context, "donate_invoice_description"),
+        title=t(user_lang, "donate_invoice_title"),
+        description=t(user_lang, "donate_invoice_description"),
         payload=payload,
-        provider_token="",  # for XTR leave empty
+        provider_token="", # XTR uchun bo'sh
         currency="XTR",
         prices=prices,
         is_flexible=False
@@ -1669,13 +1880,10 @@ async def precheckout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def successful_payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     payment = update.message.successful_payment
-    # For XTR, total_amount is already in "stars" (no need to divide by 100 anymore)
-    # The LabeledPrice was correctly set in cents, so this should be fine.
-    # However, to be safe and consistent with previous logic where it was divided by 100,
-    # we'll keep the division here. Please verify your payment provider's documentation.
-    amount_stars = payment.total_amount // 100
+    amount_stars = payment.total_amount // 100 # XTR uchun to'g'ri miqdor
     user = update.effective_user
-    thanks_text = t(context, "donate_thanks", first_name=user.first_name, amount_stars=amount_stars)
+    user_lang = get_user_language(context, user.id)
+    thanks_text = t(user_lang, "donate_thanks", first_name=user.first_name, amount_stars=amount_stars)
     await update.message.reply_text(thanks_text)
     pool = context.application.bot_data["db_pool"]
     async with pool.acquire() as conn:
@@ -1683,12 +1891,25 @@ async def successful_payment_handler(update: Update, context: ContextTypes.DEFAU
             "INSERT INTO donations(user_id, username, stars, payload) VALUES($1,$2,$3,$4)",
             user.id, user.username if user.username else None, amount_stars, payment.invoice_payload
         )
-    # update user's balance
     await adjust_user_balance(pool, user.id, Decimal(amount_stars))
+    
+    # To'lovdan keyin foydalanuvchini bosh menyuga yo'naltirish
+    text, kb = await send_main_panel(update.effective_chat, user_lang, context.application.bot_data)
+    await update.message.reply_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
 
 # ---------------- Hisobim / Account panel ----------------
 async def my_account_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Can be callback_query or message command
+    global MAINTENANCE_MODE
+    if MAINTENANCE_MODE:
+        q = update.callback_query if update.callback_query else None
+        if q:
+            await q.answer()
+        user_lang = get_user_language(context, update.effective_user.id if update.effective_user else (q.from_user.id if q else 0))
+        msg = q.message if q else update.message
+        if msg:
+            await msg.reply_text(t(user_lang, "maintenance_message"))
+        return
+
     if update.callback_query:
         q = update.callback_query
         await q.answer()
@@ -1699,140 +1920,558 @@ async def my_account_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
         chat = update.effective_chat
 
     rec = await get_user_record(context.application.bot_data["db_pool"], user_id)
+    if not rec:
+        user_lang = get_user_language(context, user_id)
+        await chat.send_message(t(user_lang, "error_try_again"))
+        return
+        
     balance = Decimal(rec.get("balance") or 0)
-    # Count referrals
     async with context.application.bot_data["db_pool"].acquire() as conn:
         refs = await conn.fetchval("SELECT COUNT(*) FROM referrals WHERE inviter_id=$1", user_id)
     refs = int(refs or 0)
-    # Use BOT_USERNAME from env or fallback
-    referral_link = f"https://t.me/{BOT_USERNAME}?start=ref_{user_id}"
-    account_title = t(context, "account_title")
-    account_balance = t(context, "account_balance", balance=balance)
-    account_referrals = t(context, "account_referrals", count=refs)
-    account_referral_link = t(context, "account_referral_link", link=referral_link)
-    account_withdraw = t(context, "account_withdraw_soon") # Placeholder text
-    account_api = t(context, "account_api_soon") # Placeholder text
+    
+    # To'g'ri referral link
+    bot_username = BOT_USERNAME or "DigenAi_Bot" # Fallback
+    referral_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
+    
+    user_lang = rec.get("lang") or "en"
+    account_title = t(user_lang, "account_title")
+    account_balance = t(user_lang, "account_balance", balance=balance)
+    account_referrals = t(user_lang, "account_referrals", count=refs)
+    account_referral_link = t(user_lang, "account_referral_link", link=referral_link)
+    account_withdraw = t(user_lang, "account_withdraw") # tugma uchun
+    account_api = t(user_lang, "account_api") # tugma uchun
+    withdraw_soon_text = t(user_lang, "withdraw_soon")
+    api_soon_text = t(user_lang, "api_soon")
     
     text = (
-        f"{account_title}\n\n"
+        f"<b>{account_title}</b>\n\n"
         f"{account_balance}\n"
         f"{account_referrals}\n\n"
         f"{account_referral_link}\n\n"
-        f"{account_withdraw}\n"
-        f"{account_api}"
+        f"<b>{account_withdraw}:</b> {withdraw_soon_text}\n"
+        f"<b>{account_api}:</b> {api_soon_text}"
     )
     kb = [
-        [InlineKeyboardButton(t(context, "btn_donate"), callback_data="donate_custom"), InlineKeyboardButton(t(context, "account_withdraw"), callback_data="withdraw")],
-        [InlineKeyboardButton(t(context, "btn_change_lang"), callback_data="change_lang"), InlineKeyboardButton(t(context, "btn_back"), callback_data="back_main")]
+        [InlineKeyboardButton(t(user_lang, "btn_donate"), callback_data="donate_custom"), InlineKeyboardButton(account_withdraw, callback_data="withdraw")],
+        [InlineKeyboardButton(t(user_lang, "btn_change_lang"), callback_data="change_lang"), InlineKeyboardButton(t(user_lang, "btn_back"), callback_data="back_main")]
     ]
     if update.callback_query:
         try:
-            await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
+            await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
         except BadRequest:
             try:
-                await q.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb))
+                await q.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
             except Exception:
                 pass
     else:
-        await chat.send_message(text, reply_markup=InlineKeyboardMarkup(kb))
+        await chat.send_message(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
 
 # ---------------- Info / Stats ----------------
 async def info_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Send uptime, ping, totals, and admin contact
+    global MAINTENANCE_MODE
+    if MAINTENANCE_MODE:
+        q = update.callback_query if update.callback_query else None
+        if q:
+            await q.answer()
+        user_lang = get_user_language(context, update.effective_user.id if update.effective_user else (q.from_user.id if q else 0))
+        msg = q.message if q else update.message
+        if msg:
+            await msg.reply_text(t(user_lang, "maintenance_message"))
+        return
+
+    if update.callback_query:
+        q = update.callback_query
+        await q.answer()
+        chat = q.message.chat
+        user_lang = get_user_language(context, q.from_user.id)
+    else:
+        chat = update.effective_chat
+        user_lang = get_user_language(context, update.effective_user.id)
+
+    info_title = t(user_lang, "info_title")
+    info_description = t(user_lang, "info_description")
+    
+    text = f"<b>{info_title}</b>\n\n{info_description}"
+    
+    kb = [
+        [InlineKeyboardButton(t(user_lang, "btn_contact_admin"), url=f"tg://user?id={ADMIN_ID}")],
+        [InlineKeyboardButton(t(user_lang, "btn_realtime_stats"), callback_data="realtime_stats")],
+        [InlineKeyboardButton(t(user_lang, "btn_back"), callback_data="back_main")]
+    ]
+    
+    if update.callback_query:
+        try:
+            await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
+        except BadRequest:
+            await q.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
+    else:
+        await chat.send_message(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
+
+async def realtime_stats_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Real-time statistikani ko'rsatish va yangilash."""
+    q = update.callback_query
+    await q.answer()
+    user_lang = get_user_language(context, q.from_user.id)
+    
+    # Initial stats message
+    stats_msg = await q.edit_message_text(t(user_lang, "stats_title") + "\n🔄 Yangilanmoqda...")
+    
+    # Schedule a job to update stats every 5 seconds
+    job_queue: JobQueue = context.job_queue
+    if job_queue:
+        job_data = {
+            'chat_id': stats_msg.chat_id,
+            'message_id': stats_msg.message_id,
+            'user_lang': user_lang,
+            'db_pool': context.application.bot_data["db_pool"]
+        }
+        job = job_queue.run_repeating(update_stats_message, interval=5, first=0, data=job_data)
+        # Store job reference in user_data or chat_data to cancel later
+        # For simplicity, we'll use user_data, but this means only one stats view per user
+        context.chat_data['stats_job'] = job
+
+async def update_stats_message(context: ContextTypes.DEFAULT_TYPE):
+    """Stats xabarini yangilash uchun job."""
+    job = context.job
+    if not job or not job.data:
+        return
+    data = job.data
+    chat_id = data.get('chat_id')
+    message_id = data.get('message_id')
+    user_lang = data.get('user_lang')
+    pool = data.get('db_pool')
+    
+    if not chat_id or not message_id or not user_lang or not pool:
+        return
+
+    try:
+        async with pool.acquire() as conn:
+            start_time_row = await conn.fetchrow("SELECT value FROM meta WHERE key='start_time'")
+            start_ts = int(start_time_row["value"]) if start_time_row else int(time.time())
+            user_count = await conn.fetchval("SELECT COUNT(*) FROM users")
+            gen_count = await conn.fetchval("SELECT COUNT(*) FROM generations")
+            donation_sum_row = await conn.fetchval("SELECT COALESCE(SUM(stars),0) FROM donations")
+            donation_sum = int(donation_sum_row) if donation_sum_row else 0
+            
+        uptime_seconds = int(time.time()) - start_ts
+        uptime_str = str(timedelta(seconds=uptime_seconds))
+        
+        ping_ms = None
+        try:
+            t0 = time.time()
+            async with aiohttp.ClientSession() as session:
+                async with session.get("https://www.google.com", timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    await resp.text()
+            ping_ms = int((time.time() - t0) * 1000)
+        except Exception as e:
+            logger.debug(f"[PING ERROR] {e}")
+            ping_ms = None
+
+        stats_title = t(user_lang, "stats_title")
+        stats_uptime = t(user_lang, "stats_uptime", uptime=uptime_str)
+        stats_ping = t(user_lang, "stats_ping", ping=f'{ping_ms} ms' if ping_ms is not None else 'Nomaʼlum')
+        stats_users = t(user_lang, "stats_users", count=user_count)
+        stats_images = t(user_lang, "stats_images", count=gen_count)
+        stats_donations = t(user_lang, "stats_donations", amount=donation_sum)
+        
+        text = (
+            f"<b>{stats_title}</b>\n\n"
+            f"{stats_uptime}\n"
+            f"{stats_ping}\n"
+            f"{stats_users}\n"
+            f"{stats_images}\n"
+            f"{stats_donations}\n\n"
+            "<i>🔄 Avtomatik yangilanadi...</i>"
+        )
+        
+        kb = [[InlineKeyboardButton(t(user_lang, "btn_back"), callback_data="show_info")]]
+        
+        await context.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=message_id,
+            text=text,
+            reply_markup=InlineKeyboardMarkup(kb),
+            parse_mode=ParseMode.HTML
+        )
+    except BadRequest as e:
+        if "Message is not modified" in str(e):
+            pass # Ignore if message hasn't changed
+        else:
+            logger.warning(f"Stats update error: {e}")
+            # If there's an error, cancel the job
+            job.schedule_removal()
+    except Exception as e:
+        logger.error(f"Unexpected stats update error: {e}")
+        job.schedule_removal()
+
+async def stop_stats_updates(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Stats yangilanishini to'xtatish."""
+    if 'stats_job' in context.chat_data:
+        job = context.chat_data['stats_job']
+        job.schedule_removal()
+        del context.chat_data['stats_job']
+
+# ---------------- Simple navigation handlers ----------------
+async def back_main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global MAINTENANCE_MODE
+    if MAINTENANCE_MODE:
+        q = update.callback_query
+        await q.answer()
+        user_lang = get_user_language(context, q.from_user.id)
+        await q.edit_message_text(t(user_lang, "maintenance_message"))
+        return
+
+    q = update.callback_query
+    await q.answer()
+    # Stats yangilanishini to'xtatish
+    await stop_stats_updates(update, context)
+    
+    user_rec = await get_user_record(context.application.bot_data["db_pool"], q.from_user.id)
+    lang_code = user_rec["lang"] if user_rec and user_rec["lang"] else "en"
+    context.user_data[USER_DATA_LANG] = lang_code
+    text, kb = await send_main_panel(q.message.chat, lang_code, context.application.bot_data)
+    try:
+        await q.edit_message_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+    except BadRequest:
+        try:
+            await q.message.reply_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+        except Exception:
+            pass
+
+async def withdraw_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global MAINTENANCE_MODE
+    if MAINTENANCE_MODE:
+        q = update.callback_query
+        await q.answer()
+        user_lang = get_user_language(context, q.from_user.id)
+        await q.edit_message_text(t(user_lang, "maintenance_message"))
+        return
+
+    q = update.callback_query
+    await q.answer()
+    user_lang = get_user_language(context, q.from_user.id)
+    try:
+        await q.edit_message_text(t(user_lang, "withdraw_soon"))
+    except Exception:
+        pass
+
+# ---------------- Admin Panel ----------------
+async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin panelni ko'rsatish."""
+    global MAINTENANCE_MODE
+    if MAINTENANCE_MODE:
+        q = update.callback_query if update.callback_query else None
+        if q:
+            await q.answer()
+        user_lang = get_user_language(context, update.effective_user.id if update.effective_user else (q.from_user.id if q else 0))
+        msg = q.message if q else update.message
+        if msg:
+            await msg.reply_text(t(user_lang, "maintenance_message"))
+        return
+
+    user_id = update.effective_user.id if update.effective_user else (update.callback_query.from_user.id if update.callback_query else 0)
+    if user_id != ADMIN_ID:
+        # Agar foydalanuvchi admin bo'lmasa, bosh menyuga qaytarish
+        user_rec = await get_user_record(context.application.bot_data["db_pool"], user_id)
+        lang_code = user_rec["lang"] if user_rec and user_rec["lang"] else "en"
+        context.user_data[USER_DATA_LANG] = lang_code
+        text, kb = await send_main_panel(update.effective_chat if update.effective_message else update.callback_query.message.chat, lang_code, context.application.bot_data)
+        if update.callback_query:
+            await update.callback_query.answer()
+            await update.callback_query.edit_message_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+        else:
+            await update.message.reply_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+        return
+
     if update.callback_query:
         q = update.callback_query
         await q.answer()
         chat = q.message.chat
     else:
+        q = None
         chat = update.effective_chat
 
+    user_lang = get_user_language(context, user_id)
+    admin_title = t(user_lang, "admin_panel_title")
+    btn_broadcast = t(user_lang, "btn_admin_broadcast")
+    btn_ban = t(user_lang, "btn_admin_ban")
+    btn_unban = t(user_lang, "btn_admin_unban")
+    btn_user_info = t(user_lang, "btn_admin_user_info")
+    btn_maintenance = t(user_lang, "btn_admin_toggle_maintenance")
+    btn_referrals = t(user_lang, "btn_admin_get_all_referrals")
+    btn_back = t(user_lang, "btn_back")
+    
+    text = f"<b>{admin_title}</b>"
+    kb = [
+        [InlineKeyboardButton(btn_broadcast, callback_data="admin_broadcast")],
+        [InlineKeyboardButton(btn_ban, callback_data="admin_ban")],
+        [InlineKeyboardButton(btn_unban, callback_data="admin_unban")],
+        [InlineKeyboardButton(btn_user_info, callback_data="admin_user_info")],
+        [InlineKeyboardButton(btn_referrals, callback_data="admin_referrals")],
+        [InlineKeyboardButton(btn_maintenance, callback_data="admin_maintenance")],
+        [InlineKeyboardButton(btn_back, callback_data="back_main")]
+    ]
+    
+    if q:
+        await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
+    else:
+        await chat.send_message(text, reply_markup=InlineKeyboardMarkup(kb), parse_mode=ParseMode.HTML)
+
+async def admin_broadcast_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin broadcast uchun conversationni boshlash."""
+    q = update.callback_query
+    await q.answer()
+    user_lang = get_user_language(context, q.from_user.id)
+    await q.message.reply_text(t(user_lang, "enter_broadcast_message"))
+    return ADMIN_BROADCAST_MESSAGE
+
+async def admin_broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin broadcast xabarini qabul qilish va yuborish."""
+    # Xabarni olish (text, photo, va h.k.)
+    message: Message = update.message
+    
+    # Foydalanuvchilarga yuborish
     pool = context.application.bot_data["db_pool"]
     async with pool.acquire() as conn:
-        start_time_row = await conn.fetchrow("SELECT value FROM meta WHERE key='start_time'")
-        start_ts = int(start_time_row["value"]) if start_time_row else int(time.time())
-        user_count = await conn.fetchval("SELECT COUNT(*) FROM users")
-        gen_count = await conn.fetchval("SELECT COUNT(*) FROM generations")
-        donation_sum = await conn.fetchval("SELECT COALESCE(SUM(stars),0) FROM donations")
-    # uptime
-    uptime_seconds = int(time.time()) - start_ts
-    uptime_str = str(timedelta(seconds=uptime_seconds))
-    # ping measurement (simple HTTP GET to google with timeout)
-    ping_ms = None
-    try:
-        t0 = time.time()
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://www.google.com", timeout=aiohttp.ClientTimeout(total=5)) as resp:
-                await resp.text()
-        ping_ms = int((time.time() - t0) * 1000)
-    except Exception as e:
-        logger.debug(f"[PING ERROR] {e}")
-        ping_ms = None
-
-    info_title = t(context, "info_title")
-    info_uptime = t(context, "info_uptime", uptime=uptime_str)
-    info_ping = t(context, "info_ping", ping=f'{ping_ms} ms' if ping_ms is not None else 'Nomaʼlum')
-    info_users = t(context, "info_users", count=user_count)
-    info_images = t(context, "info_images", count=gen_count)
-    info_donations = t(context, "info_donations", amount=donation_sum)
+        user_ids = await conn.fetch("SELECT id FROM users WHERE is_banned = FALSE") # Faqat ban qilinmagan foydalanuvchilarga
     
-    text = (
-        f"{info_title}\n\n"
-        f"{info_uptime}\n"
-        f"{info_ping}\n"
-        f"{info_users}\n"
-        f"{info_images}\n"
-        f"{info_donations}\n"
-    )
-    kb = [
-        [InlineKeyboardButton(t(context, "btn_contact_admin"), url=f"tg://user?id={ADMIN_ID}")],
-        [InlineKeyboardButton(t(context, "btn_back"), callback_data="back_main")]
-    ]
-    if update.callback_query:
+    user_lang = get_user_language(context, update.effective_user.id)
+    
+    success_count = 0
+    fail_count = 0
+    for record in user_ids:
+        user_id = record['id']
         try:
-            await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb))
-        except BadRequest:
-            await q.message.reply_text(text, reply_markup=InlineKeyboardMarkup(kb))
+            # Xabarni qayta yuborish
+            if message.text:
+                await context.bot.send_message(user_id, message.text, parse_mode=ParseMode.HTML if message.parse_mode else None)
+            elif message.photo:
+                caption = message.caption or ""
+                await context.bot.send_photo(user_id, message.photo[-1].file_id, caption=caption, parse_mode=ParseMode.HTML if message.parse_mode else None)
+            elif message.document:
+                caption = message.caption or ""
+                await context.bot.send_document(user_id, message.document.file_id, caption=caption, parse_mode=ParseMode.HTML if message.parse_mode else None)
+            elif message.video:
+                caption = message.caption or ""
+                await context.bot.send_video(user_id, message.video.file_id, caption=caption, parse_mode=ParseMode.HTML if message.parse_mode else None)
+            elif message.audio:
+                caption = message.caption or ""
+                await context.bot.send_audio(user_id, message.audio.file_id, caption=caption, parse_mode=ParseMode.HTML if message.parse_mode else None)
+            # Boshqa media turlarini qo'shishingiz mumkin
+            else:
+                # Noma'lum turdagi xabar
+                pass
+            success_count += 1
+        except Exception as e:
+            logger.warning(f"Failed to send broadcast to user {user_id}: {e}")
+            fail_count += 1
+            
+    await message.reply_text(f"📢 Xabar yuborildi!\n✅ Muvaffaqiyatli: {success_count}\n❌ Muvaffaqiyatsiz: {fail_count}")
+    
+    # Adminni bosh menyuga qaytarish
+    text, kb = await send_main_panel(update.effective_chat, user_lang, context.application.bot_data)
+    await message.reply_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+    return ConversationHandler.END
+
+async def admin_ban_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin foydalanuvchini ban qilish uchun user ID so'rash."""
+    q = update.callback_query
+    await q.answer()
+    user_lang = get_user_language(context, q.from_user.id)
+    await q.message.reply_text(t(user_lang, "enter_user_id_to_ban"))
+    return ADMIN_BAN_USER_ID
+
+async def admin_ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Foydalanuvchini ban qilish."""
+    txt = update.message.text.strip()
+    try:
+        user_id = int(txt)
+    except ValueError:
+        user_lang = get_user_language(context, update.effective_user.id)
+        await update.message.reply_text(t(user_lang, "invalid_user_id"))
+        return ADMIN_BAN_USER_ID # Yana ID so'raladi
+
+    pool = context.application.bot_data["db_pool"]
+    user_rec = await get_user_record(pool, user_id)
+    if not user_rec:
+        user_lang = get_user_language(context, update.effective_user.id)
+        await update.message.reply_text(t(user_lang, "user_not_found"))
+        return ConversationHandler.END
+
+    is_already_banned = user_rec.get("is_banned")
+    if is_already_banned:
+        user_lang = get_user_language(context, update.effective_user.id)
+        await update.message.reply_text(t(user_lang, "user_already_banned", user_id=user_id))
     else:
-        await chat.send_message(text, reply_markup=InlineKeyboardMarkup(kb))
+        success = await ban_user(pool, user_id)
+        user_lang = get_user_language(context, update.effective_user.id)
+        if success:
+            await update.message.reply_text(t(user_lang, "user_banned", user_id=user_id))
+        else:
+            await update.message.reply_text(t(user_lang, "error_try_again"))
+    
+    # Adminni bosh menyuga qaytarish
+    user_lang = get_user_language(context, update.effective_user.id)
+    text, kb = await send_main_panel(update.effective_chat, user_lang, context.application.bot_data)
+    await update.message.reply_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+    return ConversationHandler.END
 
-# ---------------- Simple navigation handlers ----------------
-async def back_main_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_unban_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin foydalanuvchini bandan chiqarish uchun user ID so'rash."""
     q = update.callback_query
     await q.answer()
-    rec = await get_user_record(context.application.bot_data["db_pool"], q.from_user.id)
-    # Set user's language in context for t() function
-    if rec and rec.get("lang"):
-        context.user_data['lang'] = rec.get("lang")
-    text, kb = await send_main_panel(q.message.chat, context)
-    try:
-        await q.edit_message_text(text, reply_markup=kb)
-    except BadRequest:
-        try:
-            await q.message.reply_text(text, reply_markup=kb)
-        except Exception:
-            pass
+    user_lang = get_user_language(context, q.from_user.id)
+    await q.message.reply_text(t(user_lang, "enter_user_id_to_unban"))
+    return ADMIN_UNBAN_USER_ID
 
-async def withdraw_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_unban_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Foydalanuvchini bandan chiqarish."""
+    txt = update.message.text.strip()
+    try:
+        user_id = int(txt)
+    except ValueError:
+        user_lang = get_user_language(context, update.effective_user.id)
+        await update.message.reply_text(t(user_lang, "invalid_user_id"))
+        return ADMIN_UNBAN_USER_ID # Yana ID so'raladi
+
+    pool = context.application.bot_data["db_pool"]
+    user_rec = await get_user_record(pool, user_id)
+    if not user_rec:
+        user_lang = get_user_language(context, update.effective_user.id)
+        await update.message.reply_text(t(user_lang, "user_not_found"))
+        return ConversationHandler.END
+
+    is_banned = user_rec.get("is_banned")
+    if not is_banned:
+        user_lang = get_user_language(context, update.effective_user.id)
+        await update.message.reply_text(t(user_lang, "user_not_banned", user_id=user_id))
+    else:
+        success = await unban_user(pool, user_id)
+        user_lang = get_user_language(context, update.effective_user.id)
+        if success:
+            await update.message.reply_text(t(user_lang, "user_unbanned", user_id=user_id))
+        else:
+            await update.message.reply_text(t(user_lang, "error_try_again"))
+    
+    # Adminni bosh menyuga qaytarish
+    user_lang = get_user_language(context, update.effective_user.id)
+    text, kb = await send_main_panel(update.effective_chat, user_lang, context.application.bot_data)
+    await update.message.reply_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+    return ConversationHandler.END
+
+async def admin_user_info_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin foydalanuvchi haqida ma'lumot olish uchun user ID so'rash."""
     q = update.callback_query
     await q.answer()
-    # placeholder
+    user_lang = get_user_language(context, q.from_user.id)
+    await q.message.reply_text(t(user_lang, "enter_user_id_for_info"))
+    # Bu yerda state kerak bo'lmasa, oddiy handler sifatida ishlatish mumkin
+    # Yoki conversation state dan foydalanish mumkin. Hozir oddiy handler.
+    return ConversationHandler.END
+
+async def admin_user_info_by_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Foydalanuvchi haqida ma'lumot berish."""
+    txt = update.message.text.strip()
     try:
-        await q.edit_message_text(t(context, "withdraw_soon"))
-    except Exception:
-        pass
+        user_id = int(txt)
+    except ValueError:
+        user_lang = get_user_language(context, update.effective_user.id)
+        await update.message.reply_text(t(user_lang, "invalid_user_id"))
+        return
+
+    pool = context.application.bot_data["db_pool"]
+    user_rec = await get_user_record(pool, user_id)
+    if not user_rec:
+        user_lang = get_user_language(context, update.effective_user.id)
+        await update.message.reply_text(t(user_lang, "user_not_found"))
+        return
+
+    # Referral sonini hisoblash
+    async with pool.acquire() as conn:
+        refs_count = await conn.fetchval("SELECT COUNT(*) FROM referrals WHERE inviter_id=$1", user_id)
+    refs_count = int(refs_count or 0)
+    
+    user_lang_admin = get_user_language(context, update.effective_user.id) # Admin tili
+    user_lang_user = user_rec.get("lang") or "en" # Foydalanuvchi tili
+    
+    info_title = t(user_lang_admin, "user_info_title")
+    info_details = t(
+        user_lang_admin, "user_info_details",
+        id=user_rec['id'],
+        username=user_rec['username'] or "N/A",
+        first_seen=user_rec['first_seen'].strftime('%Y-%m-%d %H:%M:%S') if user_rec['first_seen'] else "N/A",
+        last_seen=user_rec['last_seen'].strftime('%Y-%m-%d %H:%M:%S') if user_rec['last_seen'] else "N/A",
+        lang=user_rec['lang'] or "N/A",
+        balance=user_rec['balance'] or 0,
+        referral_count=refs_count
+    )
+    
+    text = f"<b>{info_title}</b>\n\n{info_details}"
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+    
+    # Adminni bosh menyuga qaytarish
+    text, kb = await send_main_panel(update.effective_chat, user_lang_admin, context.application.bot_data)
+    await update.message.reply_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+
+async def admin_get_all_referrals(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Foydalanuvchining barcha referallarini olish."""
+    q = update.callback_query
+    await q.answer()
+    
+    # Foydalanuvchi ID'sini olish (misol uchun, admin ID'si so'ralmasa, o'zini ID'si olinadi)
+    # Bu yerda oddiy holat: admin o'z referallarini ko'radi deb hisoblaymiz.
+    # Agar boshqa foydalanuvchining referallari kerak bo'lsa, alohida ID so'rash kerak.
+    # Hozircha, admin o'zini referallarini ko'radi.
+    user_id = q.from_user.id 
+    pool = context.application.bot_data["db_pool"]
+    
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("SELECT invited_id FROM referrals WHERE inviter_id=$1", user_id)
+        
+    if not rows:
+        user_lang = get_user_language(context, user_id)
+        await q.message.reply_text(t(user_lang, "no_referrals_found"))
+        return
+        
+    user_lang = get_user_language(context, user_id)
+    referrals_title = t(user_lang, "referrals_title", user_id=user_id)
+    text = f"<b>{referrals_title}</b>\n\n"
+    
+    for i, row in enumerate(rows, 1):
+        invited_id = row['invited_id']
+        invited_rec = await get_user_record(pool, invited_id)
+        username = invited_rec['username'] if invited_rec and invited_rec['username'] else "N/A"
+        text += f"{i}. ID: {invited_id}, Username: @{username}\n"
+        
+    await q.message.reply_text(text, parse_mode=ParseMode.HTML)
+
+async def admin_toggle_maintenance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Maintenance rejimini yoqish/o'chirish."""
+    global MAINTENANCE_MODE
+    q = update.callback_query
+    await q.answer()
+    
+    MAINTENANCE_MODE = not MAINTENANCE_MODE
+    user_lang = get_user_language(context, q.from_user.id)
+    if MAINTENANCE_MODE:
+        await q.edit_message_text(t(user_lang, "maintenance_enabled"))
+    else:
+        await q.edit_message_text(t(user_lang, "maintenance_disabled"))
 
 # ---------------- Error handler ----------------
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.exception("Unhandled exception:", exc_info=context.error)
     try:
         if isinstance(update, Update) and update.effective_chat:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text=t(context, "error_try_again"))
+            user_lang = get_user_language(context, update.effective_user.id if update.effective_user else 0)
+            await context.bot.send_message(chat_id=update.effective_chat.id, text=t(user_lang, "error_try_again"))
     except Exception:
         pass
 
 # ---------------- Startup ----------------
 async def on_startup(app: Application):
-    pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
+    pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=10) # Max size ni oshirdim
     app.bot_data["db_pool"] = pool
     await init_db(pool)
     logger.info("✅ DB initialized and pool created.")
@@ -1856,13 +2495,17 @@ def build_app():
     # Info / account
     app.add_handler(CommandHandler("info", info_handler))
     app.add_handler(CallbackQueryHandler(info_handler, pattern=r"show_info"))
+    app.add_handler(CallbackQueryHandler(realtime_stats_handler, pattern=r"realtime_stats"))
     app.add_handler(CallbackQueryHandler(my_account_handler, pattern=r"my_account"))
 
-    # Donate conversation MUST be added BEFORE generic text handler
+    # Donate conversation
     donate_conv = ConversationHandler(
         entry_points=[CommandHandler("donate", donate_start), CallbackQueryHandler(donate_start, pattern="donate_custom")],
-        states={WAITING_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, donate_amount)]},
-        fallbacks=[]
+        states={
+            DONATE_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, donate_amount)]
+        },
+        fallbacks=[],
+        per_message=False
     )
     app.add_handler(donate_conv)
 
@@ -1876,6 +2519,52 @@ def build_app():
     # private plain text -> prompt handler (after donate_conv)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, private_text_handler))
 
+    # Admin Panel Handlers
+    app.add_handler(CallbackQueryHandler(admin_panel_handler, pattern=r"admin_panel"))
+    
+    # Admin Broadcast Conversation
+    admin_broadcast_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(admin_broadcast_start, pattern=r"admin_broadcast")],
+        states={
+            ADMIN_BROADCAST_MESSAGE: [MessageHandler(~filters.COMMAND, admin_broadcast_message)]
+        },
+        fallbacks=[],
+        per_message=False
+    )
+    app.add_handler(admin_broadcast_conv)
+    
+    # Admin Ban Conversation
+    admin_ban_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(admin_ban_start, pattern=r"admin_ban")],
+        states={
+            ADMIN_BAN_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_ban_user)]
+        },
+        fallbacks=[],
+        per_message=False
+    )
+    app.add_handler(admin_ban_conv)
+    
+    # Admin Unban Conversation
+    admin_unban_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(admin_unban_start, pattern=r"admin_unban")],
+        states={
+            ADMIN_UNBAN_USER_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_unban_user)]
+        },
+        fallbacks=[],
+        per_message=False
+    )
+    app.add_handler(admin_unban_conv)
+    
+    # Admin User Info (simple handler, no conversation state needed for single message)
+    app.add_handler(CallbackQueryHandler(admin_user_info_start, pattern=r"admin_user_info"))
+    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE & filters.User(user_id=ADMIN_ID), admin_user_info_by_id))
+    
+    # Admin Get Referrals
+    app.add_handler(CallbackQueryHandler(admin_get_all_referrals, pattern=r"admin_referrals"))
+    
+    # Admin Toggle Maintenance
+    app.add_handler(CallbackQueryHandler(admin_toggle_maintenance, pattern=r"admin_maintenance"))
+
     # errors
     app.add_error_handler(on_error)
     return app
@@ -1883,7 +2572,7 @@ def build_app():
 def main():
     app = build_app()
     logger.info("Application initialized. Starting polling...")
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True) # Yangi ishga tushganda eski xabarlarni tashlab ketish
 
 if __name__ == "__main__":
     main()
