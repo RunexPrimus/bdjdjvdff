@@ -227,6 +227,46 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
+# ---------------- Donate Conversation ----------------
+WAITING_AMOUNT = 1
+
+async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.message.reply_text("💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):")
+    else:
+        await update.message.reply_text("💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):")
+    return WAITING_AMOUNT
+
+async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        stars = int(update.message.text)
+    except ValueError:
+        await update.message.reply_text("❌ Raqam kiriting.")
+        return WAITING_AMOUNT
+
+    if stars < 1 or stars > 100000:
+        await update.message.reply_text("❌ 1 dan 100000 gacha bo‘lishi kerak.")
+        return WAITING_AMOUNT
+
+    await update.message.reply_invoice(
+        title="Botni qo‘llab-quvvatlash",
+        description=f"Siz {stars} ⭐ yubormoqchisiz",
+        payload=f"donate_{stars}",
+        provider_token=os.getenv("PROVIDER_TOKEN", ""),
+        currency="XTR",
+        prices=[LabeledPrice(label="Stars", amount=stars)]
+    )
+    return ConversationHandler.END
+
+async def precheckout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.pre_checkout_query
+    await query.answer(ok=True)
+
+async def successful_payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    payment = update.message.successful_payment
+    await update.message.reply_text(f"✅ Rahmat! Siz {payment.total_amount} ⭐ yubordingiz.")
+
 # ---------------- Admin commands ----------------
 async def ping_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🏓 Pong!")
@@ -264,10 +304,6 @@ async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 continue
     await update.message.reply_text(f"✅ Yuborildi: {sent} | ❌ O‘tmadi: {failed}")
 
-# ---------------- Generate CB, Donate, Error handler (o‘zgarmagan) ----------------
-# (shu yerda yuqoridagi generate_cb, donate_start, donate_amount, precheckout_handler,
-# successful_payment_handler, private_text_handler, on_error funksiyalari to‘liq qoldi)
-
 # ---------------- Startup ----------------
 async def on_startup(app: Application):
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
@@ -288,8 +324,7 @@ def build_app():
     app.add_handler(CommandHandler("get", cmd_get))
 
     donate_conv = ConversationHandler(
-        entry_points=[CommandHandler("donate", donate_start), CallbackQueryHandler(donate_start,
-pattern="donate_custom")],
+        entry_points=[CommandHandler("donate", donate_start), CallbackQueryHandler(donate_start, pattern="donate_custom")],
         states={WAITING_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, donate_amount)]},
         fallbacks=[],
     )
@@ -297,10 +332,6 @@ pattern="donate_custom")],
     app.add_handler(PreCheckoutQueryHandler(precheckout_handler))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
 
-    app.add_handler(CallbackQueryHandler(generate_cb, pattern="count_"))
-    app.add_handler(MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, private_text_handler))
-
-    app.add_error_handler(on_error)
     return app
 
 if __name__ == "__main__":
