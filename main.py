@@ -527,7 +527,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "width": 512,
         "height": 512,
         "lora_id": "",
-        "batch_size": count,
+        "batch_size": 8,
         "reference_images": [],
         "strength": ""
     }
