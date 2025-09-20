@@ -682,7 +682,7 @@ async def successful_payment_handler(update: Update, context: ContextTypes.DEFAU
         translated = context.user_data.get("translated", prompt)
         # count ni saqlamaganmiz — shuning uchun default 1 qilamiz
         # Yaxshisi: count ni ham user_data ga saqlash kerak edi.
-        count =   # Yoki xohlasangiz, 4 qilish ham mumkin
+        count = 8  # Yoki xohlasangiz, 4 qilish ham mumkin
 
         # Xuddi generate_cb dagi kabi API so'rovini qilamiz
         payload = {
