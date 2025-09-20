@@ -190,7 +190,22 @@ async def init_db(pool):
         row = await conn.fetchrow("SELECT value FROM meta WHERE key = 'start_time'")
         if not row:
             await conn.execute("INSERT INTO meta(key, value) VALUES($1, $2)", "start_time", str(int(time.time())))
-
+        
+        # Yangi ustunlarni qo'shish (agar mavjud bo'lmasa)
+        try:
+            # users jadvalida language_code borligini tekshirish
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS language_code TEXT DEFAULT 'uz'")
+            logger.info("✅ Added column 'language_code' to table 'users'")
+        except Exception as e:
+            logger.info(f"ℹ️ Column 'language_code' already exists or error: {e}")
+        
+        # donations jadvalida charge_id va refunded_at borligini tekshirish
+        try:
+            await conn.execute("ALTER TABLE donations ADD COLUMN IF NOT EXISTS charge_id TEXT")
+            await conn.execute("ALTER TABLE donations ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ")
+            logger.info("✅ Added columns 'charge_id', 'refunded_at' to table 'donations'")
+        except Exception as e:
+            logger.info(f"ℹ️ Columns already exist or error: {e}")
 # ---------------- Digen headers ----------------
 def get_digen_headers():
     if not DIGEN_KEYS:
