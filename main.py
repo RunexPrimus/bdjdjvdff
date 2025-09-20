@@ -8,7 +8,7 @@ import os
 import json
 import random
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 import asyncpg
 from telegram import (
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 # ---------------- ENV ----------------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))  # BU MUHIM — ADMIN SIZNING IDINGIZ
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@SizningKanal")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1001234567890"))
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))  # e.g. '[{"token":"...","session":"..."}]'
@@ -43,6 +43,9 @@ if not BOT_TOKEN:
 if not DATABASE_URL:
     logger.error("DATABASE_URL muhim! ENV ga qo'ying.")
     raise SystemExit(1)
+if ADMIN_ID == 0:
+    logger.error("ADMIN_ID muhim! ENV ga qo'ying.")
+    raise SystemExit(1)
 
 # ---------------- STATE ----------------
 LANGUAGE_SELECT, WAITING_AMOUNT = range(2)
@@ -52,7 +55,7 @@ LANGUAGES = {
     "uz": {
         "flag": "🇺🇿",
         "name": "O'zbekcha",
-        "welcome": "👋 Salom!\n\nMen siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.\n Menga istalgan so'rovingini yuboring men uni rasmga aylantiranman",
+        "welcome": "👋 Salom!\n\nMen siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.\nPrivatda matn yuboring yoki guruhda /get bilan ishlating.",
         "gen_button": "🎨 Rasm yaratish",
         "donate_button": "💖 Donate",
         "lang_button": "🌐 Tilni o'zgartirish",
@@ -81,7 +84,7 @@ LANGUAGES = {
     "ru": {
         "flag": "🇷🇺",
         "name": "Русский",
-        "welcome": "👋 Привет!\n\nЯ создаю для вас изображения с помощью ИИ.\n",
+        "welcome": "👋 Привет!\n\nЯ создаю для вас изображения с помощью ИИ.\nОтправляйте текст в личку или используйте /get в группе.",
         "gen_button": "🎨 Создать изображение",
         "donate_button": "💖 Поддержать",
         "lang_button": "🌐 Изменить язык",
@@ -110,7 +113,7 @@ LANGUAGES = {
     "en": {
         "flag": "🇬🇧",
         "name": "English",
-        "welcome": "👋 Hello!\n\nI create images for you using AI.\n",
+        "welcome": "👋 Hello!\n\nI create images for you using AI.\nSend text in private or use /get in group.",
         "gen_button": "🎨 Generate Image",
         "donate_button": "💖 Donate",
         "lang_button": "🌐 Change Language",
@@ -138,7 +141,7 @@ LANGUAGES = {
     }
 }
 
-DEFAULT_LANGUAGE = "en"
+DEFAULT_LANGUAGE = "uz"
 
 # ---------------- helpers ----------------
 def escape_md(text: str) -> str:
@@ -148,6 +151,10 @@ def escape_md(text: str) -> str:
 
 def utc_now():
     return datetime.now(timezone.utc)
+
+def tashkent_time():
+    # UTC+5 — Toshkent vaqti
+    return datetime.now(timezone.utc) + timedelta(hours=5)
 
 # ---------------- DB schema ----------------
 CREATE_TABLES_SQL = """
@@ -200,7 +207,6 @@ async def init_db(pool):
         if not row:
             await conn.execute("INSERT INTO meta(key, value) VALUES($1, $2)", "start_time", str(int(time.time())))
         
-        # Yangi ustunlarni qo'shish (agar mavjud bo'lmasa)
         try:
             await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS language_code TEXT DEFAULT 'uz'")
             logger.info("✅ Added column 'language_code' to table 'users'")
@@ -311,6 +317,29 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
             prompt, translated, image_id, count, now
         )
 
+# ---------------- Admin ga xabar yuborish ----------------
+async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prompt, image_url, count):
+    """Generatsiya qilingan har bir rasm haqida admin ga xabar yuborish"""
+    try:
+        tashkent_dt = tashkent_time()
+        caption = (
+            f"🎨 *Yangi generatsiya!*\n\n"
+            f"👤 *Foydalanuvchi:* @{user.username if user.username else 'N/A'} (ID: {user.id})\n"
+            f"📝 *Prompt:* {escape_md(prompt)}\n"
+            f"🔢 *Soni:* {count}\n"
+            f"⏰ *Vaqt (UTC+5):* {tashkent_dt.strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        
+        await context.bot.send_photo(
+            chat_id=ADMIN_ID,
+            photo=image_url,
+            caption=caption,
+            parse_mode="Markdown"
+        )
+        logger.info(f"[ADMIN NOTIFY] Foydalanuvchi {user.id} uchun generatsiya admin ga yuborildi.")
+    except Exception as e:
+        logger.exception(f"[ADMIN NOTIFY ERROR] {e}")
+
 # ---------------- Tilni o'zgartirish handleri ----------------
 async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [
@@ -339,7 +368,6 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
     lang_code = q.data.split("_")[1]
     user = q.from_user
     
-    # DBga saqlash
     await add_user_db(context.application.bot_data["db_pool"], user, lang_code)
     
     lang = LANGUAGES[lang_code]
@@ -351,19 +379,17 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
     await q.edit_message_text(lang["lang_changed"].format(lang=lang["name"]), reply_markup=InlineKeyboardMarkup(kb))
     return ConversationHandler.END
 
-# ---------------- START handleri (birinchi marta) ----------------
+# ---------------- START handleri ----------------
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     lang_code = None
     
-    # Foydalanuvchi DBda bormi, tili qanday?
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user_id)
         if row:
             lang_code = row["language_code"]
     
     if lang_code:
-        # Agar tili allaqachon tanlangan bo'lsa — to'g'ridan-to'g'ri menyu
         lang = LANGUAGES[lang_code]
         kb = [
             [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
@@ -372,7 +398,6 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await update.message.reply_text(lang["welcome"], reply_markup=InlineKeyboardMarkup(kb))
     else:
-        # Birinchi marta — til tanlash
         kb = [
             [InlineKeyboardButton(f"{LANGUAGES['uz']['flag']} {LANGUAGES['uz']['name']}", callback_data="lang_uz")],
             [InlineKeyboardButton(f"{LANGUAGES['ru']['flag']} {LANGUAGES['ru']['name']}", callback_data="lang_ru")],
@@ -398,7 +423,7 @@ async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await cmd_language(update, context)
 
-# /get command (works in groups and private)
+# /get command
 async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang_code = DEFAULT_LANGUAGE
     if update.effective_chat.type == "private":
@@ -573,6 +598,10 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except Exception as ex:
                         logger.exception(f"[SINGLE SEND ERR] {ex}")
 
+            # ADMIN GA XABAR YUBORISH — BU YERDA QO'SHILDI
+            if ADMIN_ID and urls:
+                await notify_admin_generation(context, user, prompt, urls[0], count)
+
             await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
 
             try:
@@ -740,7 +769,6 @@ async def on_startup(app: Application):
 def build_app():
     app = Application.builder().token(BOT_TOKEN).post_init(on_startup).build()
 
-    # START conversation handler (faqat birinchi marta)
     start_conv = ConversationHandler(
         entry_points=[CommandHandler("start", start_handler)],
         states={
@@ -751,7 +779,6 @@ def build_app():
     )
     app.add_handler(start_conv)
 
-    # Tilni o'zgartirish
     lang_conv = ConversationHandler(
         entry_points=[
             CommandHandler("language", cmd_language),
@@ -765,13 +792,11 @@ def build_app():
     )
     app.add_handler(lang_conv)
 
-    # Basic handlers
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
     app.add_handler(CallbackQueryHandler(check_sub_button_handler, pattern="check_sub"))
     app.add_handler(CommandHandler("get", cmd_get))
     app.add_handler(CommandHandler("refund", cmd_refund))
 
-    # Donate conversation
     donate_conv = ConversationHandler(
         entry_points=[CommandHandler("donate", donate_start), CallbackQueryHandler(donate_start, pattern="donate_custom")],
         states={WAITING_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, donate_amount)]},
@@ -780,17 +805,13 @@ def build_app():
     )
     app.add_handler(donate_conv)
 
-    # Payments handlers
     app.add_handler(PreCheckoutQueryHandler(precheckout_handler))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
 
-    # Generate callback
     app.add_handler(CallbackQueryHandler(generate_cb, pattern=r"count_\d+"))
 
-    # private plain text -> prompt handler
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, private_text_handler))
 
-    # errors
     app.add_error_handler(on_error)
     return app
 
