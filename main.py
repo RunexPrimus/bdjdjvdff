@@ -55,7 +55,7 @@ TRANSLATIONS = {
         "start_text": "👋 Salom!\n\nMen siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.\nPrivatda matn yuboring yoki guruhda /get bilan ishlating.",
         "gen_button": "🎨 Rasm yaratish",
         "donate_button": "💖 Donate",
-        "prompt_request": "✍️ Endi tasvir yaratish uchun matn yuboring (privatda).",
+        "prompt_request": "✍️ Endi tasvir yaratish uchun matn yuboring.",
         "group_prompt_missing": "❌ Guruhda /get dan keyin prompt yozing. Misol: /get futuristik shahar",
         "private_prompt_missing": "✍️ Iltimos, rasm uchun matn yozing (yoki oddiy matn yuboring).",
         "your_prompt": "🖌 Sizning matningiz:\n{}\n\n🔢 Nechta rasm yaratilsin?",
@@ -91,7 +91,7 @@ TRANSLATIONS = {
         "start_text": "👋 Салом!\n\nМен сиз учун сунъий интеллект ёрдамида расмлар яратиб бераман.\nПриватда матн юборинг ёки гуруҳда /get билан ишлаштиринг.",
         "gen_button": "🎨 Расм яратиш",
         "donate_button": "💖 Донат",
-        "prompt_request": "✍️ Энди тасвир яратиш учун матн юборинг (приватда).",
+        "prompt_request": "✍️ Энди тасвир яратиш учун матн юборинг.",
         "group_prompt_missing": "❌ Гуруҳда /get дан кейин промпт ёзинг. Мисол: /get футуристик шаҳар",
         "private_prompt_missing": "✍️ Илтимос, расм учун матн ёзинг (ёки оддий матн юборинг).",
         "your_prompt": "🖌 Сизнинг матнингиз:\n{}\n\n🔢 Нечта расм яратилсин?",
@@ -127,7 +127,7 @@ TRANSLATIONS = {
         "start_text": "👋 Привет!\n\nЯ создаю для вас изображения с помощью ИИ.\nОтправьте текст в личку или используйте /get в группе.",
         "gen_button": "🎨 Создать изображение",
         "donate_button": "💖 Пожертвовать",
-        "prompt_request": "✍️ Теперь отправьте текст для создания изображения (в личку).",
+        "prompt_request": "✍️ Теперь отправьте текст для создания изображения.",
         "group_prompt_missing": "❌ В группе после /get укажите запрос. Пример: /get футуристический город",
         "private_prompt_missing": "✍️ Пожалуйста, введите текст для изображения (или просто отправьте текст).",
         "your_prompt": "🖌 Ваш текст:\n{}\n\n🔢 Сколько изображений создать?",
@@ -163,7 +163,7 @@ TRANSLATIONS = {
         "start_text": "👋 Hello!\n\nI create images for you using AI.\nSend text in private or use /get in groups.",
         "gen_button": "🎨 Generate Image",
         "donate_button": "💖 Donate",
-        "prompt_request": "✍️ Now send the text to generate an image (in private).",
+        "prompt_request": "✍️ Now send the text to generate an image.",
         "group_prompt_missing": "❌ In groups, write prompt after /get. Example: /get futuristic city",
         "private_prompt_missing": "✍️ Please enter text for the image (or just send text).",
         "your_prompt": "🖌 Your prompt:\n{}\n\n🔢 How many images to generate?",
@@ -682,7 +682,7 @@ async def successful_payment_handler(update: Update, context: ContextTypes.DEFAU
         translated = context.user_data.get("translated", prompt)
         # count ni saqlamaganmiz — shuning uchun default 1 qilamiz
         # Yaxshisi: count ni ham user_data ga saqlash kerak edi.
-        count = 8  # Yoki xohlasangiz, 4 qilish ham mumkin
+        count = 1  # Yoki xohlasangiz, 4 qilish ham mumkin
 
         # Xuddi generate_cb dagi kabi API so'rovini qilamiz
         payload = {
