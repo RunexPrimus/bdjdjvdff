@@ -34,7 +34,7 @@ ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@SizningKanal")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1001234567890"))
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))  # e.g. '[{"token":"...","session":"..."}]'
-DIGEN_URL = os.getenv("DIGEN_URL", "https://api.digen.ai/v2/tools/text_to_image")
+DIGEN_URL = os.getenv("DIGEN_URL", "https://api.digen.ai/v2/tools/text_to_image  ")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not BOT_TOKEN:
@@ -55,7 +55,7 @@ TRANSLATIONS = {
         "start_text": "👋 Salom!\n\nMen siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.\nPrivatda matn yuboring yoki guruhda /get bilan ishlating.",
         "gen_button": "🎨 Rasm yaratish",
         "donate_button": "💖 Donate",
-        "prompt_request": "✍️ Endi tasvir yaratish uchun matn yuboring.",
+        "prompt_request": "✍️ Endi tasvir yaratish uchun matn yuboring (privatda).",
         "group_prompt_missing": "❌ Guruhda /get dan keyin prompt yozing. Misol: /get futuristik shahar",
         "private_prompt_missing": "✍️ Iltimos, rasm uchun matn yozing (yoki oddiy matn yuboring).",
         "your_prompt": "🖌 Sizning matningiz:\n{}\n\n🔢 Nechta rasm yaratilsin?",
@@ -91,7 +91,7 @@ TRANSLATIONS = {
         "start_text": "👋 Салом!\n\nМен сиз учун сунъий интеллект ёрдамида расмлар яратиб бераман.\nПриватда матн юборинг ёки гуруҳда /get билан ишлаштиринг.",
         "gen_button": "🎨 Расм яратиш",
         "donate_button": "💖 Донат",
-        "prompt_request": "✍️ Энди тасвир яратиш учун матн юборинг.",
+        "prompt_request": "✍️ Энди тасвир яратиш учун матн юборинг (приватда).",
         "group_prompt_missing": "❌ Гуруҳда /get дан кейин промпт ёзинг. Мисол: /get футуристик шаҳар",
         "private_prompt_missing": "✍️ Илтимос, расм учун матн ёзинг (ёки оддий матн юборинг).",
         "your_prompt": "🖌 Сизнинг матнингиз:\n{}\n\n🔢 Нечта расм яратилсин?",
@@ -127,7 +127,7 @@ TRANSLATIONS = {
         "start_text": "👋 Привет!\n\nЯ создаю для вас изображения с помощью ИИ.\nОтправьте текст в личку или используйте /get в группе.",
         "gen_button": "🎨 Создать изображение",
         "donate_button": "💖 Пожертвовать",
-        "prompt_request": "✍️ Теперь отправьте текст для создания изображения.",
+        "prompt_request": "✍️ Теперь отправьте текст для создания изображения (в личку).",
         "group_prompt_missing": "❌ В группе после /get укажите запрос. Пример: /get футуристический город",
         "private_prompt_missing": "✍️ Пожалуйста, введите текст для изображения (или просто отправьте текст).",
         "your_prompt": "🖌 Ваш текст:\n{}\n\n🔢 Сколько изображений создать?",
@@ -163,7 +163,7 @@ TRANSLATIONS = {
         "start_text": "👋 Hello!\n\nI create images for you using AI.\nSend text in private or use /get in groups.",
         "gen_button": "🎨 Generate Image",
         "donate_button": "💖 Donate",
-        "prompt_request": "✍️ Now send the text to generate an image.",
+        "prompt_request": "✍️ Now send the text to generate an image (in private).",
         "group_prompt_missing": "❌ In groups, write prompt after /get. Example: /get futuristic city",
         "private_prompt_missing": "✍️ Please enter text for the image (or just send text).",
         "your_prompt": "🖌 Your prompt:\n{}\n\n🔢 How many images to generate?",
@@ -272,8 +272,8 @@ def get_digen_headers():
         "digen-platform": "web",
         "digen-token": key.get("token", ""),
         "digen-sessionid": key.get("session", ""),
-        "origin": "https://rm.digen.ai",
-        "referer": "https://rm.digen.ai/",
+        "origin": "https://rm.digen.ai  ",
+        "referer": "https://rm.digen.ai/  ",
     }
 
 # ---------------- subscription check (optional) ----------------
@@ -292,7 +292,7 @@ async def force_sub_if_private(update: Update, context: ContextTypes.DEFAULT_TYP
     if not ok:
         lang = context.user_data.get("lang", "uz_latin")
         kb = [
-            [InlineKeyboardButton(t("subscribe_button", lang), url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
+            [InlineKeyboardButton(t("subscribe_button", lang), url=f"https://t.me/  {CHANNEL_USERNAME.strip('@')}")],
             [InlineKeyboardButton(t("check_subscription", lang), callback_data="check_sub")]
         ]
         if update.callback_query:
@@ -312,7 +312,7 @@ async def check_sub_button_handler(update: Update, context: ContextTypes.DEFAULT
         await q.edit_message_text(t("subscription_confirmed", lang))
     else:
         kb = [
-            [InlineKeyboardButton(t("subscribe_button", lang), url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
+            [InlineKeyboardButton(t("subscribe_button", lang), url=f"https://t.me/  {CHANNEL_USERNAME.strip('@')}")],
             [InlineKeyboardButton(t("check_subscription", lang), callback_data="check_sub")]
         ]
         await q.edit_message_text(t("subscription_not_confirmed", lang), reply_markup=InlineKeyboardMarkup(kb))
@@ -555,7 +555,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await q.message.reply_text(t("no_image_id", lang))
                 return
 
-            urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
+            urls = [f"https://liveme-image.s3.amazonaws.com/  {image_id}-{i}.jpeg" for i in range(count)]
             logger.info(f"[GENERATE] urls: {urls}")
 
             available = False
@@ -682,7 +682,7 @@ async def successful_payment_handler(update: Update, context: ContextTypes.DEFAU
         translated = context.user_data.get("translated", prompt)
         # count ni saqlamaganmiz — shuning uchun default 1 qilamiz
         # Yaxshisi: count ni ham user_data ga saqlash kerak edi.
-        count = 1  # Yoki xohlasangiz, 4 qilish ham mumkin
+        count =   # Yoki xohlasangiz, 4 qilish ham mumkin
 
         # Xuddi generate_cb dagi kabi API so'rovini qilamiz
         payload = {
@@ -716,7 +716,7 @@ async def successful_payment_handler(update: Update, context: ContextTypes.DEFAU
                     await update.message.reply_text(t("no_image_id", lang))
                     return
 
-                urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
+                urls = [f"https://liveme-image.s3.amazonaws.com/  {image_id}-{i}.jpeg" for i in range(count)]
 
                 available = False
                 max_wait = 60
