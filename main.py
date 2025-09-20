@@ -788,7 +788,7 @@ def build_app():
             LANGUAGE_SELECT: [CallbackQueryHandler(language_select_handler, pattern=r"lang_(uz|ru|en)")],
         },
         fallbacks=[CommandHandler("language", cmd_language)],
-        per_message=True
+        per_message=False
     )
     app.add_handler(lang_conv)
 
@@ -801,7 +801,7 @@ def build_app():
         entry_points=[CommandHandler("donate", donate_start), CallbackQueryHandler(donate_start, pattern="donate_custom")],
         states={WAITING_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, donate_amount)]},
         fallbacks=[],
-        per_message=True
+        per_message=False
     )
     app.add_handler(donate_conv)
 
