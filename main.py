@@ -44,6 +44,93 @@ if not DATABASE_URL:
     logger.error("DATABASE_URL muhim! ENV ga qo'ying.")
     raise SystemExit(1)
 
+# ---------------- STATE ----------------
+LANGUAGE_SELECT, WAITING_AMOUNT = range(2)
+
+# ---------------- Til sozlamalari ----------------
+LANGUAGES = {
+    "uz": {
+        "flag": "🇺🇿",
+        "name": "O'zbekcha",
+        "welcome": "👋 Salom!\n\nMen siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.\nPrivatda matn yuboring yoki guruhda /get bilan ishlating.",
+        "gen_button": "🎨 Rasm yaratish",
+        "donate_button": "💖 Donate",
+        "prompt_text": "✍️ Endi tasvir yaratish uchun matn yuboring (privatda).",
+        "select_count": "🔢 Nechta rasm yaratilsin?",
+        "generating": "🔄 Rasm yaratilmoqda ({count})... ⏳",
+        "success": "✅ Rasm tayyor! 📸",
+        "error": "⚠️ Xatolik yuz berdi. Qayta urinib ko‘ring.",
+        "donate_prompt": "💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):",
+        "donate_invalid": "❌ Iltimos, 1–100000 oralig‘ida butun son kiriting.",
+        "donate_thanks": "✅ Rahmat, {name}! Siz {stars} Stars yubordingiz.",
+        "refund_success": "✅ {stars} Stars muvaffaqiyatli qaytarildi foydalanuvchi {user_id} ga.",
+        "refund_error": "❌ Xatolik: {error}",
+        "no_permission": "⛔ Sizga ruxsat yo'q.",
+        "usage_refund": "UsageId: /refund <user_id> <donation_id>",
+        "not_found": "❌ Topilmadi yoki noto'g'ri ma'lumot.",
+        "no_charge_id": "❌ Bu to'lovda charge_id yo'q (eski to'lov).",
+        "sub_prompt": "⛔ Botdan foydalanish uchun kanalimizga obuna bo‘ling!",
+        "sub_check": "✅ Obunani tekshirish",
+        "sub_url_text": "🔗 Kanalga obuna bo‘lish",
+        "sub_thanks": "✅ Rahmat! Siz obuna bo‘lgansiz. Endi botdan foydalanishingiz mumkin.",
+        "sub_still_not": "⛔ Hali ham obuna bo‘lmagansiz. Obuna bo‘lib, qayta tekshiring.",
+    },
+    "ru": {
+        "flag": "🇷🇺",
+        "name": "Русский",
+        "welcome": "👋 Привет!\n\nЯ создаю для вас изображения с помощью ИИ.\nОтправляйте текст в личку или используйте /get в группе.",
+        "gen_button": "🎨 Создать изображение",
+        "donate_button": "💖 Поддержать",
+        "prompt_text": "✍️ Теперь отправьте текст для создания изображения (в личку).",
+        "select_count": "🔢 Сколько изображений создать?",
+        "generating": "🔄 Создаю изображение ({count})... ⏳",
+        "success": "✅ Изображение готово! 📸",
+        "error": "⚠️ Произошла ошибка. Попробуйте еще раз.",
+        "donate_prompt": "💰 Пожалуйста, введите сумму для отправки (1–100000):",
+        "donate_invalid": "❌ Пожалуйста, введите целое число от 1 до 100000.",
+        "donate_thanks": "✅ Спасибо, {name}! Вы отправили {stars} Stars.",
+        "refund_success": "✅ {stars} Stars успешно возвращены пользователю {user_id}.",
+        "refund_error": "❌ Ошибка: {error}",
+        "no_permission": "⛔ У вас нет разрешения.",
+        "usage_refund": "Использование: /refund <user_id> <donation_id>",
+        "not_found": "❌ Не найдено или неверные данные.",
+        "no_charge_id": "❌ В этом платеже нет charge_id (старый платеж).",
+        "sub_prompt": "⛔ Чтобы пользоваться ботом, подпишитесь на наш канал!",
+        "sub_check": "✅ Проверить подписку",
+        "sub_url_text": "🔗 Подписаться на канал",
+        "sub_thanks": "✅ Спасибо! Вы подписаны. Теперь вы можете пользоваться ботом.",
+        "sub_still_not": "⛔ Вы все еще не подписаны. Подпишитесь и проверьте снова.",
+    },
+    "en": {
+        "flag": "🇬🇧",
+        "name": "English",
+        "welcome": "👋 Hello!\n\nI create images for you using AI.\nSend text in private or use /get in group.",
+        "gen_button": "🎨 Generate Image",
+        "donate_button": "💖 Donate",
+        "prompt_text": "✍️ Now send the text to generate an image (in private).",
+        "select_count": "🔢 How many images to generate?",
+        "generating": "🔄 Generating image ({count})... ⏳",
+        "success": "✅ Image ready! 📸",
+        "error": "⚠️ An error occurred. Please try again.",
+        "donate_prompt": "💰 Please enter the amount you wish to send (1–100000):",
+        "donate_invalid": "❌ Please enter a whole number between 1 and 100000.",
+        "donate_thanks": "✅ Thank you, {name}! You sent {stars} Stars.",
+        "refund_success": "✅ {stars} Stars successfully refunded to user {user_id}.",
+        "refund_error": "❌ Error: {error}",
+        "no_permission": "⛔ You don't have permission.",
+        "usage_refund": "Usage: /refund <user_id> <donation_id>",
+        "not_found": "❌ Not found or invalid data.",
+        "no_charge_id": "❌ This payment has no charge_id (old payment).",
+        "sub_prompt": "⛔ Subscribe to our channel to use the bot!",
+        "sub_check": "✅ Check Subscription",
+        "sub_url_text": "🔗 Subscribe to Channel",
+        "sub_thanks": "✅ Thank you! You are subscribed. You can now use the bot.",
+        "sub_still_not": "⛔ You are still not subscribed. Subscribe and check again.",
+    }
+}
+
+DEFAULT_LANGUAGE = "uz"
+
 # ---------------- helpers ----------------
 def escape_md(text: str) -> str:
     if not text:
@@ -64,7 +151,8 @@ CREATE TABLE IF NOT EXISTS users (
     id BIGINT PRIMARY KEY,
     username TEXT,
     first_seen TIMESTAMPTZ,
-    last_seen TIMESTAMPTZ
+    last_seen TIMESTAMPTZ,
+    language_code TEXT DEFAULT 'uz'
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -90,6 +178,8 @@ CREATE TABLE IF NOT EXISTS donations (
     username TEXT,
     stars INT,
     payload TEXT,
+    charge_id TEXT,
+    refunded_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT now()
 );
 """
@@ -109,7 +199,7 @@ def get_digen_headers():
     return {
         "accept": "application/json, text/plain, */*",
         "content-type": "application/json",
-        "digen-language": "uz-US",
+        "digen-language": "en-US",  # API uchun doim ingliz
         "digen-platform": "web",
         "digen-token": key.get("token", ""),
         "digen-sessionid": key.get("session", ""),
@@ -124,23 +214,23 @@ async def check_subscription(user_id: int, context: ContextTypes.DEFAULT_TYPE) -
         return member.status in ("member", "administrator", "creator")
     except Exception as e:
         logger.debug(f"[SUB CHECK ERROR] {e}")
-        # If can't check, return False (force subscribe) or True (fail open). We choose False to show prompt.
         return False
 
-async def force_sub_if_private(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+async def force_sub_if_private(update: Update, context: ContextTypes.DEFAULT_TYPE, lang_code=None) -> bool:
     if update.effective_chat.type != "private":
         return True
     ok = await check_subscription(update.effective_user.id, context)
     if not ok:
+        lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE]) if lang_code else LANGUAGES[DEFAULT_LANGUAGE]
         kb = [
-            [InlineKeyboardButton("🔗 Kanalga obuna bo‘lish", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
-            [InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")]
+            [InlineKeyboardButton(lang["sub_url_text"], url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
+            [InlineKeyboardButton(lang["sub_check"], callback_data="check_sub")]
         ]
         if update.callback_query:
             await update.callback_query.answer()
-            await update.callback_query.message.reply_text("⛔ Botdan foydalanish uchun kanalimizga obuna bo‘ling!", reply_markup=InlineKeyboardMarkup(kb))
+            await update.callback_query.message.reply_text(lang["sub_prompt"], reply_markup=InlineKeyboardMarkup(kb))
         else:
-            await update.message.reply_text("⛔ Botdan foydalanish uchun kanalimizga obuna bo‘ling!", reply_markup=InlineKeyboardMarkup(kb))
+            await update.message.reply_text(lang["sub_prompt"], reply_markup=InlineKeyboardMarkup(kb))
         return False
     return True
 
@@ -148,26 +238,39 @@ async def check_sub_button_handler(update: Update, context: ContextTypes.DEFAULT
     q = update.callback_query
     await q.answer()
     user_id = q.from_user.id
+    # Foydalanuvchi tilini olish
+    lang_code = None
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user_id)
+        if row:
+            lang_code = row["language_code"]
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE]) if lang_code else LANGUAGES[DEFAULT_LANGUAGE]
+    
     if await check_subscription(user_id, context):
-        await q.edit_message_text("✅ Rahmat! Siz obuna bo‘lgansiz. Endi botdan foydalanishingiz mumkin.")
+        await q.edit_message_text(lang["sub_thanks"])
     else:
         kb = [
-            [InlineKeyboardButton("🔗 Kanalga obuna bo‘lish", url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
-            [InlineKeyboardButton("✅ Obunani tekshirish", callback_data="check_sub")]
+            [InlineKeyboardButton(lang["sub_url_text"], url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
+            [InlineKeyboardButton(lang["sub_check"], callback_data="check_sub")]
         ]
-        await q.edit_message_text("⛔ Hali ham obuna bo‘lmagansiz. Obuna bo‘lib, qayta tekshiring.", reply_markup=InlineKeyboardMarkup(kb))
+        await q.edit_message_text(lang["sub_still_not"], reply_markup=InlineKeyboardMarkup(kb))
 
 # ---------------- DB user/session/logging ----------------
-async def add_user_db(pool, tg_user):
+async def add_user_db(pool, tg_user, lang_code=None):
     now = utc_now()
     async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT id FROM users WHERE id = $1", tg_user.id)
         if row:
-            await conn.execute("UPDATE users SET username=$1, last_seen=$2 WHERE id=$3",
-                               tg_user.username if tg_user.username else None, now, tg_user.id)
+            update_fields = "username=$1, last_seen=$2"
+            params = [tg_user.username if tg_user.username else None, now, tg_user.id]
+            if lang_code:
+                update_fields += ", language_code=$3"
+                params = [tg_user.username if tg_user.username else None, now, lang_code, tg_user.id]
+            await conn.execute(f"UPDATE users SET {update_fields} WHERE id=$4", *params)
         else:
-            await conn.execute("INSERT INTO users(id, username, first_seen, last_seen) VALUES($1,$2,$3,$4)",
-                               tg_user.id, tg_user.username if tg_user.username else None, now, now)
+            lang_code = lang_code or DEFAULT_LANGUAGE
+            await conn.execute("INSERT INTO users(id, username, first_seen, last_seen, language_code) VALUES($1,$2,$3,$4,$5)",
+                               tg_user.id, tg_user.username if tg_user.username else None, now, now, lang_code)
         await conn.execute("INSERT INTO sessions(user_id, started_at) VALUES($1,$2)", tg_user.id, now)
 
 async def log_generation(pool, tg_user, prompt, translated, image_id, count):
@@ -182,28 +285,58 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
 
 # ---------------- Handlers ----------------
 
-# START
+# START - Tilni tanlash
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await force_sub_if_private(update, context):
-        return
-    await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
-    kb = [[InlineKeyboardButton("🎨 Rasm yaratish", callback_data="start_gen")],
-          [InlineKeyboardButton("💖 Donate", callback_data="donate_custom")]]
-    await update.message.reply_text(
-        "👋 Salom!\n\nMen siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.\n"
-        "Privatda matn yuboring yoki guruhda /get bilan ishlating.",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
+    kb = [
+        [InlineKeyboardButton(f"{LANGUAGES['uz']['flag']} {LANGUAGES['uz']['name']}", callback_data="lang_uz")],
+        [InlineKeyboardButton(f"{LANGUAGES['ru']['flag']} {LANGUAGES['ru']['name']}", callback_data="lang_ru")],
+        [InlineKeyboardButton(f"{LANGUAGES['en']['flag']} {LANGUAGES['en']['name']}", callback_data="lang_en")],
+    ]
+    await update.message.reply_text("🌐 Iltimos, tilni tanlang / Пожалуйста, выберите язык / Please select language:", reply_markup=InlineKeyboardMarkup(kb))
+    return LANGUAGE_SELECT
+
+async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    lang_code = q.data.split("_")[1]
+    context.user_data["language"] = lang_code
+
+    # DBga saqlash
+    await add_user_db(context.application.bot_data["db_pool"], q.from_user, lang_code)
+
+    lang = LANGUAGES[lang_code]
+    kb = [
+        [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
+        [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")]
+    ]
+    await q.edit_message_text(lang["welcome"], reply_markup=InlineKeyboardMarkup(kb))
+    return ConversationHandler.END
 
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.callback_query.answer()
-    await update.callback_query.message.reply_text("✍️ Endi tasvir yaratish uchun matn yuboring (privatda).")
+    q = update.callback_query
+    await q.answer()
+    
+    # Tilni olish
+    lang_code = context.user_data.get("language", DEFAULT_LANGUAGE)
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+    
+    await q.message.reply_text(lang["prompt_text"])
 
 # /get command (works in groups and private)
 async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not await force_sub_if_private(update, context):
+    lang_code = DEFAULT_LANGUAGE
+    if update.effective_chat.type == "private":
+        # Foydalanuvchi tilini olish
+        async with context.application.bot_data["db_pool"].acquire() as conn:
+            row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", update.effective_user.id)
+            if row:
+                lang_code = row["language_code"]
+    
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+    
+    if not await force_sub_if_private(update, context, lang_code):
         return
+        
     chat_type = update.effective_chat.type
     if chat_type in ("group", "supergroup"):
         if not context.args:
@@ -218,15 +351,15 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     context.user_data["prompt"] = prompt
-    context.user_data["translated"] = prompt
-    kb = [[
-        InlineKeyboardButton("1️⃣", callback_data="count_1"),
-        InlineKeyboardButton("2️⃣", callback_data="count_2"),
-        InlineKeyboardButton("4️⃣", callback_data="count_4"),
-        InlineKeyboardButton("8️⃣", callback_data="count_8"),
-    ]]
+    context.user_data["translated"] = prompt  # Keyinchalik tarjima qilish mumkin
+    kb = [
+        [InlineKeyboardButton("1️⃣", callback_data="count_1")],
+        [InlineKeyboardButton("2️⃣", callback_data="count_2")],
+        [InlineKeyboardButton("4️⃣", callback_data="count_4")],
+        [InlineKeyboardButton("8️⃣", callback_data="count_8")]
+    ]
     await update.message.reply_text(
-        f"🖌 Sizning matningiz:\n{escape_md(prompt)}\n\n🔢 Nechta rasm yaratilsin?",
+        f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
     )
@@ -235,21 +368,26 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return
-    # If conversation for donate is active, PTB will route to conversation handler first.
-    if not await force_sub_if_private(update, context):
+        
+    # Foydalanuvchi tilini olish
+    lang_code = context.user_data.get("language", DEFAULT_LANGUAGE)
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+    
+    if not await force_sub_if_private(update, context, lang_code):
         return
+        
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     prompt = update.message.text
     context.user_data["prompt"] = prompt
-    context.user_data["translated"] = prompt
-    kb = [[
-        InlineKeyboardButton("1️⃣", callback_data="count_1"),
-        InlineKeyboardButton("2️⃣", callback_data="count_2"),
-        InlineKeyboardButton("4️⃣", callback_data="count_4"),
-        InlineKeyboardButton("8️⃣", callback_data="count_8"),
-    ]]
+    context.user_data["translated"] = prompt  # Keyinchalik tarjima qilish mumkin
+    kb = [
+        [InlineKeyboardButton("1️⃣", callback_data="count_1")],
+        [InlineKeyboardButton("2️⃣", callback_data="count_2")],
+        [InlineKeyboardButton("4️⃣", callback_data="count_4")],
+        [InlineKeyboardButton("8️⃣", callback_data="count_8")]
+    ]
     await update.message.reply_text(
-        f"🖌 Sizning matningiz:\n{escape_md(prompt)}\n\n🔢 Nechta rasm yaratilsin?",
+        f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
     )
@@ -258,11 +396,16 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
+    
+    # Tilni olish
+    lang_code = context.user_data.get("language", DEFAULT_LANGUAGE)
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+    
     try:
         count = int(q.data.split("_")[1])
     except Exception:
         try:
-            await q.edit_message_text("❌ Noto'g'ri tugma.")
+            await q.edit_message_text(lang["error"])
         except Exception:
             pass
         return
@@ -273,7 +416,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # try edit message (ignore MessageNotModified)
     try:
-        await q.edit_message_text(f"🔄 Rasm yaratilmoqda ({count})... ⏳")
+        await q.edit_message_text(lang["generating"].format(count=count))
     except BadRequest:
         pass
     except Exception as e:
@@ -300,7 +443,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     data = await resp.json()
                 except Exception:
                     logger.error(f"[DIGEN PARSE ERROR] status={resp.status} text={text_resp}")
-                    await q.message.reply_text("❌ API dan noma'lum javob keldi. Adminga murojaat qiling.")
+                    await q.message.reply_text(lang["error"])
                     return
 
             logger.debug(f"[DIGEN DATA] {json.dumps(data)[:2000]}")
@@ -311,7 +454,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 image_id = (data.get("data") or {}).get("id") or data.get("id")
             if not image_id:
                 logger.error("[DIGEN] image_id olinmadi")
-                await q.message.reply_text("❌ Rasm ID olinmadi (API javobi).")
+                await q.message.reply_text(lang["error"])
                 return
 
             urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
@@ -356,41 +499,56 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
 
             try:
-                await q.edit_message_text("✅ Rasm tayyor! 📸")
+                await q.edit_message_text(lang["success"])
             except BadRequest:
                 pass
 
     except Exception as e:
         logger.exception(f"[GENERATE ERROR] {e}")
         try:
-            await q.edit_message_text("⚠️ Xatolik yuz berdi. Qayta urinib ko‘ring.")
+            await q.edit_message_text(lang["error"])
         except Exception:
             pass
 
 # ---------------- Donate (Stars) flow ----------------
-WAITING_AMOUNT = 1
-
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Tilni olish
+    lang_code = None
     if update.callback_query:
+        lang_code = context.user_data.get("language", DEFAULT_LANGUAGE)
         await update.callback_query.answer()
-        await update.callback_query.message.reply_text("💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):")
     else:
-        await update.message.reply_text("💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):")
+        if update.effective_chat.type == "private":
+            async with context.application.bot_data["db_pool"].acquire() as conn:
+                row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", update.effective_user.id)
+                if row:
+                    lang_code = row["language_code"]
+    
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE]) if lang_code else LANGUAGES[DEFAULT_LANGUAGE]
+    
+    if update.callback_query:
+        await update.callback_query.message.reply_text(lang["donate_prompt"])
+    else:
+        await update.message.reply_text(lang["donate_prompt"])
     return WAITING_AMOUNT
 
 async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Tilni olish
+    lang_code = context.user_data.get("language", DEFAULT_LANGUAGE)
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+    
     txt = update.message.text.strip()
     try:
         amount = int(txt)
         if amount < 1 or amount > 100000:
             raise ValueError
     except ValueError:
-        await update.message.reply_text("❌ Iltimos, 1–100000 oralig‘ida butun son kiriting.")
+        await update.message.reply_text(lang["donate_invalid"])
         return WAITING_AMOUNT
 
     payload = f"donate_{update.effective_user.id}_{int(time.time())}"
-    prices = [LabeledPrice(f"{amount} Stars", amount)]
-    prices = [LabeledPrice(f"{amount} Stars", amount)]
+    prices = [LabeledPrice(f"{amount} Stars", amount)]  # XTR da 1 Star = 1
+    
     # provider_token empty for Stars (XTR)
     await context.bot.send_invoice(
         chat_id=update.effective_chat.id,
@@ -398,7 +556,7 @@ async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
         description="Botni qo‘llab-quvvatlash uchun ixtiyoriy summa yuboring.",
         payload=payload,
         provider_token="",  # for XTR leave empty
-        currency="XTR",
+        currency="XTR",  # Stars uchun
         prices=prices,
         is_flexible=False
     )
@@ -409,15 +567,81 @@ async def precheckout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def successful_payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     payment = update.message.successful_payment
-    amount_stars = payment.total_amount // 100
+    amount_stars = payment.total_amount  # XTR da 1 Star = 1
     user = update.effective_user
-    await update.message.reply_text(f"✅ Rahmat, {user.first_name}! Siz {amount_stars} Stars yubordingiz.")
+    
+    # charge_id ni olish
+    charge_id = payment.provider_payment_charge_id
+    
+    # Tilni olish
+    lang_code = None
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user.id)
+        if row:
+            lang_code = row["language_code"]
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE]) if lang_code else LANGUAGES[DEFAULT_LANGUAGE]
+    
+    await update.message.reply_text(lang["donate_thanks"].format(name=user.first_name, stars=amount_stars))
+
     pool = context.application.bot_data["db_pool"]
     async with pool.acquire() as conn:
         await conn.execute(
-            "INSERT INTO donations(user_id, username, stars, payload) VALUES($1,$2,$3,$4)",
-            user.id, user.username if user.username else None, amount_stars, payment.invoice_payload
+            "INSERT INTO donations(user_id, username, stars, payload, charge_id) VALUES($1,$2,$3,$4,$5)",
+            user.id, user.username if user.username else None, amount_stars, payment.invoice_payload, charge_id
         )
+
+# ---------------- Refund handler (faqat admin uchun) ----------------
+async def cmd_refund(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user.id != ADMIN_ID:
+        await update.message.reply_text("⛔ Sizga ruxsat yo'q.")
+        return
+
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text("UsageId: /refund <user_id> <donation_id>")
+        return
+
+    try:
+        target_user_id = int(context.args[0])
+        donation_id = int(context.args[1])
+    except (ValueError, IndexError):
+        await update.message.reply_text("UsageId: /refund <user_id> <donation_id>")
+        return
+
+    pool = context.application.bot_data["db_pool"]
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT charge_id, stars FROM donations WHERE id = $1 AND user_id = $2",
+            donation_id, target_user_id
+        )
+        if not row:
+            await update.message.reply_text("❌ Topilmadi yoki noto'g'ri ma'lumot.")
+            return
+
+        charge_id = row["charge_id"]
+        stars = row["stars"]
+
+        if not charge_id:
+            await update.message.reply_text("❌ Bu to'lovda charge_id yo'q (eski to'lov).")
+            return
+
+        try:
+            # Refund qilish (Stars uchun)
+            await context.bot.refund_star_payment(
+                user_id=target_user_id,
+                telegram_payment_charge_id=charge_id
+            )
+            await update.message.reply_text(f"✅ {stars} Stars muvaffaqiyatli qaytarildi foydalanuvchi {target_user_id} ga.")
+
+            # DBda refund qilinganini belgilash
+            await conn.execute(
+                "UPDATE donations SET refunded_at = NOW() WHERE id = $1",
+                donation_id
+            )
+
+        except Exception as e:
+            logger.exception(f"[REFUND ERROR] {e}")
+            await update.message.reply_text(f"❌ Xatolik: {str(e)}")
 
 # ---------------- Error handler ----------------
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE):
@@ -439,13 +663,23 @@ async def on_startup(app: Application):
 def build_app():
     app = Application.builder().token(BOT_TOKEN).post_init(on_startup).build()
 
+    # START conversation handler
+    start_conv = ConversationHandler(
+        entry_points=[CommandHandler("start", start_handler)],
+        states={
+            LANGUAGE_SELECT: [CallbackQueryHandler(language_select_handler, pattern=r"lang_(uz|ru|en)")],
+        },
+        fallbacks=[CommandHandler("start", start_handler)]
+    )
+    app.add_handler(start_conv)
+
     # Basic handlers
-    app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
     app.add_handler(CallbackQueryHandler(check_sub_button_handler, pattern="check_sub"))
     app.add_handler(CommandHandler("get", cmd_get))
+    app.add_handler(CommandHandler("refund", cmd_refund))  # Yangi refund handler
 
-    # Donate conversation MUST be added BEFORE generic text handler
+    # Donate conversation
     donate_conv = ConversationHandler(
         entry_points=[CommandHandler("donate", donate_start), CallbackQueryHandler(donate_start, pattern="donate_custom")],
         states={WAITING_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, donate_amount)]},
