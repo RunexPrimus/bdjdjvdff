@@ -775,7 +775,7 @@ def build_app():
             LANGUAGE_SELECT: [CallbackQueryHandler(language_select_handler, pattern=r"lang_(uz|ru|en)")],
         },
         fallbacks=[CommandHandler("start", start_handler)],
-        per_message=True
+        per_message=False
     )
     app.add_handler(start_conv)
 
