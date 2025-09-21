@@ -55,7 +55,7 @@ LANGUAGES = {
     "uz": {
         "flag": "🇺🇿",
         "name": "O'zbekcha",
-        "welcome": "👋 Salom!\n\nMen siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.\nPrivatda matn yuboring yoki guruhda /get bilan ishlating.",
+        "welcome": "👋 Salom!\n\nMen siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.",
         "gen_button": "🎨 Rasm yaratish",
         "donate_button": "💖 Donate",
         "lang_button": "🌐 Tilni o'zgartirish",
@@ -84,7 +84,7 @@ LANGUAGES = {
     "ru": {
         "flag": "🇷🇺",
         "name": "Русский",
-        "welcome": "👋 Привет!\n\nЯ создаю для вас изображения с помощью ИИ.\nОтправляйте текст в личку или используйте /get в группе.",
+        "welcome": "👋 Привет!\n\nЯ создаю для вас изображения с помощью ИИ.",
         "gen_button": "🎨 Создать изображение",
         "donate_button": "💖 Поддержать",
         "lang_button": "🌐 Изменить язык",
@@ -113,7 +113,7 @@ LANGUAGES = {
     "en": {
         "flag": "🇬🇧",
         "name": "English",
-        "welcome": "👋 Hello!\n\nI create images for you using AI.\nSend text in private or use /get in group.",
+        "welcome": "👋 Hello!\n\nI create images for you using AI.",
         "gen_button": "🎨 Generate Image",
         "donate_button": "💖 Donate",
         "lang_button": "🌐 Change Language",
