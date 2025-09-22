@@ -9,7 +9,6 @@ import json
 import random
 import time
 from datetime import datetime, timezone, timedelta
-import imghdr_pure as imghdr
 
 import asyncpg
 import google.generativeai as genai
