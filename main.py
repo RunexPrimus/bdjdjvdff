@@ -9,7 +9,9 @@ import json
 import random
 import time
 from datetime import datetime, timezone, timedelta
-from telegram.error import TelegramError, BadRequest, Conflict
+
+# Yangi import qo'shildi
+from telegram.error import BadRequest, TelegramError
 
 import asyncpg
 import google.generativeai as genai
@@ -67,7 +69,7 @@ LANGUAGES = {
         "lang_button": "🌐 Tilni o'zgartirish",
         "prompt_text": "✍️ Endi tasvir yaratish uchun matn yuboring.",
         "select_count": "🔢 Nechta rasm yaratilsin?",
-        "generating": "🔄 Rasm yaratilmoqda... {bar} {percent}%",
+        "generating": "🔄 Rasm yaratilmoqda ({count})... ⏳",
         "success": "✅ Rasm tayyor! 📸",
         "error": "⚠️ Xatolik yuz berdi. Qayta urinib ko‘ring.",
         "donate_prompt": "💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):",
@@ -86,7 +88,7 @@ LANGUAGES = {
         "sub_still_not": "⛔ Hali ham obuna bo‘lmagansiz. Obuna bo‘lib, qayta tekshiring.",
         "lang_changed": "✅ Til o'zgartirildi: {lang}",
         "select_lang": "🌐 Iltimos, tilni tanlang:",
-        "ai_thinking": "🧠 AI javob bermoqda... {bar} {percent}%",
+        # Yangi: AI javob uchun oddiy matn
         "ai_response_header": "💬 AI javob:",
     },
     "ru": {
@@ -98,8 +100,7 @@ LANGUAGES = {
         "lang_button": "🌐 Изменить язык",
         "prompt_text": "✍️ Теперь отправьте текст для создания изображения.",
         "select_count": "🔢 Сколько изображений создать?",
-        "generating": "🔄 Создаю изображение... {bar} {percent}%",
-        "ai_thinking": "🧠 AI думает... {bar} {percent}%",
+        "generating": "🔄 Создаю изображение ({count})... ⏳",
         "success": "✅ Изображение готово! 📸",
         "error": "⚠️ Произошла ошибка. Попробуйте еще раз.",
         "donate_prompt": "💰 Пожалуйста, введите сумму для отправки (1–100000):",
@@ -118,6 +119,7 @@ LANGUAGES = {
         "sub_still_not": "⛔ Вы все еще не подписаны. Подпишитесь и проверьте снова.",
         "lang_changed": "✅ Язык изменен: {lang}",
         "select_lang": "🌐 Пожалуйста, выберите язык:",
+        # Yangi: AI javob uchun oddiy matn
         "ai_response_header": "💬 Ответ AI:",
     },
     "en": {
@@ -129,8 +131,7 @@ LANGUAGES = {
         "lang_button": "🌐 Change Language",
         "prompt_text": "✍️ Now send the text to generate an image.",
         "select_count": "🔢 How many images to generate?",
-       "generating": "🔄 Generating image... {bar} {percent}%",
-        "ai_thinking": "🧠 AI is thinking... {bar} {percent}%",
+        "generating": "🔄 Generating image ({count})... ⏳",
         "success": "✅ Image ready! 📸",
         "error": "⚠️ An error occurred. Please try again.",
         "donate_prompt": "💰 Please enter the amount you wish to send (1–100000):",
@@ -160,10 +161,11 @@ DEFAULT_LANGUAGE = "uz"
 def escape_md(text: str) -> str:
     """
     Telegram MarkdownV2 uchun maxsus belgilarni escape qiladi.
+    ! belgisini ham qo'shdik.
     """
     if not text:
         return ""
-    # MarkdownV2 uchun escape qilinishi kerak bo'lgan belgilar
+    # MarkdownV2 uchun escape qilinishi kerak bo'lgan belgilar, ! ham qo'shildi
     escape_chars = r'_*[]()~`>#+-=|{}.!'
     # Har bir belgini oldidan \ qo'yamiz
     escaped = ''.join('\\' + char if char in escape_chars else char for char in text)
@@ -340,6 +342,7 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
 async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prompt, image_url, count):
     try:
         tashkent_dt = tashkent_time()
+        # Admin xabari uchun ham escape_md dan foydalanamiz
         caption = (
             f"🎨 *Yangi generatsiya!*\n\n"
             f"👤 *Foydalanuvchi:* @{user.username if user.username else 'N/A'} (ID: {user.id})\n"
@@ -352,7 +355,7 @@ async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prom
             chat_id=ADMIN_ID,
             photo=image_url,
             caption=caption,
-            parse_mode="Markdown"
+            parse_mode="MarkdownV2" # Admin xabari uchun MarkdownV2
         )
         logger.info(f"[ADMIN NOTIFY] Foydalanuvchi {user.id} uchun generatsiya admin ga yuborildi.")
     except Exception as e:
@@ -420,7 +423,6 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text(lang["welcome"], reply_markup=InlineKeyboardMarkup(kb))
 
-# ---------------- Bosh menyudan AI chat ----------------
 # ---------------- Bosh menyudan AI chat ----------------
 async def start_ai_flow_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -493,76 +495,80 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # Private plain text -> prompt + inline buttons yoki AI chat
-# Asosan yangilangan: AI chat flow uchun maxsus shart qo'shildi
-# Private plain text -> prompt + inline buttons yoki AI chat
-# Private plain text -> prompt + inline buttons yoki AI chat
-# Private plain text -> prompt + inline buttons yoki AI chat
-# Private plain text -> prompt + inline buttons yoki AI chat
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return
         
-    lang_code = DEFAULT_LANGUAGE # <--- Bu qatorni yuqoriga ko'chiring
+    lang_code = DEFAULT_LANGUAGE
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", update.effective_user.id)
         if row:
-            lang_code = row["language_code"] # <--- Bu qatorni yuqoriga ko'chiring
+            lang_code = row["language_code"]
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
     
     # Agar foydalanuvchi oldin "AI chat" tugmasini bosgan bo'lsa
     flow = context.user_data.get("flow")
     if flow == "ai":
-        # ... (qolgan kod)
-        # ... (vaqt tekshiruvi o'zgarmaydi)
-        
-        # Vaqt o'tmagan, AI chat davom etadi
-        prompt = update.message.text
-        
-        # Yangi: AI uchun oddiy progress bar (soxta)
-        progress_message = await update.message.reply_text(lang["ai_thinking"].format(bar='░' * 10, percent=0))
-        
-        async def update_ai_progress(percent):
-            bar_length = 10
-            filled_length = int(bar_length * percent // 100)
-            bar = '█' * filled_length + '░' * (bar_length - filled_length)
+        # Oxirgi faollik vaqtini tekshirish
+        last_active = context.user_data.get("last_active")
+        now = datetime.now(timezone.utc)
+        if last_active:
+            # 15 daqiqa = 900 sekund
+            if (now - last_active).total_seconds() > 900:
+                # Vaqt o'tgan, flow ni bekor qilamiz
+                context.user_data["flow"] = None
+                context.user_data["last_active"] = None
+                # Quyidagi kod oddiy matn yuborilganda ishlaydi (pastga tushadi)
+            else:
+                # Vaqt o'tmagan, AI chat davom etadi
+                prompt = update.message.text
+                # AI javobini oddiy matn sifatida yuborish, maxsus belgilarsiz
+                await update.message.reply_text("🧠 AI javob berayotganicha...")
+
+                try:
+                    model = genai.GenerativeModel("gemini-2.0-flash")
+                    response = await model.generate_content_async(
+                        prompt,
+                        generation_config=genai.types.GenerationConfig(
+                            max_output_tokens=1000,
+                            temperature=0.7
+                        )
+                    )
+                    answer = response.text.strip()
+                    if not answer:
+                        answer = "⚠️ Javob topilmadi."
+                except Exception as e:
+                    logger.exception("[GEMINI ERROR]")
+                    answer = lang["error"]
+
+                # AI javobini oddiy matn sifatida yuborish, Markdown formatlashsiz
+                await update.message.reply_text(f"{lang['ai_response_header']}\n\n{answer}")
+                # Oxirgi faollik vaqtini yangilash
+                context.user_data["last_active"] = datetime.now(timezone.utc)
+                return
+        else:
+            # Biror sababdan last_active yo'q, lekin flow "ai"
+            # Bu holat kam uchraydi, lekin ehtimolni hisobga olamiz
+            prompt = update.message.text
+            await update.message.reply_text("🧠 AI javob berayotganicha...")
             try:
-                await progress_message.edit_text(lang["ai_thinking"].format(bar=bar, percent=percent))
-            except Exception:
-                pass
-
-        await update_ai_progress(20)
-        await asyncio.sleep(0.5)
-        await update_ai_progress(50)
-        await asyncio.sleep(0.5)
-        await update_ai_progress(80)
-        await asyncio.sleep(0.5)
-        await update_ai_progress(100)
-        # Progress xabarini o'chirish
-        # await progress_message.delete()
-
-        try:
-            model = genai.GenerativeModel("gemini-2.0-flash")
-            response = await model.generate_content_async(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=1000,
-                    temperature=0.7
+                model = genai.GenerativeModel("gemini-2.0-flash")
+                response = await model.generate_content_async(
+                    prompt,
+                    generation_config=genai.types.GenerationConfig(
+                        max_output_tokens=1000,
+                        temperature=0.7
+                    )
                 )
-            )
-            answer = response.text.strip()
-            if not answer:
-                answer = "⚠️ Javob topilmadi."
-        except Exception as e:
-            logger.exception("[GEMINI ERROR]")
-            answer = lang["error"]
-
-        # AI javobini oddiy matn sifatida yuborish, Markdown formatlashsiz
-        await update.message.reply_text(f"{lang['ai_response_header']}\n\n{answer}")
-        # Oxirgi faollik vaqtini yangilash
-        context.user_data["last_active"] = datetime.now(timezone.utc)
-        return
-
-    # ... (qolgan kod o'zgarmaydi)
+                answer = response.text.strip()
+                if not answer:
+                    answer = "⚠️ Javob topilmadi."
+            except Exception as e:
+                logger.exception("[GEMINI ERROR]")
+                answer = lang["error"]
+            await update.message.reply_text(f"{lang['ai_response_header']}\n\n{answer}")
+            context.user_data["last_active"] = datetime.now(timezone.utc)
+            return
 
     # Agar hech qanday maxsus flow bo'lmasa, oddiy rasm generatsiya jarayoni ketaveradi
     # (start_gen orqali kirilganda ham, oddiy matn yuborilganda ham)
@@ -601,8 +607,8 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup(kb)
         )
+
 # ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
-# Yangi: Oddiy matn yuborilganda tanlov tugmasi bosilganda rasm generatsiya qilish
 async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -614,7 +620,6 @@ async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DE
     await generate_cb(fake_update, context)
 
 # ---------------- Tanlov tugmachasi orqali AI chat ----------------
-# Yangi: Oddiy matn yuborilganda tanlov tugmasi bosilganda AI chat qilish
 async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -623,9 +628,6 @@ async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFA
     context.user_data["flow"] = "ai"
     await q.message.reply_text("✍️ Suhbatni boshlash uchun savolingizni yozing.")
 
-# GENERATE (robust)
-# GENERATE (robust)
-# GENERATE (robust)
 # GENERATE (robust) - Yangilangan versiya
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -749,27 +751,28 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             end_time = time.time()
             elapsed_time = end_time - start_time
 
-            # Yangi: Statistika bilan rasm(lar)ni yuborish
+            # Yangi: Statistika bilan rasm(lar)ni yuborish (Oddiy matn sifatida)
             # escape_md dan foydalanib, maxsus belgilarni to'g'ri qo'yamiz
             escaped_prompt = escape_md(prompt) 
             
-            caption = (
-                f"🎨 *Rasm tayyor\\!*\n\n" # ! belgisini ham escape qilish kerak
-                f"📝 *Prompt:* `{escaped_prompt}`\n"
-                f"🔢 *Soni:* {count}\n"
-                f"⏰ *Vaqt \\(UTC\\+5\\):* {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                f"⏱ *Yaratish uchun ketgan vaqt:* {elapsed_time:.1f}s"
+            # Statistikani oddiy matn sifatida yaratamiz, hech qanday parse_mode ishlatmaymiz
+            stats_text = (
+                f"🎨 Rasm tayyor!\n\n"
+                f"📝 Prompt: {escaped_prompt}\n" # escape_md qilingan prompt
+                f"🔢 Soni: {count}\n"
+                f"⏰ Vaqt (UTC+5): {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"⏱ Yaratish uchun ketgan vaqt: {elapsed_time:.1f}s"
             )
 
             try:
-                # Birinchi rasmga caption, qolganlariga yo'q. parse_mode="MarkdownV2" ishlatamiz.
-                media = [InputMediaPhoto(u, caption=caption if i == 0 else None, parse_mode="MarkdownV2") for i, u in enumerate(urls)]
+                # Birinchi rasmga statistika, qolganlariga yo'q. parse_mode ishlatmaymiz.
+                media = [InputMediaPhoto(u, caption=stats_text if i == 0 else None) for i, u in enumerate(urls)]
                 await q.message.reply_media_group(media)
             except TelegramError as e:
                 logger.exception(f"[MEDIA_GROUP ERROR] {e}; fallback to single photos")
-                # Agar MediaGroup ishlamasa, birinchi rasmga caption bilan, qolganlariga yo'q holda yuboramiz
+                # Agar MediaGroup ishlamasa, birinchi rasmga statistika bilan, qolganlariga yo'q holda yuboramiz
                 try:
-                    await q.message.reply_photo(urls[0], caption=caption, parse_mode="MarkdownV2")
+                    await q.message.reply_photo(urls[0], caption=stats_text) # parse_mode ishlatmaymiz
                     for u in urls[1:]:
                         try:
                             await q.message.reply_photo(u)
@@ -798,12 +801,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-    except Exception as e:
-        logger.exception(f"[GENERATE ERROR] {e}")
-        try:
-            await q.edit_message_text(lang["error"])
-        except Exception:
-            pass
+
 # ---------------- Donate (Stars) flow ----------------
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang_code = DEFAULT_LANGUAGE
@@ -957,13 +955,14 @@ async def on_startup(app: Application):
 def build_app():
     app = Application.builder().token(BOT_TOKEN).post_init(on_startup).build()
 
+    # ConversationHandler larda per_message=False warninglari chiqmasligi uchun per_message=True qilindi
     start_conv = ConversationHandler(
         entry_points=[CommandHandler("start", start_handler)],
         states={
             LANGUAGE_SELECT: [CallbackQueryHandler(language_select_handler, pattern=r"lang_(uz|ru|en)")],
         },
         fallbacks=[CommandHandler("start", start_handler)],
-        per_message=False
+        per_message=True # O'zgardi
     )
     app.add_handler(start_conv)
 
@@ -976,7 +975,7 @@ def build_app():
             LANGUAGE_SELECT: [CallbackQueryHandler(language_select_handler, pattern=r"lang_(uz|ru|en)")],
         },
         fallbacks=[CommandHandler("language", cmd_language)],
-        per_message=False
+        per_message=True # O'zgardi
     )
     app.add_handler(lang_conv)
 
@@ -989,7 +988,7 @@ def build_app():
         entry_points=[CommandHandler("donate", donate_start), CallbackQueryHandler(donate_start, pattern="donate_custom")],
         states={WAITING_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, donate_amount)]},
         fallbacks=[],
-        per_message=False
+        per_message=True # O'zgardi
     )
     app.add_handler(donate_conv)
 
