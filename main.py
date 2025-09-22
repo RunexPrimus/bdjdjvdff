@@ -420,13 +420,15 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(lang["welcome"], reply_markup=InlineKeyboardMarkup(kb))
 
 # ---------------- Bosh menyudan AI chat ----------------
-# Yangi: AI chat flow boshlanadi
+# ---------------- Bosh menyudan AI chat ----------------
 async def start_ai_flow_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     await q.message.reply_text("✍️ Suhbatni boshlash uchun savolingizni yozing.")
-    # Foydalanuvchi matn yuborganida, uni AI ga jo'natish kerak
+    # AI chat flow boshlanadi
     context.user_data["flow"] = "ai"
+    # Oxirgi faollik vaqtini saqlaymiz
+    context.user_data["last_active"] = datetime.now(timezone.utc)
 
 # ---------------- Bosh menyudan rasm generatsiya ----------------
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -441,7 +443,7 @@ async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
     
     await q.message.reply_text(lang["prompt_text"])
-    # Yangi: flow o'zgaruvchisini o'rnatamiz
+    # flow o'zgaruvchisini o'rnatamiz
     context.user_data["flow"] = "image_pending_prompt"
 
 # ---------------- Bosh menyuga qaytish tugmasi ----------------
@@ -491,6 +493,7 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Private plain text -> prompt + inline buttons yoki AI chat
 # Asosan yangilangan: AI chat flow uchun maxsus shart qo'shildi
+# Private plain text -> prompt + inline buttons yoki AI chat
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return
@@ -505,35 +508,69 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     # Agar foydalanuvchi oldin "AI chat" tugmasini bosgan bo'lsa
     flow = context.user_data.get("flow")
     if flow == "ai":
-        # AI chat
-        prompt = update.message.text
-        # AI javobini oddiy matn sifatida yuborish, maxsus belgilarsiz
-        await update.message.reply_text("🧠 AI javob berayotganicha...")
+        # Oxirgi faollik vaqtini tekshirish
+        last_active = context.user_data.get("last_active")
+        now = datetime.now(timezone.utc)
+        if last_active:
+            # 15 daqiqa = 900 sekund
+            if (now - last_active).total_seconds() > 900:
+                # Vaqt o'tgan, flow ni bekor qilamiz
+                context.user_data["flow"] = None
+                context.user_data["last_active"] = None
+                # Quyidagi kod oddiy matn yuborilganda ishlaydi (pastga tushadi)
+            else:
+                # Vaqt o'tmagan, AI chat davom etadi
+                prompt = update.message.text
+                # AI javobini oddiy matn sifatida yuborish, maxsus belgilarsiz
+                await update.message.reply_text("🧠 AI javob berayotganicha...")
 
-        try:
-            model = genai.GenerativeModel("gemini-2.0-flash")
-            response = await model.generate_content_async(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=1000,
-                    temperature=0.7
+                try:
+                    model = genai.GenerativeModel("gemini-2.0-flash")
+                    response = await model.generate_content_async(
+                        prompt,
+                        generation_config=genai.types.GenerationConfig(
+                            max_output_tokens=1000,
+                            temperature=0.7
+                        )
+                    )
+                    answer = response.text.strip()
+                    if not answer:
+                        answer = "⚠️ Javob topilmadi."
+                except Exception as e:
+                    logger.exception("[GEMINI ERROR]")
+                    answer = lang["error"]
+
+                # AI javobini oddiy matn sifatida yuborish, Markdown formatlashsiz
+                await update.message.reply_text(f"{lang['ai_response_header']}\n\n{answer}")
+                # Oxirgi faollik vaqtini yangilash
+                context.user_data["last_active"] = datetime.now(timezone.utc)
+                return
+        else:
+            # Biror sababdan last_active yo'q, lekin flow "ai"
+            # Bu holat kam uchraydi, lekin ehtimolni hisobga olamiz
+            prompt = update.message.text
+            await update.message.reply_text("🧠 AI javob berayotganicha...")
+            try:
+                model = genai.GenerativeModel("gemini-2.0-flash")
+                response = await model.generate_content_async(
+                    prompt,
+                    generation_config=genai.types.GenerationConfig(
+                        max_output_tokens=1000,
+                        temperature=0.7
+                    )
                 )
-            )
-            answer = response.text.strip()
-            if not answer:
-                answer = "⚠️ Javob topilmadi."
-        except Exception as e:
-            logger.exception("[GEMINI ERROR]")
-            answer = lang["error"]
+                answer = response.text.strip()
+                if not answer:
+                    answer = "⚠️ Javob topilmadi."
+            except Exception as e:
+                logger.exception("[GEMINI ERROR]")
+                answer = lang["error"]
+            await update.message.reply_text(f"{lang['ai_response_header']}\n\n{answer}")
+            context.user_data["last_active"] = datetime.now(timezone.utc)
+            return
 
-        # AI javobini oddiy matn sifatida yuborish, Markdown formatlashsiz
-        await update.message.reply_text(f"{lang['ai_response_header']}\n\n{answer}")
-        # Flow tugadi
-        context.user_data["flow"] = None
-        return
-
-    # Agar foydalanuvchi hech qanday bosh menyudagi tugma bosmasdan oddiy matn yuborsa
-    # Yoki rasm generatsiya flow'i ketayotgan bo'lsa (start_gen orqali)
+    # Agar hech qanday maxsus flow bo'lmasa, oddiy rasm generatsiya jarayoni ketaveradi
+    # (start_gen orqali kirilganda ham, oddiy matn yuborilganda ham)
     if not await force_sub_if_private(update, context, lang_code):
         return
         
@@ -542,11 +579,8 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data["prompt"] = prompt
     context.user_data["translated"] = prompt
 
-    # Agar hech qanday maxsus flow bo'lmasa, oddiy rasm generatsiya jarayoni ketaveradi
-    # (start_gen orqali kirilganda ham, oddiy matn yuborilganda ham)
-    # Lekin agar flow "ai" bo'lmasa, bu yerda rasm generatsiya jarayoni boshlanadi
-    # Shuning uchun faqat oddiy matn yuborilganda tanlov tugmalari chiqadi
-    if flow is None: # Hech qanday flow boshlanmagan bo'lsa (faqat oddiy matn)
+    # Agar hech qanday flow boshlanmagan bo'lsa (faqat oddiy matn)
+    if flow is None: 
         kb = [
             [
                 InlineKeyboardButton("🖼 Rasm yaratish", callback_data="gen_image_from_prompt"),
@@ -572,7 +606,6 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup(kb)
         )
-
 # ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
 # Yangi: Oddiy matn yuborilganda tanlov tugmasi bosilganda rasm generatsiya qilish
 async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
