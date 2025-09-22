@@ -59,15 +59,18 @@ else:
 LANGUAGE_SELECT, WAITING_AMOUNT = range(2)
 
 # ---------------- Til sozlamalari ----------------
+# Yangilangan: Yangi matn kalitlari qo'shildi
 LANGUAGES = {
     "uz": {
         "flag": "🇺🇿",
         "name": "O'zbekcha",
         "welcome": "👋 Salom!\n\nMen siz uchun sun’iy intellekt yordamida rasmlar yaratib beraman.",
         "gen_button": "🎨 Rasm yaratish",
+        "ai_button": "💬 AI bilan suhbat",
         "donate_button": "💖 Donate",
         "lang_button": "🌐 Tilni o'zgartirish",
         "prompt_text": "✍️ Endi tasvir yaratish uchun matn yuboring.",
+        "ai_prompt_text": "✍️ Suhbatni boshlash uchun savolingizni yozing.",
         "select_count": "🔢 Nechta rasm yaratilsin?",
         "generating": "🔄 Rasm yaratilmoqda ({count})... ⏳",
         "success": "✅ Rasm tayyor! 📸",
@@ -90,15 +93,32 @@ LANGUAGES = {
         "select_lang": "🌐 Iltimos, tilni tanlang:",
         # Yangi: AI javob uchun oddiy matn
         "ai_response_header": "💬 AI javob:",
+        # Yangi: Statistika matnlari
+        "image_ready_header": "🎨 Rasm tayyor!",
+        "image_prompt_label": "📝 Prompt:",
+        "image_count_label": "🔢 Soni:",
+        "image_time_label": "⏰ Vaqt (UTC+5):",
+        "image_elapsed_label": "⏱ Yaratish uchun ketgan vaqt:",
+        "choose_action": "Quyidagilardan birini tanlang:",
+        "your_message": "💬 Sizning xabaringiz:",
+        # Yangi: Admin xabari matnlari
+        "admin_new_generation": "🎨 *Yangi generatsiya!*",
+        "admin_user": "👤 *Foydalanuvchi:*",
+        "admin_prompt": "📝 *Prompt:*",
+        "admin_count": "🔢 *Soni:*",
+        "admin_image_id": "🆔 *Image ID:*",
+        "admin_time": "⏰ *Vaqt \\(UTC\\+5\\):*", # Markdown belgilari escape qilindi
     },
     "ru": {
         "flag": "🇷🇺",
         "name": "Русский",
         "welcome": "👋 Привет!\n\nЯ создаю для вас изображения с помощью ИИ.",
         "gen_button": "🎨 Создать изображение",
+        "ai_button": "💬 AI bilan suhbat",
         "donate_button": "💖 Поддержать",
         "lang_button": "🌐 Изменить язык",
         "prompt_text": "✍️ Теперь отправьте текст для создания изображения.",
+        "ai_prompt_text": "✍️ Suhbatni boshlash uchun savolingizni yozing.",
         "select_count": "🔢 Сколько изображений создать?",
         "generating": "🔄 Создаю изображение ({count})... ⏳",
         "success": "✅ Изображение готово! 📸",
@@ -121,15 +141,32 @@ LANGUAGES = {
         "select_lang": "🌐 Пожалуйста, выберите язык:",
         # Yangi: AI javob uchun oddiy matn
         "ai_response_header": "💬 Ответ AI:",
+        # Yangi: Statistika matnlari
+        "image_ready_header": "🎨 Rasm tayyor!",
+        "image_prompt_label": "📝 Prompt:",
+        "image_count_label": "🔢 Soni:",
+        "image_time_label": "⏰ Vaqt (UTC+5):",
+        "image_elapsed_label": "⏱ Yaratish uchun ketgan vaqt:",
+        "choose_action": "Quyidagilardan birini tanlang:",
+        "your_message": "💬 Sizning xabaringiz:",
+        # Yangi: Admin xabari matnlari
+        "admin_new_generation": "🎨 *Yangi generatsiya!*",
+        "admin_user": "👤 *Foydalanuvchi:*",
+        "admin_prompt": "📝 *Prompt:*",
+        "admin_count": "🔢 *Soni:*",
+        "admin_image_id": "🆔 *Image ID:*",
+        "admin_time": "⏰ *Vaqt \\(UTC\\+5\\):*", # Markdown belgilari escape qilindi
     },
     "en": {
         "flag": "🇬🇧",
         "name": "English",
         "welcome": "👋 Hello!\n\nI create images for you using AI.",
         "gen_button": "🎨 Generate Image",
+        "ai_button": "💬 AI bilan suhbat",
         "donate_button": "💖 Donate",
         "lang_button": "🌐 Change Language",
         "prompt_text": "✍️ Now send the text to generate an image.",
+        "ai_prompt_text": "✍️ Suhbatni boshlash uchun savolingizni yozing.",
         "select_count": "🔢 How many images to generate?",
         "generating": "🔄 Generating image ({count})... ⏳",
         "success": "✅ Image ready! 📸",
@@ -152,6 +189,21 @@ LANGUAGES = {
         "select_lang": "🌐 Please select language:",
         # Yangi: AI javob uchun oddiy matn
         "ai_response_header": "💬 AI Response:",
+        # Yangi: Statistika matnlari
+        "image_ready_header": "🎨 Rasm tayyor!",
+        "image_prompt_label": "📝 Prompt:",
+        "image_count_label": "🔢 Soni:",
+        "image_time_label": "⏰ Vaqt (UTC+5):",
+        "image_elapsed_label": "⏱ Yaratish uchun ketgan vaqt:",
+        "choose_action": "Quyidagilardan birini tanlang:",
+        "your_message": "💬 Sizning xabaringiz:",
+        # Yangi: Admin xabari matnlari
+        "admin_new_generation": "🎨 *Yangi generatsiya!*",
+        "admin_user": "👤 *Foydalanuvchi:*",
+        "admin_prompt": "📝 *Prompt:*",
+        "admin_count": "🔢 *Soni:*",
+        "admin_image_id": "🆔 *Image ID:*",
+        "admin_time": "⏰ *Vaqt \\(UTC\\+5\\):*", # Markdown belgilari escape qilindi
     }
 }
 
@@ -339,7 +391,7 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
         )
 
 # ---------------- Admin ga xabar yuborish (YANGILANGAN) ----------------
-# Endi barcha rasmlarni yuboradi
+# Endi barcha rasmlarni yuboradi va tarjima qiladi
 async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prompt, image_urls, count, image_id):
     """
     Foydalanuvchi rasm generatsiya qilganda, barcha rasmlarni admin foydalanuvchisiga yuboradi.
@@ -348,15 +400,23 @@ async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prom
         return # Agar ADMIN_ID o'rnatilmagan bo'lsa, hech narsa yuborilmaydi
 
     try:
+        # Foydalanuvchi tilini olish
+        lang_code = DEFAULT_LANGUAGE
+        async with context.application.bot_data["db_pool"].acquire() as conn:
+            row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", ADMIN_ID)
+            if row:
+                lang_code = row["language_code"]
+        lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+
         tashkent_dt = tashkent_time()
-        # Admin xabari uchun matn (statistika)
+        # Admin xabari uchun matn (statistika) - Tarjima qilingan matnlardan foydalanilmoqda
         caption_text = (
-            f"🎨 *Yangi generatsiya!*\n\n"
-            f"👤 *Foydalanuvchi:* @{user.username if user.username else 'N/A'} (ID: {user.id})\n"
-            f"📝 *Prompt:* {escape_md(prompt)}\n"
-            f"🔢 *Soni:* {count}\n"
-            f"🆔 *Image ID:* `{image_id}`\n" # Image ID ni ham qo'shamiz
-            f"⏰ *Vaqt \\(UTC\\+5\\):* {tashkent_dt.strftime('%Y-%m-%d %H:%M:%S')}" # Markdown belgilari escape qilindi
+            f"{lang['admin_new_generation']}\n\n"
+            f"{lang['admin_user']} @{user.username if user.username else 'N/A'} (ID: {user.id})\n"
+            f"{lang['admin_prompt']} {escape_md(prompt)}\n"
+            f"{lang['admin_count']} {count}\n"
+            f"{lang['admin_image_id']} `{image_id}`\n" # Image ID ni ham qo'shamiz
+            f"{lang['admin_time']} {tashkent_dt.strftime('%Y-%m-%d %H:%M:%S')}" # Markdown belgilari escape qilindi
         )
         
         # 1. Avval statistikani yuboramiz (1-rasmga biriktiriladi)
@@ -420,7 +480,7 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
     lang = LANGUAGES[lang_code]
     kb = [
         [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
-        [InlineKeyboardButton("💬 AI bilan suhbat", callback_data="start_ai_flow")], # Yangi tugma
+        [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")], # Yangi tugma, tarjima qilingan
         [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
         [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
     ]
@@ -443,7 +503,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Mavjud barcha tugmalar + yangi AI chat tugmasi
     kb = [
         [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
-        [InlineKeyboardButton("💬 AI bilan suhbat", callback_data="start_ai_flow")], # Yangi tugma
+        [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")], # Yangi tugma, tarjima qilingan
         [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
         [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
     ]
@@ -453,7 +513,14 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start_ai_flow_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    await q.message.reply_text("✍️ Suhbatni boshlash uchun savolingizni yozing.")
+    lang_code = DEFAULT_LANGUAGE
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
+        if row:
+            lang_code = row["language_code"]
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+    # await q.message.reply_text("✍️ Suhbatni boshlash uchun savolingizni yozing.")
+    await q.message.reply_text(lang["ai_prompt_text"]) # Yangilangan, tarjima qilingan
     # AI chat flow boshlanadi
     context.user_data["flow"] = "ai"
     # Oxirgi faollik vaqtini saqlaymiz
@@ -521,6 +588,7 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 # Private plain text -> prompt + inline buttons yoki AI chat
+# Yangilangan: Tanlov tugmachasi bosilganda flow o'rnatiladi
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return
@@ -645,8 +713,14 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat_from_prompt")
             ]
         ]
+        # await update.message.reply_text(
+        #     f"Quyidagilardan birini tanlang:\n\n💬 *Sizning xabaringiz:* {escape_md(prompt)}",
+        #     parse_mode="MarkdownV2",
+        #     reply_markup=InlineKeyboardMarkup(kb)
+        # )
+        # Yangilangan qatorlar, tarjima qilingan
         await update.message.reply_text(
-            f"Quyidagilardan birini tanlang:\n\n💬 *Sizning xabaringiz:* {escape_md(prompt)}",
+            f"{lang['choose_action']}\n\n*{lang['your_message']}* {escape_md(prompt)}",
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup(kb)
         )
@@ -666,9 +740,13 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         )
 
 # ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
+# Yangilangan: context.user_data["flow"] o'rnatiladi
 async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
+    
+    # flow o'zgaruvchisini o'rnatamiz
+    context.user_data["flow"] = "image_pending_prompt"
     
     # To'g'ridan-to'g'ri 1 ta rasm generatsiya qilamiz
     fake_update = Update(0, message=q.message)
@@ -677,13 +755,21 @@ async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DE
     await generate_cb(fake_update, context)
 
 # ---------------- Tanlov tugmachasi orqali AI chat ----------------
+# Yangilangan: context.user_data["flow"] o'rnatiladi
 async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     
     # AI chat flow boshlanadi
     context.user_data["flow"] = "ai"
-    await q.message.reply_text("✍️ Suhbatni boshlash uchun savolingizni yozing.")
+    lang_code = DEFAULT_LANGUAGE
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
+        if row:
+            lang_code = row["language_code"]
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+    # await q.message.reply_text("✍️ Suhbatni boshlash uchun savolingizni yozing.")
+    await q.message.reply_text(lang["ai_prompt_text"]) # Yangilangan, tarjima qilingan
 
 # GENERATE (robust) - Yangilangan versiya (Prompt - Gemini - Digen)
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -821,12 +907,20 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # Statistikani oddiy matn sifatida yaratamiz, hech qanday parse_mode ishlatmaymiz
             # Tarjimalar to'g'rilangan
+            # stats_text = (
+            #     f"🎨 Rasm tayyor!\n\n" 
+            #     f"📝 Prompt: {escaped_prompt}\n" # escape_md qilingan prompt
+            #     f"🔢 Soni: {count}\n"
+            #     f"⏰ Vaqt (UTC+5): {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            #     f"⏱ Yaratish uchun ketgan vaqt: {elapsed_time:.1f}s"
+            # )
+            # Yangilangan qatorlar, tarjima qilingan
             stats_text = (
-                f"🎨 Rasm tayyor!\n\n" 
-                f"📝 Prompt: {escaped_prompt}\n" # escape_md qilingan prompt
-                f"🔢 Soni: {count}\n"
-                f"⏰ Vaqt (UTC+5): {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                f"⏱ Yaratish uchun ketgan vaqt: {elapsed_time:.1f}s"
+                f"{lang['image_ready_header']}\n\n"
+                f"{lang['image_prompt_label']} {escaped_prompt}\n"
+                f"{lang['image_count_label']} {count}\n"
+                f"{lang['image_time_label']} {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"{lang['image_elapsed_label']} {elapsed_time:.1f}s"
             )
 
             try:
@@ -875,7 +969,11 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------- Donate (Stars) flow ----------------
+# Yangilangan: context.user_data["current_operation"] o'rnatiladi
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Yangi: donate jarayonini belgilash
+    context.user_data["current_operation"] = "donate"
+    
     lang_code = DEFAULT_LANGUAGE
     if update.callback_query:
         async with context.application.bot_data["db_pool"].acquire() as conn:
@@ -898,7 +996,17 @@ async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(lang["donate_prompt"])
     return WAITING_AMOUNT
 
+# Yangilangan: context.user_data["current_operation"] tekshiriladi
 async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Yangi: faqat donate jarayonida bo'lsa ishlashi
+    if context.user_data.get("current_operation") != "donate":
+        # Agar foydalanuvchi donate jarayonida bo'lmasa, bu handler ishlamasin
+        # Boshqa handlerlar bu xabarni qo'lga kiritadi
+        return ConversationHandler.END # Yoki hech nishga qaytmasa ham bo'ladi
+    
+    # Yangi: donate jarayoni tugadi, belgini o'chiramiz
+    context.user_data.pop("current_operation", None)
+    
     lang_code = DEFAULT_LANGUAGE
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", update.effective_user.id)
@@ -913,8 +1021,11 @@ async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raise ValueError
     except ValueError:
         await update.message.reply_text(lang["donate_invalid"])
-        return WAITING_AMOUNT
+        # Yangi: donate jarayoni davom etayotgani uchun, WAITING_AMOUNT qaytaramiz
+        # Agar ConversationHandler ishlamayotgan bo'lsa, bu hech narsa o'zgartirmaydi
+        return WAITING_AMOUNT 
 
+    # ... (qolgan kodlar - invoice yuborish) ...
     payload = f"donate_{update.effective_user.id}_{int(time.time())}"
     prices = [LabeledPrice(f"{amount} Stars", amount)]
     
@@ -928,6 +1039,7 @@ async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
         prices=prices,
         is_flexible=False
     )
+    # Oxirida ConversationHandler tugashi kerak
     return ConversationHandler.END
 
 async def precheckout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
