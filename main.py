@@ -85,7 +85,8 @@ LANGUAGES = {
         "sub_still_not": "⛔ Hali ham obuna bo‘lmagansiz. Obuna bo‘lib, qayta tekshiring.",
         "lang_changed": "✅ Til o'zgartirildi: {lang}",
         "select_lang": "🌐 Iltimos, tilni tanlang:",
-        "ai_response": "💬 *AI javob:*\n\n{text}",
+        # Yangi: AI javob uchun oddiy matn
+        "ai_response_header": "💬 *AI javob:*",
     },
     "ru": {
         "flag": "🇷🇺",
@@ -115,7 +116,8 @@ LANGUAGES = {
         "sub_still_not": "⛔ Вы все еще не подписаны. Подпишитесь и проверьте снова.",
         "lang_changed": "✅ Язык изменен: {lang}",
         "select_lang": "🌐 Пожалуйста, выберите язык:",
-        "ai_response": "💬 *Ответ AI:*\n\n{text}",
+        # Yangi: AI javob uchun oddiy matn
+        "ai_response_header": "💬 *Ответ AI:*",
     },
     "en": {
         "flag": "🇬🇧",
@@ -145,7 +147,8 @@ LANGUAGES = {
         "sub_still_not": "⛔ You are still not subscribed. Subscribe and check again.",
         "lang_changed": "✅ Language changed to: {lang}",
         "select_lang": "🌐 Please select language:",
-        "ai_response": "💬 *AI Response:*\n\n{text}",
+        # Yangi: AI javob uchun oddiy matn
+        "ai_response_header": "💬 *AI Response:*",
     }
 }
 
@@ -153,9 +156,16 @@ DEFAULT_LANGUAGE = "uz"
 
 # ---------------- helpers ----------------
 def escape_md(text: str) -> str:
+    """
+    Telegram MarkdownV2 uchun maxsus belgilarni escape qiladi.
+    """
     if not text:
         return ""
-    return re.sub(r'([_*\[\]()~>#+\-=|{}.!])', r'\\\1', text)
+    # MarkdownV2 uchun escape qilinishi kerak bo'lgan belgilar
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    # Har bir belgini oldidan \ qo'yamiz
+    escaped = ''.join('\\' + char if char in escape_chars else char for char in text)
+    return escaped
 
 def utc_now():
     return datetime.now(timezone.utc)
@@ -379,6 +389,7 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
     lang = LANGUAGES[lang_code]
     kb = [
         [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
+        [InlineKeyboardButton("💬 AI bilan suhbat", callback_data="start_ai_flow")], # Yangi tugma
         [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
         [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
     ]
@@ -386,6 +397,7 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
     return ConversationHandler.END
 
 # ---------------- START handleri ----------------
+# Yangilangan: Yangi AI chat tugmasi qo'shildi
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     lang_code = None
@@ -395,22 +407,25 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if row:
             lang_code = row["language_code"]
     
-    if lang_code:
-        lang = LANGUAGES[lang_code]
-        kb = [
-            [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
-            [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
-            [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
-        ]
-        await update.message.reply_text(lang["welcome"], reply_markup=InlineKeyboardMarkup(kb))
-    else:
-        kb = [
-            [InlineKeyboardButton(f"{LANGUAGES['uz']['flag']} {LANGUAGES['uz']['name']}", callback_data="lang_uz")],
-            [InlineKeyboardButton(f"{LANGUAGES['ru']['flag']} {LANGUAGES['ru']['name']}", callback_data="lang_ru")],
-            [InlineKeyboardButton(f"{LANGUAGES['en']['flag']} {LANGUAGES['en']['name']}", callback_data="lang_en")],
-        ]
-        await update.message.reply_text("🌐 Iltimos, tilni tanlang / Пожалуйста, выберите язык / Please select language:", reply_markup=InlineKeyboardMarkup(kb))
-        return LANGUAGE_SELECT
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+
+    # Mavjud barcha tugmalar + yangi AI chat tugmasi
+    kb = [
+        [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
+        [InlineKeyboardButton("💬 AI bilan suhbat", callback_data="start_ai_flow")], # Yangi tugma
+        [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
+        [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
+    ]
+    await update.message.reply_text(lang["welcome"], reply_markup=InlineKeyboardMarkup(kb))
+
+# ---------------- Bosh menyudan AI chat ----------------
+# Yangi: AI chat flow boshlanadi
+async def start_ai_flow_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    await q.message.reply_text("✍️ Suhbatni boshlash uchun savolingizni yozing.")
+    # Foydalanuvchi matn yuborganida, uni AI ga jo'natish kerak
+    context.user_data["flow"] = "ai"
 
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -466,11 +481,12 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await update.message.reply_text(
         f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
-        parse_mode="Markdown",
+        parse_mode="MarkdownV2",
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
-# Private plain text -> prompt + inline buttons
+# Private plain text -> prompt + inline buttons yoki AI chat
+# Asosan yangilangan: AI chat flow uchun maxsus shart qo'shildi
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return
@@ -482,91 +498,98 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             lang_code = row["language_code"]
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
     
+    # Agar foydalanuvchi oldin "AI chat" tugmasini bosgan bo'lsa
+    flow = context.user_data.get("flow")
+    if flow == "ai":
+        # AI chat
+        prompt = update.message.text
+        # AI javobini oddiy matn sifatida yuborish, maxsus belgilarsiz
+        await update.message.reply_text("🧠 AI javob berayotganicha...")
+
+        try:
+            model = genai.GenerativeModel("gemini-2.0-flash")
+            response = await model.generate_content_async(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=1000,
+                    temperature=0.7
+                )
+            )
+            answer = response.text.strip()
+            if not answer:
+                answer = "⚠️ Javob topilmadi."
+        except Exception as e:
+            logger.exception("[GEMINI ERROR]")
+            answer = lang["error"]
+
+        # AI javobini oddiy matn sifatida yuborish, Markdown formatlashsiz
+        await update.message.reply_text(f"{lang['ai_response_header']}\n\n{answer}")
+        # Flow tugadi
+        context.user_data["flow"] = None
+        return
+
+    # Agar foydalanuvchi hech qanday bosh menyudagi tugma bosmasdan oddiy matn yuborsa
+    # Yoki rasm generatsiya flow'i ketayotgan bo'lsa (start_gen orqali)
     if not await force_sub_if_private(update, context, lang_code):
         return
         
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     prompt = update.message.text
     context.user_data["prompt"] = prompt
-
-    kb = [
-        [
-            InlineKeyboardButton("🖼 Rasm generatsiya qilish", callback_data="gen_image"),
-            InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat")
-        ]
-    ]
-    await update.message.reply_text(
-        f"Quyidagilardan birini tanlang:\n\n💬 *Sizning xabaringiz:* {escape_md(prompt)}",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
-
-# ---------------- AI Chat handler ----------------
-async def handle_ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-
-    prompt = context.user_data.get("prompt", "")
-    if not prompt:
-        await q.message.reply_text("⚠️ Xatolik: matn topilmadi.")
-        return
-
-    lang_code = DEFAULT_LANGUAGE
-    async with context.application.bot_data["db_pool"].acquire() as conn:
-        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
-        if row:
-            lang_code = row["language_code"]
-    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-
-    await q.message.reply_text("🧠 AI javob berayotganicha...")
-
-    try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        response = await model.generate_content_async(
-            prompt,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=1000,
-                temperature=0.7
-            )
-        )
-        answer = response.text.strip()
-        if not answer:
-            answer = "⚠️ Javob topilmadi."
-    except Exception as e:
-        logger.exception("[GEMINI ERROR]")
-        answer = lang["error"]
-
-    await q.message.reply_text(lang["ai_response"].format(text=escape_md(answer)), parse_mode="Markdown")
-
-# ---------------- Rasm generatsiya handler ----------------
-async def handle_gen_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-
-    prompt = context.user_data.get("prompt", "")
-    if not prompt:
-        await q.message.reply_text("⚠️ Xatolik: matn topilmadi.")
-        return
-
-    lang_code = DEFAULT_LANGUAGE
-    async with context.application.bot_data["db_pool"].acquire() as conn:
-        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
-        if row:
-            lang_code = row["language_code"]
-    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-
     context.user_data["translated"] = prompt
-    kb = [
-        [InlineKeyboardButton("1️⃣", callback_data="count_1")],
-        [InlineKeyboardButton("2️⃣", callback_data="count_2")],
-        [InlineKeyboardButton("4️⃣", callback_data="count_4")],
-        [InlineKeyboardButton("8️⃣", callback_data="count_8")]
-    ]
-    await q.message.reply_text(
-        f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
+
+    # Agar hech qanday maxsus flow bo'lmasa, oddiy rasm generatsiya jarayoni ketaveradi
+    # (start_gen orqali kirilganda ham, oddiy matn yuborilganda ham)
+    # Lekin agar flow "ai" bo'lmasa, bu yerda rasm generatsiya jarayoni boshlanadi
+    # Shuning uchun faqat oddiy matn yuborilganda tanlov tugmalari chiqadi
+    if flow is None: # Hech qanday flow boshlanmagan bo'lsa (faqat oddiy matn)
+        kb = [
+            [
+                InlineKeyboardButton("🖼 Rasm yaratish", callback_data="gen_image_from_prompt"),
+                InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat_from_prompt")
+            ]
+        ]
+        await update.message.reply_text(
+            f"Quyidagilardan birini tanlang:\n\n💬 *Sizning xabaringiz:* {escape_md(prompt)}",
+            parse_mode="MarkdownV2",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
+        return
+    else: # start_gen orqali kirilganda flow "image_pending_prompt" bo'ladi
+        # "Nechta rasm?" so'rovi chiqadi
+        kb = [
+            [InlineKeyboardButton("1️⃣", callback_data="count_1")],
+            [InlineKeyboardButton("2️⃣", callback_data="count_2")],
+            [InlineKeyboardButton("4️⃣", callback_data="count_4")],
+            [InlineKeyboardButton("8️⃣", callback_data="count_8")]
+        ]
+        await update.message.reply_text(
+            f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
+            parse_mode="MarkdownV2",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
+
+# ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
+# Yangi: Oddiy matn yuborilganda tanlov tugmasi bosilganda rasm generatsiya qilish
+async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    
+    # To'g'ridan-to'g'ri 1 ta rasm generatsiya qilamiz
+    fake_update = Update(0, message=q.message)
+    fake_update.callback_query = q
+    fake_update.callback_query.data = "count_1"
+    await generate_cb(fake_update, context)
+
+# ---------------- Tanlov tugmachasi orqali AI chat ----------------
+# Yangi: Oddiy matn yuborilganda tanlov tugmasi bosilganda AI chat qilish
+async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    
+    # AI chat flow boshlanadi
+    context.user_data["flow"] = "ai"
+    await q.message.reply_text("✍️ Suhbatni boshlash uchun savolingizni yozing.")
 
 # GENERATE (robust)
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -881,8 +904,10 @@ def build_app():
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
 
     app.add_handler(CallbackQueryHandler(generate_cb, pattern=r"count_\d+"))
-    app.add_handler(CallbackQueryHandler(handle_ai_chat, pattern="ai_chat"))
-    app.add_handler(CallbackQueryHandler(handle_gen_image, pattern="gen_image"))
+    # Yangi handlerlar
+    app.add_handler(CallbackQueryHandler(start_ai_flow_handler, pattern="start_ai_flow"))
+    app.add_handler(CallbackQueryHandler(gen_image_from_prompt_handler, pattern="gen_image_from_prompt"))
+    app.add_handler(CallbackQueryHandler(ai_chat_from_prompt_handler, pattern="ai_chat_from_prompt"))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, private_text_handler))
 
