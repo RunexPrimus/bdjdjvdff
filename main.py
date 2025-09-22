@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timezone, timedelta
 
 import asyncpg
+import google.generativeai as genai
 from telegram import (
     Update, InlineKeyboardMarkup, InlineKeyboardButton,
     InputMediaPhoto, LabeledPrice
@@ -19,7 +20,6 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler,
     ContextTypes, filters, ConversationHandler, PreCheckoutQueryHandler
 )
-from telegram.error import BadRequest, TelegramError
 
 # ---------------- LOG ----------------
 logging.basicConfig(
@@ -30,12 +30,13 @@ logger = logging.getLogger(__name__)
 
 # ---------------- ENV ----------------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))  # BU MUHIM — ADMIN SIZNING IDINGIZ
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@SizningKanal")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1001234567890"))
-DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))  # e.g. '[{"token":"...","session":"..."}]'
+DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
 DIGEN_URL = os.getenv("DIGEN_URL", "https://api.digen.ai/v2/tools/text_to_image")
 DATABASE_URL = os.getenv("DATABASE_URL")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not BOT_TOKEN:
     logger.error("BOT_TOKEN muhim! ENV ga qo'ying.")
@@ -46,6 +47,10 @@ if not DATABASE_URL:
 if ADMIN_ID == 0:
     logger.error("ADMIN_ID muhim! ENV ga qo'ying.")
     raise SystemExit(1)
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+else:
+    logger.warning("GEMINI_API_KEY kiritilmagan. AI chat funksiyasi ishlamaydi.")
 
 # ---------------- STATE ----------------
 LANGUAGE_SELECT, WAITING_AMOUNT = range(2)
@@ -80,6 +85,7 @@ LANGUAGES = {
         "sub_still_not": "⛔ Hali ham obuna bo‘lmagansiz. Obuna bo‘lib, qayta tekshiring.",
         "lang_changed": "✅ Til o'zgartirildi: {lang}",
         "select_lang": "🌐 Iltimos, tilni tanlang:",
+        "ai_response": "💬 *AI javob:*\n\n{text}",
     },
     "ru": {
         "flag": "🇷🇺",
@@ -109,6 +115,7 @@ LANGUAGES = {
         "sub_still_not": "⛔ Вы все еще не подписаны. Подпишитесь и проверьте снова.",
         "lang_changed": "✅ Язык изменен: {lang}",
         "select_lang": "🌐 Пожалуйста, выберите язык:",
+        "ai_response": "💬 *Ответ AI:*\n\n{text}",
     },
     "en": {
         "flag": "🇬🇧",
@@ -138,6 +145,7 @@ LANGUAGES = {
         "sub_still_not": "⛔ You are still not subscribed. Subscribe and check again.",
         "lang_changed": "✅ Language changed to: {lang}",
         "select_lang": "🌐 Please select language:",
+        "ai_response": "💬 *AI Response:*\n\n{text}",
     }
 }
 
@@ -153,7 +161,6 @@ def utc_now():
     return datetime.now(timezone.utc)
 
 def tashkent_time():
-    # UTC+5 — Toshkent vaqti
     return datetime.now(timezone.utc) + timedelta(hours=5)
 
 # ---------------- DB schema ----------------
@@ -236,7 +243,7 @@ def get_digen_headers():
         "referer": "https://rm.digen.ai/",
     }
 
-# ---------------- subscription check (optional) ----------------
+# ---------------- subscription check ----------------
 async def check_subscription(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     try:
         member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
@@ -319,7 +326,6 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
 
 # ---------------- Admin ga xabar yuborish ----------------
 async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prompt, image_url, count):
-    """Generatsiya qilingan har bir rasm haqida admin ga xabar yuborish"""
     try:
         tashkent_dt = tashkent_time()
         caption = (
@@ -464,7 +470,7 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
-# Private plain text -> prompt
+# Private plain text -> prompt + inline buttons
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return
@@ -482,6 +488,73 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     prompt = update.message.text
     context.user_data["prompt"] = prompt
+
+    kb = [
+        [
+            InlineKeyboardButton("🖼 Rasm generatsiya qilish", callback_data="gen_image"),
+            InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat")
+        ]
+    ]
+    await update.message.reply_text(
+        f"Quyidagilardan birini tanlang:\n\n💬 *Sizning xabaringiz:* {escape_md(prompt)}",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
+# ---------------- AI Chat handler ----------------
+async def handle_ai_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+
+    prompt = context.user_data.get("prompt", "")
+    if not prompt:
+        await q.message.reply_text("⚠️ Xatolik: matn topilmadi.")
+        return
+
+    lang_code = DEFAULT_LANGUAGE
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
+        if row:
+            lang_code = row["language_code"]
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+
+    await q.message.reply_text("🧠 AI javob berayotganicha...")
+
+    try:
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        response = await model.generate_content_async(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=1000,
+                temperature=0.7
+            )
+        )
+        answer = response.text.strip()
+        if not answer:
+            answer = "⚠️ Javob topilmadi."
+    except Exception as e:
+        logger.exception("[GEMINI ERROR]")
+        answer = lang["error"]
+
+    await q.message.reply_text(lang["ai_response"].format(text=escape_md(answer)), parse_mode="Markdown")
+
+# ---------------- Rasm generatsiya handler ----------------
+async def handle_gen_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+
+    prompt = context.user_data.get("prompt", "")
+    if not prompt:
+        await q.message.reply_text("⚠️ Xatolik: matn topilmadi.")
+        return
+
+    lang_code = DEFAULT_LANGUAGE
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
+        if row:
+            lang_code = row["language_code"]
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+
     context.user_data["translated"] = prompt
     kb = [
         [InlineKeyboardButton("1️⃣", callback_data="count_1")],
@@ -489,7 +562,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         [InlineKeyboardButton("4️⃣", callback_data="count_4")],
         [InlineKeyboardButton("8️⃣", callback_data="count_8")]
     ]
-    await update.message.reply_text(
+    await q.message.reply_text(
         f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(kb)
@@ -598,7 +671,6 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     except Exception as ex:
                         logger.exception(f"[SINGLE SEND ERR] {ex}")
 
-            # ADMIN GA XABAR YUBORISH — BU YERDA QO'SHILDI
             if ADMIN_ID and urls:
                 await notify_admin_generation(context, user, prompt, urls[0], count)
 
@@ -809,6 +881,8 @@ def build_app():
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
 
     app.add_handler(CallbackQueryHandler(generate_cb, pattern=r"count_\d+"))
+    app.add_handler(CallbackQueryHandler(handle_ai_chat, pattern="ai_chat"))
+    app.add_handler(CallbackQueryHandler(handle_gen_image, pattern="gen_image"))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, private_text_handler))
 
