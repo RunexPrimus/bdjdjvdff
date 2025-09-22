@@ -1,0 +1,40 @@
+# imghdr.py - Backport for Python 3.13+
+# Original code copied from Python 3.12 stdlib
+
+tests = []
+
+def test_jpeg(h, f):
+    if h[6:10] in (b'JFIF', b'Exif'):
+        return 'jpeg'
+
+def test_png(h, f):
+    if h.startswith(b'\211PNG\r\n\032\n'):
+        return 'png'
+
+def test_gif(h, f):
+    if h[:6] in (b'GIF87a', b'GIF89a'):
+        return 'gif'
+
+def test_tiff(h, f):
+    if h[:2] in (b'MM', b'II'):
+        return 'tiff'
+
+def test_bmp(h, f):
+    if h[:2] == b'BM':
+        return 'bmp'
+
+tests.extend([test_jpeg, test_png, test_gif, test_tiff, test_bmp])
+
+def what(file, h=None):
+    """Guess the type of image contained in a file or byte stream."""
+    if h is None:
+        if isinstance(file, str):
+            with open(file, 'rb') as f:
+                h = f.read(32)
+        else:
+            h = file.read(32)
+    for t in tests:
+        res = t(h, file)
+        if res:
+            return res
+    return None
