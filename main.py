@@ -86,8 +86,7 @@ LANGUAGES = {
         "sub_still_not": "⛔ Hali ham obuna bo‘lmagansiz. Obuna bo‘lib, qayta tekshiring.",
         "lang_changed": "✅ Til o'zgartirildi: {lang}",
         "select_lang": "🌐 Iltimos, tilni tanlang:",
-        # Yangi: AI javob uchun oddiy matn
-        "ai_response_header": "💬 *AI javob:*",
+        "ai_response_header": "💬 AI javob:",
     },
     "ru": {
         "flag": "🇷🇺",
@@ -116,9 +115,8 @@ LANGUAGES = {
         "sub_thanks": "✅ Спасибо! Вы подписаны. Теперь вы можете пользоваться ботом.",
         "sub_still_not": "⛔ Вы все еще не подписаны. Подпишитесь и проверьте снова.",
         "lang_changed": "✅ Язык изменен: {lang}",
-        "select_lang": "🌐 Пожалуйста, выберите язык:",
-        # Yangi: AI javob uchun oddiy matn
-        "ai_response_header": "💬 *Ответ AI:*",
+        "select_lang": "🌐 Пожалуйста, выберите язык:"
+        "ai_response_header": "💬 Ответ AI:",
     },
     "en": {
         "flag": "🇬🇧",
@@ -149,7 +147,7 @@ LANGUAGES = {
         "lang_changed": "✅ Language changed to: {lang}",
         "select_lang": "🌐 Please select language:",
         # Yangi: AI javob uchun oddiy matn
-        "ai_response_header": "💬 *AI Response:*",
+        "ai_response_header": "💬 AI Response:",
     }
 }
 
@@ -494,6 +492,7 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Private plain text -> prompt + inline buttons yoki AI chat
 # Asosan yangilangan: AI chat flow uchun maxsus shart qo'shildi
 # Private plain text -> prompt + inline buttons yoki AI chat
+# Private plain text -> prompt + inline buttons yoki AI chat
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return
@@ -541,8 +540,9 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                     answer = lang["error"]
 
                 # AI javobini oddiy matn sifatida yuborish, Markdown formatlashsiz
-                await update.message.reply_text(f"{lang['ai_response_header']}\n\n{answer}")
-                # Oxirgi faollik vaqtini yangilash
+                # lang['ai_response_header'] endi * belgisi yo'q
+                await update.message.reply_text(f"{lang['ai_response_header']}\n\n{answer}") 
+                # Oxirgi faollik vaqtini yangilash - bu yerda
                 context.user_data["last_active"] = datetime.now(timezone.utc)
                 return
         else:
