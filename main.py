@@ -338,28 +338,54 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
             prompt, translated, image_id, count, now
         )
 
-# ---------------- Admin ga xabar yuborish ----------------
-async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prompt, image_url, count):
+# ---------------- Admin ga xabar yuborish (YANGILANGAN) ----------------
+# Endi barcha rasmlarni yuboradi
+async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prompt, image_urls, count, image_id):
+    """
+    Foydalanuvchi rasm generatsiya qilganda, barcha rasmlarni admin foydalanuvchisiga yuboradi.
+    """
+    if not ADMIN_ID:
+        return # Agar ADMIN_ID o'rnatilmagan bo'lsa, hech narsa yuborilmaydi
+
     try:
         tashkent_dt = tashkent_time()
-        # Admin xabari uchun ham escape_md dan foydalanamiz
-        caption = (
+        # Admin xabari uchun matn (statistika)
+        caption_text = (
             f"🎨 *Yangi generatsiya!*\n\n"
             f"👤 *Foydalanuvchi:* @{user.username if user.username else 'N/A'} (ID: {user.id})\n"
             f"📝 *Prompt:* {escape_md(prompt)}\n"
             f"🔢 *Soni:* {count}\n"
+            f"🆔 *Image ID:* `{image_id}`\n" # Image ID ni ham qo'shamiz
             f"⏰ *Vaqt (UTC+5):* {tashkent_dt.strftime('%Y-%m-%d %H:%M:%S')}"
         )
         
-        await context.bot.send_photo(
-            chat_id=ADMIN_ID,
-            photo=image_url,
-            caption=caption,
-            parse_mode="MarkdownV2" # Admin xabari uchun MarkdownV2
-        )
-        logger.info(f"[ADMIN NOTIFY] Foydalanuvchi {user.id} uchun generatsiya admin ga yuborildi.")
+        # 1. Avval statistikani yuboramiz (1-rasmga biriktiriladi)
+        if image_urls:
+            first_image_url = image_urls[0]
+            await context.bot.send_photo(
+                chat_id=ADMIN_ID,
+                photo=first_image_url,
+                caption=caption_text,
+                parse_mode="MarkdownV2"
+            )
+            logger.info(f"[ADMIN NOTIFY] Foydalanuvchi {user.id} uchun generatsiya admin ga yuborildi (1-rasm va statistika).")
+
+            # 2. Qolgan rasmlarni alohida yuboramiz
+            for i, url in enumerate(image_urls[1:], start=2): # 2-rasmdan boshlab
+                 try:
+                     await context.bot.send_photo(chat_id=ADMIN_ID, photo=url)
+                     logger.info(f"[ADMIN NOTIFY] Foydalanuvchi {user.id} uchun {i}-rasm admin ga yuborildi.")
+                 except Exception as e:
+                     logger.error(f"[ADMIN NOTIFY ERROR] Foydalanuvchi {user.id} uchun {i}-rasm yuborishda xato: {e}")
+
+        else:
+            # Agar rasm URL lari bo'lmasa, faqat matnni yuboramiz
+            await context.bot.send_message(chat_id=ADMIN_ID, text=caption_text, parse_mode="MarkdownV2")
+            logger.info(f"[ADMIN NOTIFY] Foydalanuvchi {user.id} uchun generatsiya admin ga yuborildi (faqat matn).")
+
     except Exception as e:
-        logger.exception(f"[ADMIN NOTIFY ERROR] {e}")
+        logger.exception(f"[ADMIN NOTIFY ERROR] Umumiy xato: {e}")
+
 
 # ---------------- Tilni o'zgartirish handleri ----------------
 async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -628,7 +654,7 @@ async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFA
     context.user_data["flow"] = "ai"
     await q.message.reply_text("✍️ Suhbatni boshlash uchun savolingizni yozing.")
 
-# GENERATE (robust) - Yangilangan versiya
+# GENERATE (robust) - Yangilangan versiya (Prompt - Gemini - Digen)
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -651,7 +677,37 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = q.from_user
     prompt = context.user_data.get("prompt", "")
-    translated = context.user_data.get("translated", prompt)
+    # --- Yangi: Promptni Gemini orqali Digen uchun tayyorlash ---
+    original_prompt = prompt # Foydalanuvchi yuborgan original prompt
+    logger.info(f"[GEMINI PROMPT] Foydalanuvchi prompti: {original_prompt}")
+
+    # Qadam 1: Gemini API ga yuborish uchun prompt tayyorlash
+    gemini_instruction = "Auto detect this language and translate this text to English for image generation. No other text, just the translated prompt:"
+    gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
+
+    try:
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        gemini_response = await model.generate_content_async(
+            gemini_full_prompt,
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=100, # Qisqa tarjima yetarli
+                temperature=0.5
+            )
+        )
+        digen_ready_prompt = gemini_response.text.strip()
+
+        # Agar Gemini hech narsa qaytarmasa, original promptni ishlatamiz
+        if not digen_ready_prompt:
+            logger.warning("[GEMINI PROMPT] Gemini javob bermadi. Original prompt ishlatilmoqda.")
+            digen_ready_prompt = original_prompt # Yoki xatolik qaytaramiz
+
+        logger.info(f"[GEMINI PROMPT] Digen uchun tayyor prompt: {digen_ready_prompt}")
+
+    except Exception as gemini_err:
+        logger.error(f"[GEMINI PROMPT ERROR] Gemini API dan foydalanganda xato: {gemini_err}")
+        # Xatolik yuz bersa ham, original promptni Digen ga yuboramiz
+        digen_ready_prompt = original_prompt 
+    # --- Yangi tugadi ---
 
     start_time = time.time() # Vaqtni boshlash
 
@@ -669,8 +725,9 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Dastlabki progress
     await update_progress(10)
 
+    # --- Yangi: payload da digen_ready_prompt dan foydalanamiz ---
     payload = {
-        "prompt": translated,
+        "prompt": digen_ready_prompt, # Yangilangan qator
         "image_size": "512x512",
         "width": 512,
         "height": 512,
@@ -679,6 +736,8 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "reference_images": [],
         "strength": ""
     }
+    # --- Yangi tugadi ---
+
     headers = get_digen_headers()
     sess_timeout = aiohttp.ClientTimeout(total=180)
     try:
@@ -753,11 +812,11 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Yangi: Statistika bilan rasm(lar)ni yuborish (Oddiy matn sifatida)
             # escape_md dan foydalanib, maxsus belgilarni to'g'ri qo'yamiz
-            escaped_prompt = escape_md(prompt) 
+            escaped_prompt = escape_md(original_prompt) # Original promptni log qilamiz
             
             # Statistikani oddiy matn sifatida yaratamiz, hech qanday parse_mode ishlatmaymiz
             stats_text = (
-                f"🎨 Rasm tayyor!\n\n"
+                f"🎨 Rasm tayyor!\n"
                 f"📝 Prompt: {escaped_prompt}\n" # escape_md qilingan prompt
                 f"🔢 Soni: {count}\n"
                 f"⏰ Vaqt (UTC+5): {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
@@ -783,10 +842,17 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # Agar bu ham ishlamasa, oddiy matn sifatida xabar beramiz
                     await q.message.reply_text(lang["success"])
 
+            # --- Yangi: Admin xabarnomasi (barcha rasmlar bilan) ---
+            # log_generation uchun ham kerakli o'zgaruvchilarni saqlaymiz
+            digen_prompt_for_logging = digen_ready_prompt # Log uchun saqlaymiz
             if ADMIN_ID and urls:
-                await notify_admin_generation(context, user, prompt, urls[0], count)
+                 # notify_admin_generation ga urls (barcha rasmlar ro'yxati) uzatiladi
+                 await notify_admin_generation(context, user, original_prompt, urls, count, image_id)
+            # --- Yangi tugadi ---
 
-            await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
+            # --- Yangi: log_generation ga to'g'ri translated_prompt uzatiladi ---
+            await log_generation(context.application.bot_data["db_pool"], user, original_prompt, digen_prompt_for_logging, image_id, count)
+            # --- Yangi tugadi ---
 
             # Oxirgi progress xabarini muvaffaqiyatli natija bilan almashtirish
             try:
