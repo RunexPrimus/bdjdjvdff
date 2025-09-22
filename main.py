@@ -428,6 +428,7 @@ async def start_ai_flow_handler(update: Update, context: ContextTypes.DEFAULT_TY
     # Foydalanuvchi matn yuborganida, uni AI ga jo'natish kerak
     context.user_data["flow"] = "ai"
 
+# ---------------- Bosh menyudan rasm generatsiya ----------------
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -440,6 +441,8 @@ async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
     
     await q.message.reply_text(lang["prompt_text"])
+    # Yangi: flow o'zgaruvchisini o'rnatamiz
+    context.user_data["flow"] = "image_pending_prompt"
 
 # ---------------- Bosh menyuga qaytish tugmasi ----------------
 async def handle_change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
