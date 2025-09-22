@@ -575,12 +575,10 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     context.user_data["prompt"] = prompt
     context.user_data["translated"] = prompt
-    kb = [
-        [InlineKeyboardButton("1️⃣", callback_data="count_1")],
-        [InlineKeyboardButton("2️⃣", callback_data="count_2")],
-        [InlineKeyboardButton("4️⃣", callback_data="count_4")],
-        [InlineKeyboardButton("8️⃣", callback_data="count_8")]
-    ]
+     kb = [
+                [InlineKeyboardButton("1️⃣", callback_data="count_1"), InlineKeyboardButton("2️⃣", callback_data="count_2")],
+                [InlineKeyboardButton("4️⃣", callback_data="count_4"), InlineKeyboardButton("8️⃣", callback_data="count_8")]
+            ]
     await update.message.reply_text(
         f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
         parse_mode="MarkdownV2",
@@ -727,12 +725,10 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     else: # start_gen orqali kirilganda flow "image_pending_prompt" bo'ladi
         # "Nechta rasm?" so'rovi chiqadi
-        kb = [
-            [InlineKeyboardButton("1️⃣", callback_data="count_1")],
-            [InlineKeyboardButton("2️⃣", callback_data="count_2")],
-            [InlineKeyboardButton("4️⃣", callback_data="count_4")],
-            [InlineKeyboardButton("8️⃣", callback_data="count_8")]
-        ]
+         kb = [
+                [InlineKeyboardButton("1️⃣", callback_data="count_1"), InlineKeyboardButton("2️⃣", callback_data="count_2")],
+                [InlineKeyboardButton("4️⃣", callback_data="count_4"), InlineKeyboardButton("8️⃣", callback_data="count_8")]
+            ]
         await update.message.reply_text(
             f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
             parse_mode="MarkdownV2",
@@ -740,20 +736,24 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         )
 
 # ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
-# Yangilangan: context.user_data["flow"] o'rnatiladi
+# ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
+# Yangilangan: "Nechta rasm?" so'rovini chiqarish
 async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     
-    # flow o'zgaruvchisini o'rnatamiz
+    lang_code = DEFAULT_LANGUAGE
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
+        if row:
+            lang_code = row["language_code"]
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+    
+    # context.user_data["flow"] o'zgaruvchisini o'rnatamiz
     context.user_data["flow"] = "image_pending_prompt"
     
-    # To'g'ridan-to'g'ri 1 ta rasm generatsiya qilamiz
-    fake_update = Update(0, message=q.message)
-    fake_update.callback_query = q
-    fake_update.callback_query.data = "count_1"
-    await generate_cb(fake_update, context)
-
+    # Foydalanuvchidan matn kutish xabari
+    await q.message.reply_text(lang["prompt_text"])
 # ---------------- Tanlov tugmachasi orqali AI chat ----------------
 # Yangilangan: context.user_data["flow"] o'rnatiladi
 async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
