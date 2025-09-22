@@ -400,7 +400,7 @@ async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prom
         return # Agar ADMIN_ID o'rnatilmagan bo'lsa, hech narsa yuborilmaydi
 
     try:
-        # Foydalanuvchi tilini olish
+        # Foydalanuvchi tilini olish (agar kerak bo'lsa)
         lang_code = DEFAULT_LANGUAGE
         async with context.application.bot_data["db_pool"].acquire() as conn:
             row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", ADMIN_ID)
@@ -575,10 +575,12 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     context.user_data["prompt"] = prompt
     context.user_data["translated"] = prompt
-     kb = [
-                [InlineKeyboardButton("1️⃣", callback_data="count_1"), InlineKeyboardButton("2️⃣", callback_data="count_2")],
-                [InlineKeyboardButton("4️⃣", callback_data="count_4"), InlineKeyboardButton("8️⃣", callback_data="count_8")]
-            ]
+    kb = [
+        [InlineKeyboardButton("1️⃣", callback_data="count_1")],
+        [InlineKeyboardButton("2️⃣", callback_data="count_2")],
+        [InlineKeyboardButton("4️⃣", callback_data="count_4")],
+        [InlineKeyboardButton("8️⃣", callback_data="count_8")]
+    ]
     await update.message.reply_text(
         f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
         parse_mode="MarkdownV2",
@@ -615,7 +617,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 # Vaqt o'tmagan, AI chat davom etadi
                 prompt = update.message.text
                 # AI javobini oddiy matn sifatida yuborish, maxsus belgilarsiz
-                await update.message.reply_text("🧠 AI javob berayotganicha...")
+                await update.message.reply_text("🧠 AI javob bergunicha kuting...")
 
                 try:
                     model = genai.GenerativeModel("gemini-2.0-flash")
@@ -670,6 +672,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     prompt = update.message.text
     context.user_data["prompt"] = prompt
+    context.user_data["translated"] = prompt
     # --- Yangi: Promptni Gemini orqali Digen uchun tayyorlash ---
     original_prompt = prompt # Foydalanuvchi yuborgan original prompt
     logger.info(f"[GEMINI PROMPT] Foydalanuvchi prompti: {original_prompt}")
@@ -725,10 +728,12 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     else: # start_gen orqali kirilganda flow "image_pending_prompt" bo'ladi
         # "Nechta rasm?" so'rovi chiqadi
-         kb = [
-                [InlineKeyboardButton("1️⃣", callback_data="count_1"), InlineKeyboardButton("2️⃣", callback_data="count_2")],
-                [InlineKeyboardButton("4️⃣", callback_data="count_4"), InlineKeyboardButton("8️⃣", callback_data="count_8")]
-            ]
+        kb = [
+            [InlineKeyboardButton("1️⃣", callback_data="count_1")],
+            [InlineKeyboardButton("2️⃣", callback_data="count_2")],
+            [InlineKeyboardButton("4️⃣", callback_data="count_4")],
+            [InlineKeyboardButton("8️⃣", callback_data="count_8")]
+        ]
         await update.message.reply_text(
             f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
             parse_mode="MarkdownV2",
@@ -736,24 +741,20 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         )
 
 # ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
-# ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
-# Yangilangan: "Nechta rasm?" so'rovini chiqarish
+# Yangilangan: context.user_data["flow"] o'rnatiladi
 async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     
-    lang_code = DEFAULT_LANGUAGE
-    async with context.application.bot_data["db_pool"].acquire() as conn:
-        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
-        if row:
-            lang_code = row["language_code"]
-    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-    
-    # context.user_data["flow"] o'zgaruvchisini o'rnatamiz
+    # flow o'zgaruvchisini o'rnatamiz
     context.user_data["flow"] = "image_pending_prompt"
     
-    # Foydalanuvchidan matn kutish xabari
-    await q.message.reply_text(lang["prompt_text"])
+    # To'g'ridan-to'g'ri 1 ta rasm generatsiya qilamiz
+    fake_update = Update(0, message=q.message)
+    fake_update.callback_query = q
+    fake_update.callback_query.data = "count_1"
+    await generate_cb(fake_update, context)
+
 # ---------------- Tanlov tugmachasi orqali AI chat ----------------
 # Yangilangan: context.user_data["flow"] o'rnatiladi
 async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -969,11 +970,8 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------- Donate (Stars) flow ----------------
-# Yangilangan: context.user_data["current_operation"] o'rnatiladi
+# Yangilangan: ConversationHandler bilan boshqariladi
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Yangi: donate jarayonini belgilash
-    context.user_data["current_operation"] = "donate"
-    
     lang_code = DEFAULT_LANGUAGE
     if update.callback_query:
         async with context.application.bot_data["db_pool"].acquire() as conn:
@@ -996,17 +994,8 @@ async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(lang["donate_prompt"])
     return WAITING_AMOUNT
 
-# Yangilangan: context.user_data["current_operation"] tekshiriladi
+# Yangilangan: ConversationHandler bilan boshqariladi
 async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Yangi: faqat donate jarayonida bo'lsa ishlashi
-    if context.user_data.get("current_operation") != "donate":
-        # Agar foydalanuvchi donate jarayonida bo'lmasa, bu handler ishlamasin
-        # Boshqa handlerlar bu xabarni qo'lga kiritadi
-        return ConversationHandler.END # Yoki hech nishga qaytmasa ham bo'ladi
-    
-    # Yangi: donate jarayoni tugadi, belgini o'chiramiz
-    context.user_data.pop("current_operation", None)
-    
     lang_code = DEFAULT_LANGUAGE
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", update.effective_user.id)
@@ -1021,11 +1010,8 @@ async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raise ValueError
     except ValueError:
         await update.message.reply_text(lang["donate_invalid"])
-        # Yangi: donate jarayoni davom etayotgani uchun, WAITING_AMOUNT qaytaramiz
-        # Agar ConversationHandler ishlamayotgan bo'lsa, bu hech narsa o'zgartirmaydi
-        return WAITING_AMOUNT 
+        return WAITING_AMOUNT # ConversationHandler WAITING_AMOUNT holatida qoladi
 
-    # ... (qolgan kodlar - invoice yuborish) ...
     payload = f"donate_{update.effective_user.id}_{int(time.time())}"
     prices = [LabeledPrice(f"{amount} Stars", amount)]
     
@@ -1039,8 +1025,7 @@ async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
         prices=prices,
         is_flexible=False
     )
-    # Oxirida ConversationHandler tugashi kerak
-    return ConversationHandler.END
+    return ConversationHandler.END # ConversationHandler tugaydi
 
 async def precheckout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.pre_checkout_query.answer(ok=True)
@@ -1172,7 +1157,6 @@ def build_app():
     )
     app.add_handler(donate_conv)
 
-    # ... (qolgan handlerlar o'zgarmaydi)
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
     app.add_handler(CallbackQueryHandler(check_sub_button_handler, pattern="check_sub"))
     app.add_handler(CommandHandler("get", cmd_get))
