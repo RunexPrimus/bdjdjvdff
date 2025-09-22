@@ -626,6 +626,7 @@ async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFA
 # GENERATE (robust)
 # GENERATE (robust)
 # GENERATE (robust)
+# GENERATE (robust) - Yangilangan versiya
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -650,12 +651,21 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = context.user_data.get("prompt", "")
     translated = context.user_data.get("translated", prompt)
 
-    try:
-        await q.edit_message_text(lang["generating"].format(count=count))
-    except BadRequest:
-        pass
-    except Exception as e:
-        logger.debug(f"[EDIT WARN] {e}")
+    start_time = time.time() # Vaqtni boshlash
+
+    # Yangi: Oddiy progress bar (soxta)
+    async def update_progress(percent):
+        bar_length = 10
+        filled_length = int(bar_length * percent // 100)
+        bar = '█' * filled_length + '░' * (bar_length - filled_length)
+        try:
+            # Eski xabarni yangilash uchun Markdown ishlatmaymiz
+            await q.edit_message_text(f"🔄 Rasm yaratilmoqda... {bar} {percent}%")
+        except Exception:
+            pass # Xatolikni e'tiborsiz qoldirish mumkin
+
+    # Dastlabki progress
+    await update_progress(10)
 
     payload = {
         "prompt": translated,
@@ -669,10 +679,21 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
     headers = get_digen_headers()
     sess_timeout = aiohttp.ClientTimeout(total=180)
-    start_time = time.time() # Vaqtni boshlash
     try:
+        # Progressni yangilash (soxta)
+        await asyncio.sleep(0.5)
+        await update_progress(30)
+        
         async with aiohttp.ClientSession(timeout=sess_timeout) as session:
+            # Progressni yangilash (soxta)
+            await asyncio.sleep(0.5)
+            await update_progress(50)
+            
             async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
+                # Progressni yangilash (soxta)
+                await asyncio.sleep(0.5)
+                await update_progress(70)
+                
                 text_resp = await resp.text()
                 logger.info(f"[DIGEN] status={resp.status}")
                 try:
@@ -700,6 +721,10 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             waited = 0
             interval = 1.5
             while waited < max_wait:
+                # Progressni yangilash (soxta)
+                progress_percent = min(90, 70 + int((waited / max_wait) * 20))
+                await update_progress(progress_percent)
+                
                 try:
                     async with session.get(urls[0]) as chk:
                         if chk.status == 200:
@@ -718,40 +743,60 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
                 return
 
-            end_time = time.time() # Vaqtni tugatish
+            # 100% progress
+            await update_progress(100)
+            
+            end_time = time.time()
             elapsed_time = end_time - start_time
 
             # Yangi: Statistika bilan rasm(lar)ni yuborish
+            # escape_md dan foydalanib, maxsus belgilarni to'g'ri qo'yamiz
+            escaped_prompt = escape_md(prompt) 
+            
             caption = (
-                f"🎨 *Rasm tayyor!*\n\n"
-                f"📝 *Prompt:* `{escape_md(prompt)}`\n"
+                f"🎨 *Rasm tayyor\\!*\n\n" # ! belgisini ham escape qilish kerak
+                f"📝 *Prompt:* `{escaped_prompt}`\n"
                 f"🔢 *Soni:* {count}\n"
-                f"⏰ *Vaqt (UTC+5):* {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"⏰ *Vaqt \\(UTC\\+5\\):* {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
                 f"⏱ *Yaratish uchun ketgan vaqt:* {elapsed_time:.1f}s"
             )
 
             try:
+                # Birinchi rasmga caption, qolganlariga yo'q. parse_mode="MarkdownV2" ishlatamiz.
                 media = [InputMediaPhoto(u, caption=caption if i == 0 else None, parse_mode="MarkdownV2") for i, u in enumerate(urls)]
                 await q.message.reply_media_group(media)
             except TelegramError as e:
                 logger.exception(f"[MEDIA_GROUP ERROR] {e}; fallback to single photos")
-                # Birinchi rasmga caption, qolganlariga yo'q
-                await q.message.reply_photo(urls[0], caption=caption, parse_mode="MarkdownV2")
-                for u in urls[1:]:
-                    try:
-                        await q.message.reply_photo(u)
-                    except Exception as ex:
-                        logger.exception(f"[SINGLE SEND ERR] {ex}")
+                # Agar MediaGroup ishlamasa, birinchi rasmga caption bilan, qolganlariga yo'q holda yuboramiz
+                try:
+                    await q.message.reply_photo(urls[0], caption=caption, parse_mode="MarkdownV2")
+                    for u in urls[1:]:
+                        try:
+                            await q.message.reply_photo(u)
+                        except Exception as ex:
+                            logger.exception(f"[SINGLE SEND ERR] {ex}")
+                except Exception as e2:
+                    logger.exception(f"[FALLBACK PHOTO ERROR] {e2}")
+                    # Agar bu ham ishlamasa, oddiy matn sifatida xabar beramiz
+                    await q.message.reply_text(lang["success"])
 
             if ADMIN_ID and urls:
                 await notify_admin_generation(context, user, prompt, urls[0], count)
 
             await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
 
+            # Oxirgi progress xabarini muvaffaqiyatli natija bilan almashtirish
             try:
-                await q.edit_message_text(lang["success"])
+                await q.edit_message_text("✅ Tayyor!")
             except BadRequest:
                 pass
+
+    except Exception as e:
+        logger.exception(f"[GENERATE ERROR] {e}")
+        try:
+            await q.edit_message_text(lang["error"])
+        except Exception:
+            pass
 
     except Exception as e:
         logger.exception(f"[GENERATE ERROR] {e}")
