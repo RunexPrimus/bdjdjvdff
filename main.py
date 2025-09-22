@@ -743,30 +743,33 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 100% progress
             await update_progress(100)
             
-            end_time = time.time()
-            elapsed_time = end_time - start_time
+           # generate_cb ichida, rasmlarni yuborish qismi
 
-            # Yangi: Statistika bilan rasm(lar)ni yuborish
-            caption = (
-                f"🎨 *Rasm tayyor!*\n\n"
-                f"📝 *Prompt:* `{escape_md(prompt)}`\n"
-                f"🔢 *Soni:* {count}\n"
-                f"⏰ *Vaqt (UTC+5):* {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                f"⏱ *Yaratish uchun ketgan vaqt:* {elapsed_time:.1f}s"
-            )
+end_time = time.time()
+elapsed_time = end_time - start_time
 
-            try:
-                media = [InputMediaPhoto(u, caption=caption if i == 0 else None, parse_mode="MarkdownV2") for i, u in enumerate(urls)]
-                await q.message.reply_media_group(media)
-            except TelegramError as e:
-                logger.exception(f"[MEDIA_GROUP ERROR] {e}; fallback to single photos")
-                # Birinchi rasmga caption, qolganlariga yo'q
-                await q.message.reply_photo(urls[0], caption=caption, parse_mode="MarkdownV2")
-                for u in urls[1:]:
-                    try:
-                        await q.message.reply_photo(u)
-                    except Exception as ex:
-                        logger.exception(f"[SINGLE SEND ERR] {ex}")
+# Yangi: Statistika bilan rasm(lar)ni yuborish
+caption = (
+    f"🎨 *Rasm tayyor!*\n\n"
+    f"📝 *Prompt:* `{escape_md(prompt)}`\n"
+    f"🔢 *Soni:* {count}\n"
+    f"⏰ *Vaqt (UTC+5):* {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
+    f"⏱ *Yaratish uchun ketgan vaqt:* {elapsed_time:.1f}s"
+)
+
+try:
+    # Birinchi rasmga caption, qolganlariga yo'q
+    media = [InputMediaPhoto(u, caption=caption if i == 0 else None, parse_mode="MarkdownV2") for i, u in enumerate(urls)]
+    await q.message.reply_media_group(media)
+except TelegramError as e:
+    logger.exception(f"[MEDIA_GROUP ERROR] {e}; fallback to single photos")
+    # Birinchi rasmga caption, qolganlariga yo'q
+    await q.message.reply_photo(urls[0], caption=caption, parse_mode="MarkdownV2")
+    for u in urls[1:]:
+        try:
+            await q.message.reply_photo(u)
+        except Exception as ex:
+            logger.exception(f"[SINGLE SEND ERR] {ex}")
 
             if ADMIN_ID and urls:
                 await notify_admin_generation(context, user, prompt, urls[0], count)
