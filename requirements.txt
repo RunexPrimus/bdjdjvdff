@@ -3,5 +3,4 @@ aiohttp
 asyncpg
 python-dotenv
 google-generativeai==0.5.4
-imghdr-py
 
