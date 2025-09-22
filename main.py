@@ -9,7 +9,7 @@ import json
 import random
 import time
 from datetime import datetime, timezone, timedelta
-
+from telegram.error import TelegramError, BadRequest, Conflict
 
 import asyncpg
 import google.generativeai as genai
