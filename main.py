@@ -356,7 +356,7 @@ async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prom
             f"📝 *Prompt:* {escape_md(prompt)}\n"
             f"🔢 *Soni:* {count}\n"
             f"🆔 *Image ID:* `{image_id}`\n" # Image ID ni ham qo'shamiz
-            f"⏰ *Vaqt (UTC+5):* {tashkent_dt.strftime('%Y-%m-%d %H:%M:%S')}"
+            f"⏰ *Vaqt \\(UTC\\+5\\):* {tashkent_dt.strftime('%Y-%m-%d %H:%M:%S')}" # Markdown belgilari escape qilindi
         )
         
         # 1. Avval statistikani yuboramiz (1-rasmga biriktiriladi)
@@ -604,7 +604,38 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     prompt = update.message.text
     context.user_data["prompt"] = prompt
-    context.user_data["translated"] = prompt
+    # --- Yangi: Promptni Gemini orqali Digen uchun tayyorlash ---
+    original_prompt = prompt # Foydalanuvchi yuborgan original prompt
+    logger.info(f"[GEMINI PROMPT] Foydalanuvchi prompti: {original_prompt}")
+
+    # Qadam 1: Gemini API ga yuborish uchun prompt tayyorlash
+    gemini_instruction = "Auto detect this language and translate this text to English for image generation. No other text, just the translated prompt:"
+    gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
+
+    try:
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        gemini_response = await model.generate_content_async(
+            gemini_full_prompt,
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=100, # Qisqa tarjima yetarli
+                temperature=0.5
+            )
+        )
+        digen_ready_prompt = gemini_response.text.strip()
+
+        # Agar Gemini hech narsa qaytarmasa, original promptni ishlatamiz
+        if not digen_ready_prompt:
+            logger.warning("[GEMINI PROMPT] Gemini javob bermadi. Original prompt ishlatilmoqda.")
+            digen_ready_prompt = original_prompt # Yoki xatolik qaytaramiz
+
+        logger.info(f"[GEMINI PROMPT] Digen uchun tayyor prompt: {digen_ready_prompt}")
+        context.user_data["translated"] = digen_ready_prompt # Tarjima qilingan promptni saqlash
+
+    except Exception as gemini_err:
+        logger.error(f"[GEMINI PROMPT ERROR] Gemini API dan foydalanganda xato: {gemini_err}")
+        # Xatolik yuz bersa ham, original promptni Digen ga yuboramiz
+        context.user_data["translated"] = original_prompt
+    # --- Yangi tugadi ---
 
     # Agar hech qanday flow boshlanmagan bo'lsa (faqat oddiy matn)
     if flow is None: 
@@ -677,36 +708,10 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user = q.from_user
     prompt = context.user_data.get("prompt", "")
-    # --- Yangi: Promptni Gemini orqali Digen uchun tayyorlash ---
-    original_prompt = prompt # Foydalanuvchi yuborgan original prompt
-    logger.info(f"[GEMINI PROMPT] Foydalanuvchi prompti: {original_prompt}")
-
-    # Qadam 1: Gemini API ga yuborish uchun prompt tayyorlash
-    gemini_instruction = "Auto detect this language and translate this text to English for image generation. No other text, just the translated prompt:"
-    gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
-
-    try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        gemini_response = await model.generate_content_async(
-            gemini_full_prompt,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=100, # Qisqa tarjima yetarli
-                temperature=0.5
-            )
-        )
-        digen_ready_prompt = gemini_response.text.strip()
-
-        # Agar Gemini hech narsa qaytarmasa, original promptni ishlatamiz
-        if not digen_ready_prompt:
-            logger.warning("[GEMINI PROMPT] Gemini javob bermadi. Original prompt ishlatilmoqda.")
-            digen_ready_prompt = original_prompt # Yoki xatolik qaytaramiz
-
-        logger.info(f"[GEMINI PROMPT] Digen uchun tayyor prompt: {digen_ready_prompt}")
-
-    except Exception as gemini_err:
-        logger.error(f"[GEMINI PROMPT ERROR] Gemini API dan foydalanganda xato: {gemini_err}")
-        # Xatolik yuz bersa ham, original promptni Digen ga yuboramiz
-        digen_ready_prompt = original_prompt 
+    # --- Yangi: Tarjima qilingan promptni olish ---
+    # Agar private_text_handler da tarjima qilinmagan bo'lsa, bu yerda ham tarjima qilish mumkin edi,
+    # lekin endi u private_text_handler da qilingani uchun bu yerda faqat olinadi.
+    translated = context.user_data.get("translated", prompt) # Digen uchun tayyor prompt
     # --- Yangi tugadi ---
 
     start_time = time.time() # Vaqtni boshlash
@@ -725,9 +730,9 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Dastlabki progress
     await update_progress(10)
 
-    # --- Yangi: payload da digen_ready_prompt dan foydalanamiz ---
+    # --- Yangi: payload da tarjima qilingan promptdan foydalanamiz ---
     payload = {
-        "prompt": digen_ready_prompt, # Yangilangan qator
+        "prompt": translated, # Yangilangan qator
         "image_size": "512x512",
         "width": 512,
         "height": 512,
@@ -812,11 +817,12 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Yangi: Statistika bilan rasm(lar)ni yuborish (Oddiy matn sifatida)
             # escape_md dan foydalanib, maxsus belgilarni to'g'ri qo'yamiz
-            escaped_prompt = escape_md(original_prompt) # Original promptni log qilamiz
+            escaped_prompt = escape_md(prompt) # Original promptni log qilamiz
             
             # Statistikani oddiy matn sifatida yaratamiz, hech qanday parse_mode ishlatmaymiz
+            # Tarjimalar to'g'rilangan
             stats_text = (
-                f"🎨 Rasm tayyor!\n"
+                f"🎨 Rasm tayyor!\n\n" 
                 f"📝 Prompt: {escaped_prompt}\n" # escape_md qilingan prompt
                 f"🔢 Soni: {count}\n"
                 f"⏰ Vaqt (UTC+5): {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
@@ -844,14 +850,14 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # --- Yangi: Admin xabarnomasi (barcha rasmlar bilan) ---
             # log_generation uchun ham kerakli o'zgaruvchilarni saqlaymiz
-            digen_prompt_for_logging = digen_ready_prompt # Log uchun saqlaymiz
+            digen_prompt_for_logging = translated # Log uchun saqlaymiz
             if ADMIN_ID and urls:
                  # notify_admin_generation ga urls (barcha rasmlar ro'yxati) uzatiladi
-                 await notify_admin_generation(context, user, original_prompt, urls, count, image_id)
+                 await notify_admin_generation(context, user, prompt, urls, count, image_id)
             # --- Yangi tugadi ---
 
             # --- Yangi: log_generation ga to'g'ri translated_prompt uzatiladi ---
-            await log_generation(context.application.bot_data["db_pool"], user, original_prompt, digen_prompt_for_logging, image_id, count)
+            await log_generation(context.application.bot_data["db_pool"], user, prompt, digen_prompt_for_logging, image_id, count)
             # --- Yangi tugadi ---
 
             # Oxirgi progress xabarini muvaffaqiyatli natija bilan almashtirish
@@ -1021,34 +1027,30 @@ async def on_startup(app: Application):
 def build_app():
     app = Application.builder().token(BOT_TOKEN).post_init(on_startup).build()
 
-    # ConversationHandler larda per_message=False warninglari chiqmasligi uchun per_message=True qilindi
+    # ConversationHandler larda per_message=False qilish
+    # Bu ogohlantirishlarni oldini oladi
     start_conv = ConversationHandler(
-        entry_points=[CommandHandler("start", start_handler)],
+        entry_points=[CommandHandler("start", start_handler)], # CommandHandler
         states={
             LANGUAGE_SELECT: [CallbackQueryHandler(language_select_handler, pattern=r"lang_(uz|ru|en)")],
         },
-        fallbacks=[CommandHandler("start", start_handler)],
+        fallbacks=[CommandHandler("start", start_handler)], # CommandHandler
         per_message=False # O'zgardi
     )
     app.add_handler(start_conv)
 
     lang_conv = ConversationHandler(
         entry_points=[
-            CommandHandler("language", cmd_language),
+            CommandHandler("language", cmd_language), # CommandHandler
             CallbackQueryHandler(cmd_language, pattern="change_language")
         ],
         states={
             LANGUAGE_SELECT: [CallbackQueryHandler(language_select_handler, pattern=r"lang_(uz|ru|en)")],
         },
-        fallbacks=[CommandHandler("language", cmd_language)],
+        fallbacks=[CommandHandler("language", cmd_language)], # CommandHandler
         per_message=False # O'zgardi
     )
     app.add_handler(lang_conv)
-
-    app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
-    app.add_handler(CallbackQueryHandler(check_sub_button_handler, pattern="check_sub"))
-    app.add_handler(CommandHandler("get", cmd_get))
-    app.add_handler(CommandHandler("refund", cmd_refund))
 
     donate_conv = ConversationHandler(
         entry_points=[CommandHandler("donate", donate_start), CallbackQueryHandler(donate_start, pattern="donate_custom")],
@@ -1057,6 +1059,12 @@ def build_app():
         per_message=False # O'zgardi
     )
     app.add_handler(donate_conv)
+
+    # ... (qolgan handlerlar o'zgarmaydi)
+    app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
+    app.add_handler(CallbackQueryHandler(check_sub_button_handler, pattern="check_sub"))
+    app.add_handler(CommandHandler("get", cmd_get))
+    app.add_handler(CommandHandler("refund", cmd_refund))
 
     app.add_handler(PreCheckoutQueryHandler(precheckout_handler))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
