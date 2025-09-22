@@ -497,12 +497,22 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Private plain text -> prompt + inline buttons yoki AI chat
 # Private plain text -> prompt + inline buttons yoki AI chat
 # Private plain text -> prompt + inline buttons yoki AI chat
+# Private plain text -> prompt + inline buttons yoki AI chat
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # ... (avvalgi kod o'zgarmaydi)
-
+    if update.effective_chat.type != "private":
+        return
+        
+    lang_code = DEFAULT_LANGUAGE # <--- Bu qatorni yuqoriga ko'chiring
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", update.effective_user.id)
+        if row:
+            lang_code = row["language_code"] # <--- Bu qatorni yuqoriga ko'chiring
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+    
     # Agar foydalanuvchi oldin "AI chat" tugmasini bosgan bo'lsa
     flow = context.user_data.get("flow")
     if flow == "ai":
+        # ... (qolgan kod)
         # ... (vaqt tekshiruvi o'zgarmaydi)
         
         # Vaqt o'tmagan, AI chat davom etadi
