@@ -67,7 +67,7 @@ LANGUAGES = {
         "lang_button": "🌐 Tilni o'zgartirish",
         "prompt_text": "✍️ Endi tasvir yaratish uchun matn yuboring.",
         "select_count": "🔢 Nechta rasm yaratilsin?",
-        "generating": "🔄 Rasm yaratilmoqda ({count})... ⏳",
+        "generating": "🔄 Rasm yaratilmoqda... {bar} {percent}%",
         "success": "✅ Rasm tayyor! 📸",
         "error": "⚠️ Xatolik yuz berdi. Qayta urinib ko‘ring.",
         "donate_prompt": "💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):",
@@ -86,6 +86,7 @@ LANGUAGES = {
         "sub_still_not": "⛔ Hali ham obuna bo‘lmagansiz. Obuna bo‘lib, qayta tekshiring.",
         "lang_changed": "✅ Til o'zgartirildi: {lang}",
         "select_lang": "🌐 Iltimos, tilni tanlang:",
+        "ai_thinking": "🧠 AI javob bermoqda... {bar} {percent}%",
         "ai_response_header": "💬 AI javob:",
     },
     "ru": {
@@ -97,7 +98,8 @@ LANGUAGES = {
         "lang_button": "🌐 Изменить язык",
         "prompt_text": "✍️ Теперь отправьте текст для создания изображения.",
         "select_count": "🔢 Сколько изображений создать?",
-        "generating": "🔄 Создаю изображение ({count})... ⏳",
+        "generating": "🔄 Создаю изображение... {bar} {percent}%",
+        "ai_thinking": "🧠 AI думает... {bar} {percent}%"
         "success": "✅ Изображение готово! 📸",
         "error": "⚠️ Произошла ошибка. Попробуйте еще раз.",
         "donate_prompt": "💰 Пожалуйста, введите сумму для отправки (1–100000):",
@@ -127,7 +129,8 @@ LANGUAGES = {
         "lang_button": "🌐 Change Language",
         "prompt_text": "✍️ Now send the text to generate an image.",
         "select_count": "🔢 How many images to generate?",
-        "generating": "🔄 Generating image ({count})... ⏳",
+       "generating": "🔄 Generating image... {bar} {percent}%",
+        "ai_thinking": "🧠 AI is thinking... {bar} {percent}%",
         "success": "✅ Image ready! 📸",
         "error": "⚠️ An error occurred. Please try again.",
         "donate_prompt": "💰 Please enter the amount you wish to send (1–100000):",
@@ -493,81 +496,63 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Asosan yangilangan: AI chat flow uchun maxsus shart qo'shildi
 # Private plain text -> prompt + inline buttons yoki AI chat
 # Private plain text -> prompt + inline buttons yoki AI chat
+# Private plain text -> prompt + inline buttons yoki AI chat
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.type != "private":
-        return
-        
-    lang_code = DEFAULT_LANGUAGE
-    async with context.application.bot_data["db_pool"].acquire() as conn:
-        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", update.effective_user.id)
-        if row:
-            lang_code = row["language_code"]
-    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-    
+    # ... (avvalgi kod o'zgarmaydi)
+
     # Agar foydalanuvchi oldin "AI chat" tugmasini bosgan bo'lsa
     flow = context.user_data.get("flow")
     if flow == "ai":
-        # Oxirgi faollik vaqtini tekshirish
-        last_active = context.user_data.get("last_active")
-        now = datetime.now(timezone.utc)
-        if last_active:
-            # 15 daqiqa = 900 sekund
-            if (now - last_active).total_seconds() > 900:
-                # Vaqt o'tgan, flow ni bekor qilamiz
-                context.user_data["flow"] = None
-                context.user_data["last_active"] = None
-                # Quyidagi kod oddiy matn yuborilganda ishlaydi (pastga tushadi)
-            else:
-                # Vaqt o'tmagan, AI chat davom etadi
-                prompt = update.message.text
-                # AI javobini oddiy matn sifatida yuborish, maxsus belgilarsiz
-                await update.message.reply_text("🧠 AI javob berayotganicha...")
-
-                try:
-                    model = genai.GenerativeModel("gemini-2.0-flash")
-                    response = await model.generate_content_async(
-                        prompt,
-                        generation_config=genai.types.GenerationConfig(
-                            max_output_tokens=1000,
-                            temperature=0.7
-                        )
-                    )
-                    answer = response.text.strip()
-                    if not answer:
-                        answer = "⚠️ Javob topilmadi."
-                except Exception as e:
-                    logger.exception("[GEMINI ERROR]")
-                    answer = lang["error"]
-
-                # AI javobini oddiy matn sifatida yuborish, Markdown formatlashsiz
-                # lang['ai_response_header'] endi * belgisi yo'q
-                await update.message.reply_text(f"{lang['ai_response_header']}\n\n{answer}") 
-                # Oxirgi faollik vaqtini yangilash - bu yerda
-                context.user_data["last_active"] = datetime.now(timezone.utc)
-                return
-        else:
-            # Biror sababdan last_active yo'q, lekin flow "ai"
-            # Bu holat kam uchraydi, lekin ehtimolni hisobga olamiz
-            prompt = update.message.text
-            await update.message.reply_text("🧠 AI javob berayotganicha...")
+        # ... (vaqt tekshiruvi o'zgarmaydi)
+        
+        # Vaqt o'tmagan, AI chat davom etadi
+        prompt = update.message.text
+        
+        # Yangi: AI uchun oddiy progress bar (soxta)
+        progress_message = await update.message.reply_text(lang["ai_thinking"].format(bar='░' * 10, percent=0))
+        
+        async def update_ai_progress(percent):
+            bar_length = 10
+            filled_length = int(bar_length * percent // 100)
+            bar = '█' * filled_length + '░' * (bar_length - filled_length)
             try:
-                model = genai.GenerativeModel("gemini-2.0-flash")
-                response = await model.generate_content_async(
-                    prompt,
-                    generation_config=genai.types.GenerationConfig(
-                        max_output_tokens=1000,
-                        temperature=0.7
-                    )
+                await progress_message.edit_text(lang["ai_thinking"].format(bar=bar, percent=percent))
+            except Exception:
+                pass
+
+        await update_ai_progress(20)
+        await asyncio.sleep(0.5)
+        await update_ai_progress(50)
+        await asyncio.sleep(0.5)
+        await update_ai_progress(80)
+        await asyncio.sleep(0.5)
+        await update_ai_progress(100)
+        # Progress xabarini o'chirish
+        # await progress_message.delete()
+
+        try:
+            model = genai.GenerativeModel("gemini-2.0-flash")
+            response = await model.generate_content_async(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=1000,
+                    temperature=0.7
                 )
-                answer = response.text.strip()
-                if not answer:
-                    answer = "⚠️ Javob topilmadi."
-            except Exception as e:
-                logger.exception("[GEMINI ERROR]")
-                answer = lang["error"]
-            await update.message.reply_text(f"{lang['ai_response_header']}\n\n{answer}")
-            context.user_data["last_active"] = datetime.now(timezone.utc)
-            return
+            )
+            answer = response.text.strip()
+            if not answer:
+                answer = "⚠️ Javob topilmadi."
+        except Exception as e:
+            logger.exception("[GEMINI ERROR]")
+            answer = lang["error"]
+
+        # AI javobini oddiy matn sifatida yuborish, Markdown formatlashsiz
+        await update.message.reply_text(f"{lang['ai_response_header']}\n\n{answer}")
+        # Oxirgi faollik vaqtini yangilash
+        context.user_data["last_active"] = datetime.now(timezone.utc)
+        return
+
+    # ... (qolgan kod o'zgarmaydi)
 
     # Agar hech qanday maxsus flow bo'lmasa, oddiy rasm generatsiya jarayoni ketaveradi
     # (start_gen orqali kirilganda ham, oddiy matn yuborilganda ham)
@@ -629,6 +614,7 @@ async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFA
     await q.message.reply_text("✍️ Suhbatni boshlash uchun savolingizni yozing.")
 
 # GENERATE (robust)
+# GENERATE (robust)
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -653,12 +639,20 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = context.user_data.get("prompt", "")
     translated = context.user_data.get("translated", prompt)
 
-    try:
-        await q.edit_message_text(lang["generating"].format(count=count))
-    except BadRequest:
-        pass
-    except Exception as e:
-        logger.debug(f"[EDIT WARN] {e}")
+    start_time = time.time() # Vaqtni boshlash
+
+    # Yangi: Oddiy progress bar (soxta)
+    async def update_progress(percent):
+        bar_length = 10
+        filled_length = int(bar_length * percent // 100)
+        bar = '█' * filled_length + '░' * (bar_length - filled_length)
+        try:
+            await q.edit_message_text(lang["generating"].format(bar=bar, percent=percent))
+        except Exception:
+            pass # Xatolikni e'tiborsiz qoldirish mumkin
+
+    # Dastlabki progress
+    await update_progress(10)
 
     payload = {
         "prompt": translated,
@@ -673,8 +667,20 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     headers = get_digen_headers()
     sess_timeout = aiohttp.ClientTimeout(total=180)
     try:
+        # Progressni yangilash (soxta)
+        await asyncio.sleep(1)
+        await update_progress(30)
+        
         async with aiohttp.ClientSession(timeout=sess_timeout) as session:
+            # Progressni yangilash (soxta)
+            await asyncio.sleep(1)
+            await update_progress(50)
+            
             async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
+                # Progressni yangilash (soxta)
+                await asyncio.sleep(1)
+                await update_progress(70)
+                
                 text_resp = await resp.text()
                 logger.info(f"[DIGEN] status={resp.status}")
                 try:
@@ -702,6 +708,10 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             waited = 0
             interval = 1.5
             while waited < max_wait:
+                # Progressni yangilash (soxta)
+                progress_percent = min(90, 70 + int((waited / max_wait) * 20))
+                await update_progress(progress_percent)
+                
                 try:
                     async with session.get(urls[0]) as chk:
                         if chk.status == 200:
@@ -720,12 +730,29 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
                 return
 
+            # 100% progress
+            await update_progress(100)
+            
+            end_time = time.time()
+            elapsed_time = end_time - start_time
+
+            # Yangi: Statistika bilan rasm(lar)ni yuborish
+            caption = (
+                f"🎨 *Rasm tayyor!*\n\n"
+                f"📝 *Prompt:* `{escape_md(prompt)}`\n"
+                f"🔢 *Soni:* {count}\n"
+                f"⏰ *Vaqt (UTC+5):* {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"⏱ *Yaratish uchun ketgan vaqt:* {elapsed_time:.1f}s"
+            )
+
             try:
-                media = [InputMediaPhoto(u) for u in urls]
+                media = [InputMediaPhoto(u, caption=caption if i == 0 else None, parse_mode="MarkdownV2") for i, u in enumerate(urls)]
                 await q.message.reply_media_group(media)
             except TelegramError as e:
                 logger.exception(f"[MEDIA_GROUP ERROR] {e}; fallback to single photos")
-                for u in urls:
+                # Birinchi rasmga caption, qolganlariga yo'q
+                await q.message.reply_photo(urls[0], caption=caption, parse_mode="MarkdownV2")
+                for u in urls[1:]:
                     try:
                         await q.message.reply_photo(u)
                     except Exception as ex:
@@ -736,10 +763,8 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
 
-            try:
-                await q.edit_message_text(lang["success"])
-            except BadRequest:
-                pass
+            # Oxirgi xabarni o'chirish (progress bar)
+            # await q.delete_message() # Agar xohlasangiz, progress xabarini o'chirishingiz mumkin
 
     except Exception as e:
         logger.exception(f"[GENERATE ERROR] {e}")
@@ -747,7 +772,6 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text(lang["error"])
         except Exception:
             pass
-
 # ---------------- Donate (Stars) flow ----------------
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang_code = DEFAULT_LANGUAGE
