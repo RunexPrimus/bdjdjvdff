@@ -1089,7 +1089,7 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
         reply_markup=InlineKeyboardMarkup(kb)
     )
     return ConversationHandler.END
------------------------------------------------------------------
+    
 # Yangilangan: Yangi AI chat tugmasi qo'shildi
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
