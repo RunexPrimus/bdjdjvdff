@@ -562,20 +562,18 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
         prompt = " ".join(context.args)
     else:
         if not context.args:
-            await update.message.reply_text("✍️ Iltimos, rasm uchun matn yozing (yoki oddiy matn yuboring).")
+            await update.message.reply_text("✍️ Iltimos, rasm uchun matn yozing.")
             return
         prompt = " ".join(context.args)
 
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     context.user_data["prompt"] = prompt
     context.user_data["translated"] = prompt
-        kb = [
-        [
-            InlineKeyboardButton("1️⃣", callback_data="count_1"),
-            InlineKeyboardButton("2️⃣", callback_data="count_2"),
-            InlineKeyboardButton("4️⃣", callback_data="count_4"),
-            InlineKeyboardButton("8️⃣", callback_data="count_8")
-        ]
+          kb = [
+        [InlineKeyboardButton("1️⃣", callback_data="count_1")], # 1-qator, 1-tugma
+        [InlineKeyboardButton("2️⃣", callback_data="count_2")], # 2-qator, 1-tugma
+        [InlineKeyboardButton("4️⃣", callback_data="count_4")], # 3-qator, 1-tugma
+        [InlineKeyboardButton("8️⃣", callback_data="count_8")]  # 4-qator, 1-tugma
     ]
     await update.message.reply_text(
         f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
