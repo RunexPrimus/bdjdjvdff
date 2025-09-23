@@ -630,6 +630,7 @@ async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DE
 # ---------------- Tanlov tugmachasi orqali AI chat -
 ---------------
 # ---------------- Private plain text -> prompt + inline buttons yoki AI chat ----------------
+# Private plain text -> prompt + inline buttons yoki AI chat ----------------
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return
@@ -644,13 +645,11 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     # Flow tekshirish
     flow = context.user_data.get("flow")
     now = datetime.now(timezone.utc)
-
     if flow == "ai":
         last_active = context.user_data.get("last_active")
         if last_active and (now - last_active).total_seconds() <= 900:
             prompt = update.message.text
             await update.message.reply_text("🧠 AI javob berayotganicha kuting...")
-
             try:
                 model = genai.GenerativeModel("gemini-2.0-flash")
                 response = await model.generate_content_async(
@@ -666,13 +665,10 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             except Exception as e:
                 logger.exception("[GEMINI ERROR]")
                 answer = lang["error"]
-
             # Barcha * belgilarni olib tashlash
             import re
             clean_answer = re.sub(r"[*_~`]", "", answer)
-
-            await update.message.reply_text(f"{lang['ai_response_header']}\n\n{clean_answer}")
-
+            await update.message.reply_text(f"{lang['ai_response_header']}\n{clean_answer}")
             # Oxirgi faollik vaqtini yangilash
             context.user_data["last_active"] = now
             return
@@ -694,24 +690,23 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     original_prompt = prompt
     gemini_instruction = "Auto detect this language and translate this text to English for image generation. No other text, just the translated prompt:"
     gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
-
     try:
-    model = genai.GenerativeModel("gemini-2.0-flash")
-    gemini_response = await model.generate_content_async(
-        gemini_full_prompt,
-        generation_config=genai.types.GenerationConfig(
-            max_output_tokens=100,
-            temperature=0.5
+        model = genai.GenerativeModel("gemini-2.0-flash")  # 👈 TO'G'RI INDENTATION!
+        gemini_response = await model.generate_content_async(
+            gemini_full_prompt,
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=100,
+                temperature=0.5
+            )
         )
-    )
-    digen_ready_prompt = gemini_response.text.strip()
-    if not digen_ready_prompt:
-        digen_ready_prompt = original_prompt
-    context.user_data["translated"] = digen_ready_prompt
-
-except Exception as e:  # <-- gemini_err o'rniga oddiy 'e' ishlatish
-    logger.error(f"[GEMINI PROMPT ERROR] {e}")
-    context.user_data["translated"] = original_prompt
+        digen_ready_prompt = gemini_response.text.strip()
+        if not digen_ready_prompt:
+            digen_ready_prompt = original_prompt
+        context.user_data["translated"] = digen_ready_prompt
+    except Exception as e:  # 👈 Endi to'g'ri
+        logger.error(f"[GEMINI PROMPT ERROR] {e}")
+        context.user_data["translated"] = original_prompt
+    # --- Yangi tugadi ---
 
     # Inline tugmalar
     kb = [
@@ -721,10 +716,10 @@ except Exception as e:  # <-- gemini_err o'rniga oddiy 'e' ishlatish
         ]
     ]
     await update.message.reply_text(
-        f"{lang['choose_action']}\n\n*{lang['your_message']}* {escape_md(prompt)}",
+        f"{lang['choose_action']}\n*{lang['your_message']}* {escape_md(prompt)}",
         parse_mode="MarkdownV2",
         reply_markup=InlineKeyboardMarkup(kb)
-        )
+    )
 # Yangilangan: context.user_data["flow"] o'rnatiladi
 async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
