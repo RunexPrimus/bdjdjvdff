@@ -722,16 +722,14 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=InlineKeyboardMarkup(kb)
         )
         return
-    else: # start_gen orqali kirilganda flow "image_pending_prompt" bo'ladi
+       else: # start_gen orqali kirilganda flow "image_pending_prompt" bo'ladi
         # "Nechta rasm?" so'rovi chiqadi
-    kb = [
-        [
-            InlineKeyboardButton("1️⃣", callback_data="count_1"),
-            InlineKeyboardButton("2️⃣", callback_data="count_2"),
-            InlineKeyboardButton("4️⃣", callback_data="count_4"),
-            InlineKeyboardButton("8️⃣", callback_data="count_8")
+        kb = [
+            [InlineKeyboardButton("1️⃣", callback_data="count_1")],
+            [InlineKeyboardButton("2️⃣", callback_data="count_2")],
+            [InlineKeyboardButton("4️⃣", callback_data="count_4")],
+            [InlineKeyboardButton("8️⃣", callback_data="count_8")]
         ]
-    ]
         await update.message.reply_text(
             f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
             parse_mode="MarkdownV2",
