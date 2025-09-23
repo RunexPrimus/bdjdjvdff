@@ -1071,18 +1071,15 @@ async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------------- START handleri ----------------
 # ---------------- Tilni o'zgartirish handleri (CALLBACK) ----------------
 # ---------------- Tilni o'zgartirish handleri (CALLBACK) ----------------
+# ---------------- Tilni o'zgartirish handleri (CALLBACK) ----------------
 async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    lang_code = q.data.split("_")[1]  # Bu yerda lang_code to'g'ri olinadi
+    lang_code = q.data.split("_")[1]
     user = q.from_user
     await add_user_db(context.application.bot_data["db_pool"], user, lang_code)
-    # Tilni to'g'ri olish
-    lang = LANGUAGES.get(lang_code)
-    if lang is None:
-        # Agar tanlangan til mavjud bo'lmasa, standart tilga qaytamiz
-        lang_code = DEFAULT_LANGUAGE
-        lang = LANGUAGES[DEFAULT_LANGUAGE]
+    # To'g'ridan-to'g'ri lug'atdan olish, default qiymatga ehtiyoj yo'q
+    lang = LANGUAGES[lang_code]
     # Asosiy menyuni yaratish
     kb = [
         [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
