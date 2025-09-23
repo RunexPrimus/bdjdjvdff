@@ -631,6 +631,7 @@ async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DE
 ---------------
 # ---------------- Private plain text -> prompt + inline buttons yoki AI chat ----------------
 # Private plain text -> prompt + inline buttons yoki AI chat ----------------
+# Private plain text -> prompt + inline buttons yoki AI chat ----------------
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return
@@ -706,6 +707,20 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     except Exception as e:  # 👈 Endi to'g'ri
         logger.error(f"[GEMINI PROMPT ERROR] {e}")
         context.user_data["translated"] = original_prompt
+    # --- Yangi tugadi ---
+
+    # Inline tugmalar
+    kb = [
+        [
+            InlineKeyboardButton("🖼 Rasm yaratish", callback_data="gen_image_from_prompt"),
+            InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat_from_prompt")
+        ]
+    ]
+    await update.message.reply_text(
+        f"{lang['choose_action']}\n*{lang['your_message']}* {escape_md(prompt)}",
+        parse_mode="MarkdownV2",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
     # --- Yangi tugadi ---
 
     # Inline tugmalar
