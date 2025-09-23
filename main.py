@@ -1069,6 +1069,27 @@ async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return LANGUAGE_SELECT
 # ---------------- START handleri ----------------
+# ---------------- Tilni o'zgartirish handleri (CALLBACK) ----------------
+async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    lang_code = q.data.split("_")[1]
+    user = q.from_user
+    await add_user_db(context.application.bot_data["db_pool"], user, lang_code)
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+    # Asosiy menyuni yaratish
+    kb = [
+        [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
+        [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")],
+        [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
+        [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
+    ]
+    await q.edit_message_text(
+        text=lang["lang_changed"].format(lang=lang["name"]),
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+    return ConversationHandler.END
+-----------------------------------------------------------------
 # Yangilangan: Yangi AI chat tugmasi qo'shildi
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
