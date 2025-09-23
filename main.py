@@ -1076,7 +1076,12 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
     lang_code = q.data.split("_")[1]
     user = q.from_user
     await add_user_db(context.application.bot_data["db_pool"], user, lang_code)
-    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+    # Tilni to'g'ri olish
+    lang = LANGUAGES.get(lang_code)
+    if lang is None:
+        # Agar tanlangan til mavjud bo'lmasa, standart tilga qaytamiz
+        lang_code = DEFAULT_LANGUAGE
+        lang = LANGUAGES[DEFAULT_LANGUAGE]
     # Asosiy menyuni yaratish
     kb = [
         [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
