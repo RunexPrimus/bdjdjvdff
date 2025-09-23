@@ -1748,7 +1748,7 @@ def build_app():
     start_conv = ConversationHandler(
         entry_points=[CommandHandler("start", start_handler)], # CommandHandler
         states={
-            LANGUAGE_SELECT: [CallbackQueryHandler(language_select_handler, pattern=r"lang_(uz|ru|en)")],
+            LANGUAGE_SELECT: [CallbackQueryHandler(language_select_handler, pattern=r"lang_(uz|ru|en|id||lt|es_MX|es_ES|it|zh_CN|bn|hi|pt_BR|ar|uk|vi)")],
         },
         fallbacks=[CommandHandler("start", start_handler)], # CommandHandler
         per_message=False # O'zgardi
