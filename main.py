@@ -91,9 +91,7 @@ LANGUAGES = {
         "sub_still_not": "⛔ Hali ham obuna bo‘lmagansiz. Obuna bo‘lib, qayta tekshiring.",
         "lang_changed": "✅ Til o'zgartirildi: {lang}",
         "select_lang": "🌐 Iltimos, tilni tanlang:",
-        # Yangi: AI javob uchun oddiy matn
         "ai_response_header": "💬 AI javob:",
-        # Yangi: Statistika matnlari
         "image_ready_header": "🎨 Rasm tayyor!",
         "image_prompt_label": "📝 Prompt:",
         "image_count_label": "🔢 Soni:",
@@ -101,24 +99,23 @@ LANGUAGES = {
         "image_elapsed_label": "⏱ Yaratish uchun ketgan vaqt:",
         "choose_action": "Quyidagilardan birini tanlang:",
         "your_message": "💬 Sizning xabaringiz:",
-        # Yangi: Admin xabari matnlari
         "admin_new_generation": "🎨 *Yangi generatsiya!*",
         "admin_user": "👤 *Foydalanuvchi:*",
         "admin_prompt": "📝 *Prompt:*",
         "admin_count": "🔢 *Soni:*",
         "admin_image_id": "🆔 *Image ID:*",
-        "admin_time": "⏰ *Vaqt \\(UTC\\+5\\):*", # Markdown belgilari escape qilindi
+        "admin_time": "⏰ *Vaqt \\(UTC\\+5\\):*",
     },
     "ru": {
         "flag": "🇷🇺",
         "name": "Русский",
         "welcome": "👋 Привет!\n\nЯ создаю для вас изображения с помощью ИИ.",
         "gen_button": "🎨 Создать изображение",
-        "ai_button": "💬 AI bilan suhbat",
+        "ai_button": "💬 Чат с ИИ",
         "donate_button": "💖 Поддержать",
         "lang_button": "🌐 Изменить язык",
         "prompt_text": "✍️ Теперь отправьте текст для создания изображения.",
-        "ai_prompt_text": "✍️ Suhbatni boshlash uchun savolingizni yozing.",
+        "ai_prompt_text": "✍️ Напишите свой вопрос, чтобы начать разговор.",
         "select_count": "🔢 Сколько изображений создать?",
         "generating": "🔄 Создаю изображение ({count})... ⏳",
         "success": "✅ Изображение готово! 📸",
@@ -139,34 +136,31 @@ LANGUAGES = {
         "sub_still_not": "⛔ Вы все еще не подписаны. Подпишитесь и проверьте снова.",
         "lang_changed": "✅ Язык изменен: {lang}",
         "select_lang": "🌐 Пожалуйста, выберите язык:",
-        # Yangi: AI javob uchun oddiy matn
         "ai_response_header": "💬 Ответ AI:",
-        # Yangi: Statistika matnlari
-        "image_ready_header": "🎨 Rasm tayyor!",
-        "image_prompt_label": "📝 Prompt:",
-        "image_count_label": "🔢 Soni:",
-        "image_time_label": "⏰ Vaqt (UTC+5):",
-        "image_elapsed_label": "⏱ Yaratish uchun ketgan vaqt:",
-        "choose_action": "Quyidagilardan birini tanlang:",
-        "your_message": "💬 Sizning xabaringiz:",
-        # Yangi: Admin xabari matnlari
-        "admin_new_generation": "🎨 *Yangi generatsiya!*",
-        "admin_user": "👤 *Foydalanuvchi:*",
+        "image_ready_header": "🎨 Изображение готово!",
+        "image_prompt_label": "📝 Текст:",
+        "image_count_label": "🔢 Количество:",
+        "image_time_label": "⏰ Время (UTC+5):",
+        "image_elapsed_label": "⏱ Время создания::",
+        "choose_action": "Выберите один из вариантов:",
+        "your_message": "💬 Ваше сообщение:",
+        "admin_new_generation": "🎨 *Новое генерация!*",
+        "admin_user": "👤 *Пользователь:*",
         "admin_prompt": "📝 *Prompt:*",
-        "admin_count": "🔢 *Soni:*",
+        "admin_count": "🔢 *Количество:*",
         "admin_image_id": "🆔 *Image ID:*",
-        "admin_time": "⏰ *Vaqt \\(UTC\\+5\\):*", # Markdown belgilari escape qilindi
+        "admin_time": "⏰ *Время \\(UTC\\+5\\):*",
     },
     "en": {
         "flag": "🇬🇧",
         "name": "English",
         "welcome": "👋 Hello!\n\nI create images for you using AI.",
         "gen_button": "🎨 Generate Image",
-        "ai_button": "💬 AI bilan suhbat",
+        "ai_button": "💬 Conversation with AI",
         "donate_button": "💖 Donate",
         "lang_button": "🌐 Change Language",
         "prompt_text": "✍️ Now send the text to generate an image.",
-        "ai_prompt_text": "✍️ Suhbatni boshlash uchun savolingizni yozing.",
+        "ai_prompt_text": "✍️ Write your question to start a conversation.",
         "select_count": "🔢 How many images to generate?",
         "generating": "🔄 Generating image ({count})... ⏳",
         "success": "✅ Image ready! 📸",
@@ -187,23 +181,20 @@ LANGUAGES = {
         "sub_still_not": "⛔ You are still not subscribed. Subscribe and check again.",
         "lang_changed": "✅ Language changed to: {lang}",
         "select_lang": "🌐 Please select language:",
-        # Yangi: AI javob uchun oddiy matn
         "ai_response_header": "💬 AI Response:",
-        # Yangi: Statistika matnlari
-        "image_ready_header": "🎨 Rasm tayyor!",
+        "image_ready_header": "🎨 Image is ready!",
         "image_prompt_label": "📝 Prompt:",
-        "image_count_label": "🔢 Soni:",
-        "image_time_label": "⏰ Vaqt (UTC+5):",
-        "image_elapsed_label": "⏱ Yaratish uchun ketgan vaqt:",
-        "choose_action": "Quyidagilardan birini tanlang:",
-        "your_message": "💬 Sizning xabaringiz:",
-        # Yangi: Admin xabari matnlari
-        "admin_new_generation": "🎨 *Yangi generatsiya!*",
-        "admin_user": "👤 *Foydalanuvchi:*",
+        "image_count_label": "🔢 Count:",
+        "image_time_label": "⏰ Time (UTC+5):",
+        "image_elapsed_label": "⏱ Time taken to create:",
+        "choose_action": "Choose one of the following:",
+        "your_message": "💬 Your message:",
+        "admin_new_generation": "🎨 *New Generation!*",
+        "admin_user": "👤 *User:*",
         "admin_prompt": "📝 *Prompt:*",
-        "admin_count": "🔢 *Soni:*",
+        "admin_count": "🔢 *Count:*",
         "admin_image_id": "🆔 *Image ID:*",
-        "admin_time": "⏰ *Vaqt \\(UTC\\+5\\):*", # Markdown belgilari escape qilindi
+        "admin_time": "⏰ *Time \\(UTC\\+5\\):*",
     }
 }
 
@@ -482,14 +473,12 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
     await q.answer()
     lang_code = q.data.split("_")[1]
     user = q.from_user
-
     await add_user_db(context.application.bot_data["db_pool"], user, lang_code)
-
     lang = LANGUAGES[lang_code]
+    # Tugmalarni yaratishda faqat tarjima qilingan "AI bilan suhbat" tugmasi qo'shiladi
     kb = [
         [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
-        [InlineKeyboardButton("💬 AI bilan suhbat", callback_data="start_ai_flow")], # Yangi tugma
-        [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")], # Yangi tugma, tarjima qilingan
+        [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")], # Faqat shu qator
         [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
         [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
     ]
@@ -501,37 +490,31 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     lang_code = None
-
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user_id)
         if row:
             lang_code = row["language_code"]
-
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-
-    # Mavjud barcha tugmalar + yangi AI chat tugmasi
+    # Tugmalarni yaratishda faqat tarjima qilingan "AI bilan suhbat" tugmasi qo'shiladi
     kb = [
         [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
-        [InlineKeyboardButton("💬 AI bilan suhbat", callback_data="start_ai_flow")], # Yangi tugma
-        [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")], # Yangi tugma, tarjima qilingan
+        [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")], # Faqat shu qator
         [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
         [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
     ]
     await update.message.reply_text(lang["welcome"], reply_markup=InlineKeyboardMarkup(kb))
-
 # ---------------- Bosh menyudan AI chat ----------------
 async def start_ai_flow_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    await q.message.reply_text("✍️ Suhbatni boshlash uchun savolingizni yozing.")
     lang_code = DEFAULT_LANGUAGE
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
         if row:
             lang_code = row["language_code"]
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-    # await q.message.reply_text("✍️ Suhbatni boshlash uchun savolingizni yozing.")
-    await q.message.reply_text(lang["ai_prompt_text"]) # Yangilangan, tarjima qilingan
+    # Faqat bitta marta, tarjima qilingan xabarni yuborish
+    await q.message.reply_text(lang["ai_prompt_text"])
     # AI chat flow boshlanadi
     context.user_data["flow"] = "ai"
     # Oxirgi faollik vaqtini saqlaymiz
@@ -586,11 +569,13 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     context.user_data["prompt"] = prompt
     context.user_data["translated"] = prompt
-    kb = [
-        [InlineKeyboardButton("1️⃣", callback_data="count_1")],
-        [InlineKeyboardButton("2️⃣", callback_data="count_2")],
-        [InlineKeyboardButton("4️⃣", callback_data="count_4")],
-        [InlineKeyboardButton("8️⃣", callback_data="count_8")]
+        kb = [
+        [
+            InlineKeyboardButton("1️⃣", callback_data="count_1"),
+            InlineKeyboardButton("2️⃣", callback_data="count_2"),
+            InlineKeyboardButton("4️⃣", callback_data="count_4"),
+            InlineKeyboardButton("8️⃣", callback_data="count_8")
+        ]
     ]
     await update.message.reply_text(
         f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
@@ -655,7 +640,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             # Biror sababdan last_active yo'q, lekin flow "ai"
             # Bu holat kam uchraydi, lekin ehtimolni hisobga olamiz
             prompt = update.message.text
-            await update.message.reply_text("🧠 AI javob berayotganicha...")
+            await update.message.reply_text("🧠 AI javob bermoqda...")
             try:
                 model = genai.GenerativeModel("gemini-2.0-flash")
                 response = await model.generate_content_async(
@@ -739,12 +724,14 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     else: # start_gen orqali kirilganda flow "image_pending_prompt" bo'ladi
         # "Nechta rasm?" so'rovi chiqadi
-        kb = [
-            [InlineKeyboardButton("1️⃣", callback_data="count_1")],
-            [InlineKeyboardButton("2️⃣", callback_data="count_2")],
-            [InlineKeyboardButton("4️⃣", callback_data="count_4")],
-            [InlineKeyboardButton("8️⃣", callback_data="count_8")]
+    kb = [
+        [
+            InlineKeyboardButton("1️⃣", callback_data="count_1"),
+            InlineKeyboardButton("2️⃣", callback_data="count_2"),
+            InlineKeyboardButton("4️⃣", callback_data="count_4"),
+            InlineKeyboardButton("8️⃣", callback_data="count_8")
         ]
+    ]
         await update.message.reply_text(
             f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
             parse_mode="MarkdownV2",
@@ -771,18 +758,16 @@ async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DE
 async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-
     # AI chat flow boshlanadi
     context.user_data["flow"] = "ai"
-    await q.message.reply_text("✍️ Suhbatni boshlash uchun savolingizni yozing.")
     lang_code = DEFAULT_LANGUAGE
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
         if row:
             lang_code = row["language_code"]
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-    # await q.message.reply_text("✍️ Suhbatni boshlash uchun savolingizni yozing.")
-    await q.message.reply_text(lang["ai_prompt_text"]) # Yangilangan, tarjima qilingan
+    # Faqat bitta marta, tarjima qilingan xabarni yuborish
+    await q.message.reply_text(lang["ai_prompt_text"])
 
 # GENERATE (robust) - Yangilangan versiya (Prompt - Gemini - Digen)
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
