@@ -589,116 +589,6 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Private plain text -> prompt + inline buttons yoki AI chat
 # Yangilangan: Tanlov tugmachasi bosilganda flow o'rnatiladi
-async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_chat.type != "private":
-        return
-        
-    lang_code = DEFAULT_LANGUAGE
-    async with context.application.bot_data["db_pool"].acquire() as conn:
-        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", update.effective_user.id)
-        if row:
-            lang_code = row["language_code"]
-    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-    
-    # Agar foydalanuvchi oldin "AI chat" tugmasini bosgan bo'lsa
-    flow = context.user_data.get("flow")
-    if flow == "ai":
-        # Oxirgi faollik vaqtini tekshirish
-        last_active = context.user_data.get("last_active")
-        now = datetime.now(timezone.utc)
-        if last_active:
-            # 15 daqiqa = 900 sekund
-            if (now - last_active).total_seconds() > 900:
-                # Vaqt o'tgan, flow ni bekor qilamiz
-                context.user_data["flow"] = None
-                context.user_data["last_active"] = None
-                # Quyidagi kod oddiy matn yuborilganda ishlaydi (pastga tushadi)
-            else:
-                # Vaqt o'tmagan, AI chat davom etadi
-                prompt = update.message.text
-                # AI javobini oddiy matn sifatida yuborish, maxsus belgilarsiz
-                await update.message.reply_text("🧠 AI javob bergunicha kuting...")
-
-                try:
-                    model = genai.GenerativeModel("gemini-2.0-flash")
-                    response = await model.generate_content_async(
-                        prompt,
-                        generation_config=genai.types.GenerationConfig(
-                            max_output_tokens=1000,
-                            temperature=0.7
-                        )
-                    )
-                    answer = response.text.strip()
-                    if not answer:
-                        answer = "⚠️ Javob topilmadi."
-                except Exception as e:
-                    logger.exception("[GEMINI ERROR]")
-                    answer = lang["error"]
-
-                # AI javobini oddiy matn sifatida yuborish, Markdown formatlashsiz
-                await update.message.reply_text(f"{lang['ai_response_header']}\n\n{answer}")
-                # Oxirgi faollik vaqtini yangilash
-                context.user_data["last_active"] = datetime.now(timezone.utc)
-                return
-        else:
-            # Biror sababdan last_active yo'q, lekin flow "ai"
-            # Bu holat kam uchraydi, lekin ehtimolni hisobga olamiz
-            prompt = update.message.text
-            await update.message.reply_text("🧠 AI javob berayotganicha...")
-            try:
-                model = genai.GenerativeModel("gemini-2.0-flash")
-                response = await model.generate_content_async(
-                    prompt,
-                    generation_config=genai.types.GenerationConfig(
-                        max_output_tokens=1000,
-                        temperature=0.7
-                    )
-                )
-                answer = response.text.strip()
-                if not answer:
-                    answer = "⚠️ Javob topilmadi."
-            except Exception as e:
-                logger.exception("[GEMINI ERROR]")
-                answer = lang["error"]
-            await update.message.reply_text(f"{lang['ai_response_header']}\n\n{answer}")
-            context.user_data["last_active"] = datetime.now(timezone.utc)
-            return
-
-    # Agar hech qanday maxsus flow bo'lmasa, oddiy rasm generatsiya jarayoni ketaveradi
-    # (start_gen orqali kirilganda ham, oddiy matn yuborilganda ham)
-    if not await force_sub_if_private(update, context, lang_code):
-        return
-        
-    await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
-    prompt = update.message.text
-    context.user_data["prompt"] = prompt
-    context.user_data["translated"] = prompt
-    # --- Yangi: Promptni Gemini orqali Digen uchun tayyorlash ---
-    original_prompt = prompt # Foydalanuvchi yuborgan original prompt
-    logger.info(f"[GEMINI PROMPT] Foydalanuvchi prompti: {original_prompt}")
-
-    # Qadam 1: Gemini API ga yuborish uchun prompt tayyorlash
-    gemini_instruction = "Auto detect this language and translate this text to English for image generation. No other text, just the translated prompt:"
-    gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
-
-    try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        gemini_response = await model.generate_content_async(
-            gemini_full_prompt,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=100, # Qisqa tarjima yetarli
-                temperature=0.5
-            )
-        )
-        digen_ready_prompt = gemini_response.text.strip()
-
-        # Agar Gemini hech narsa qaytarmasa, original promptni ishlatamiz
-        if not digen_ready_prompt:
-            logger.warning("[GEMINI PROMPT] Gemini javob bermadi. Original prompt ishlatilmoqda.")
-            digen_ready_prompt = original_prompt # Yoki xatolik qaytaramiz
-
-        logger.info(f"[GEMINI PROMPT] Digen uchun tayyor prompt: {digen_ready_prompt}")
-        context.user_data["translated"] = digen_ready_prompt # Tarjima qilingan promptni saqlash
 
     except Exception as gemini_err:
         logger.error(f"[GEMINI PROMPT ERROR] Gemini API dan foydalanganda xato: {gemini_err}")
@@ -720,25 +610,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         #     reply_markup=InlineKeyboardMarkup(kb)
         # )
         # Yangilangan qatorlar, tarjima qilingan
-        await update.message.reply_text(
-            f"{lang['choose_action']}\n\n*{lang['your_message']}* {escape_md(prompt)}",
-            parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup(kb)
-        )
-        return
-    else: # start_gen orqali kirilganda flow "image_pending_prompt" bo'ladi
-        # "Nechta rasm?" so'rovi chiqadi
-        kb = [
-            [InlineKeyboardButton("1️⃣", callback_data="count_1")],
-            [InlineKeyboardButton("2️⃣", callback_data="count_2")],
-            [InlineKeyboardButton("4️⃣", callback_data="count_4")],
-            [InlineKeyboardButton("8️⃣", callback_data="count_8")]
-        ]
-        await update.message.reply_text(
-            f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
-            parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup(kb)
-        )
+        
 
 # ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
 # Yangilangan: context.user_data["flow"] o'rnatiladi
@@ -755,7 +627,103 @@ async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DE
     fake_update.callback_query.data = "count_1"
     await generate_cb(fake_update, context)
 
-# ---------------- Tanlov tugmachasi orqali AI chat ----------------
+# ---------------- Tanlov tugmachasi orqali AI chat -
+---------------
+# ---------------- Private plain text -> prompt + inline buttons yoki AI chat ----------------
+async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "private":
+        return
+        
+    lang_code = DEFAULT_LANGUAGE
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", update.effective_user.id)
+        if row:
+            lang_code = row["language_code"]
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+    
+    # Flow tekshirish
+    flow = context.user_data.get("flow")
+    now = datetime.now(timezone.utc)
+
+    if flow == "ai":
+        last_active = context.user_data.get("last_active")
+        if last_active and (now - last_active).total_seconds() <= 900:
+            prompt = update.message.text
+            await update.message.reply_text("🧠 AI javob berayotganicha kuting...")
+
+            try:
+                model = genai.GenerativeModel("gemini-2.0-flash")
+                response = await model.generate_content_async(
+                    prompt,
+                    generation_config=genai.types.GenerationConfig(
+                        max_output_tokens=1000,
+                        temperature=0.7
+                    )
+                )
+                answer = response.text.strip()
+                if not answer:
+                    answer = "⚠️ Javob topilmadi."
+            except Exception as e:
+                logger.exception("[GEMINI ERROR]")
+                answer = lang["error"]
+
+            # Barcha * belgilarni olib tashlash
+            import re
+            clean_answer = re.sub(r"[*_~`]", "", answer)
+
+            await update.message.reply_text(f"{lang['ai_response_header']}\n\n{clean_answer}")
+
+            # Oxirgi faollik vaqtini yangilash
+            context.user_data["last_active"] = now
+            return
+        else:
+            # Flowni bekor qilamiz
+            context.user_data["flow"] = None
+            context.user_data["last_active"] = None
+
+    # Agar hech qanday flow bo‘lmasa, oddiy rasm generatsiya jarayoni
+    if not await force_sub_if_private(update, context, lang_code):
+        return
+        
+    await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
+    prompt = update.message.text
+    context.user_data["prompt"] = prompt
+    context.user_data["translated"] = prompt
+
+    # --- Gemini orqali Digen uchun tayyorlash ---
+    original_prompt = prompt
+    gemini_instruction = "Auto detect this language and translate this text to English for image generation. No other text, just the translated prompt:"
+    gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
+
+    try:
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        gemini_response = await model.generate_content_async(
+            gemini_full_prompt,
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=100,
+                temperature=0.5
+            )
+        )
+        digen_ready_prompt = gemini_response.text.strip()
+        if not digen_ready_prompt:
+            digen_ready_prompt = original_prompt
+        context.user_data["translated"] = digen_ready_prompt
+    except Exception as gemini_err:
+        logger.error(f"[GEMINI PROMPT ERROR] {gemini_err}")
+        context.user_data["translated"] = original_prompt
+
+    # Inline tugmalar
+    kb = [
+        [
+            InlineKeyboardButton("🖼 Rasm yaratish", callback_data="gen_image_from_prompt"),
+            InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat_from_prompt")
+        ]
+    ]
+    await update.message.reply_text(
+        f"{lang['choose_action']}\n\n*{lang['your_message']}* {escape_md(prompt)}",
+        parse_mode="MarkdownV2",
+        reply_markup=InlineKeyboardMarkup(kb)
+        )
 # Yangilangan: context.user_data["flow"] o'rnatiladi
 async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
