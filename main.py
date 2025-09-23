@@ -84,6 +84,7 @@ LANGUAGES = {
         "usage_refund": "UsageId: /refund <user_id> <donation_id>",
         "not_found": "❌ Topilmadi yoki noto'g'ri ma'lumot.",
         "no_charge_id": "❌ Bu to'lovda charge_id yo'q (eski to'lov).",
+         "your_prompt_label": "🖌 Sizning matningiz:",
         "sub_prompt": "⛔ Botdan foydalanish uchun kanalimizga obuna bo‘ling!",
         "sub_check": "✅ Obunani tekshirish",
         "sub_url_text": "🔗 Kanalga obuna bo‘lish",
@@ -129,6 +130,7 @@ LANGUAGES = {
         "usage_refund": "Использование: /refund <user_id> <donation_id>",
         "not_found": "❌ Не найдено или неверные данные.",
         "no_charge_id": "❌ В этом платеже нет charge_id (старый платеж).",
+        "your_prompt_label": "🖌 Ваш текст:",
         "sub_prompt": "⛔ Чтобы пользоваться ботом, подпишитесь на наш канал!",
         "sub_check": "✅ Проверить подписку",
         "sub_url_text": "🔗 Подписаться на канал",
@@ -171,6 +173,7 @@ LANGUAGES = {
         "refund_success": "✅ {stars} Stars successfully refunded to user {user_id}.",
         "refund_error": "❌ Error: {error}",
         "no_permission": "⛔ You don't have permission.",
+        "your_prompt_label": "🖌 Your text:",
         "usage_refund": "Usage: /refund <user_id> <donation_id>",
         "not_found": "❌ Not found or invalid data.",
         "no_charge_id": "❌ This payment has no charge_id (old payment).",
@@ -615,7 +618,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 # Vaqt o'tmagan, AI chat davom etadi
                 prompt = update.message.text
                 # AI javobini oddiy matn sifatida yuborish, maxsus belgilarsiz
-                await update.message.reply_text("🧠 AI javob berayotganicha...")
+                await update.message.reply_text("🧠 AI javob bermoqda...")
                 try:
                     model = genai.GenerativeModel("gemini-2.0-flash")
                     response = await model.generate_content_async(
@@ -640,7 +643,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             # Biror sababdan last_active yo'q, lekin flow "ai"
             # Bu holat kam uchraydi, lekin ehtimolni hisobga olamiz
             prompt = update.message.text
-            await update.message.reply_text("🧠 AI javob berayotganicha...")
+            await update.message.reply_text(f"{lang['"your_prompt_label"']}\n{answer}")
             try:
                 model = genai.GenerativeModel("gemini-2.0-flash")
                 response = await model.generate_content_async(
