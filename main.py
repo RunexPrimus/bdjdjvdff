@@ -585,6 +585,8 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Private plain text -> prompt + inline buttons yoki AI chat
 # Yangilangan: Tanlov tugmachasi bosilganda flow o'rnatiladi
+# Private plain text -> prompt + inline buttons yoki AI chat
+# Yangilangan: Tanlov tugmachasi bosilganda flow o'rnatiladi
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return
@@ -613,8 +615,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 # Vaqt o'tmagan, AI chat davom etadi
                 prompt = update.message.text
                 # AI javobini oddiy matn sifatida yuborish, maxsus belgilarsiz
-                await update.message.reply_text("🧠 AI javob bermoqda...")
-
+                await update.message.reply_text("🧠 AI javob berayotganicha...")
                 try:
                     model = genai.GenerativeModel("gemini-2.0-flash")
                     response = await model.generate_content_async(
@@ -630,9 +631,8 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 except Exception as e:
                     logger.exception("[GEMINI ERROR]")
                     answer = lang["error"]
-
                 # AI javobini oddiy matn sifatida yuborish, Markdown formatlashsiz
-                await update.message.reply_text(f"{lang['ai_response_header']}\n\n{answer}")
+                await update.message.reply_text(f"{lang['ai_response_header']}\n{answer}")
                 # Oxirgi faollik vaqtini yangilash
                 context.user_data["last_active"] = datetime.now(timezone.utc)
                 return
@@ -640,7 +640,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             # Biror sababdan last_active yo'q, lekin flow "ai"
             # Bu holat kam uchraydi, lekin ehtimolni hisobga olamiz
             prompt = update.message.text
-            await update.message.reply_text("🧠 AI javob bermoqda...")
+            await update.message.reply_text("🧠 AI javob berayotganicha...")
             try:
                 model = genai.GenerativeModel("gemini-2.0-flash")
                 response = await model.generate_content_async(
@@ -656,7 +656,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             except Exception as e:
                 logger.exception("[GEMINI ERROR]")
                 answer = lang["error"]
-            await update.message.reply_text(f"{lang['ai_response_header']}\n\n{answer}")
+            await update.message.reply_text(f"{lang['ai_response_header']}\n{answer}")
             context.user_data["last_active"] = datetime.now(timezone.utc)
             return
 
@@ -668,6 +668,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     prompt = update.message.text
     context.user_data["prompt"] = prompt
+
     # --- Yangi: Promptni Gemini orqali Digen uchun tayyorlash ---
     original_prompt = prompt # Foydalanuvchi yuborgan original prompt
     logger.info(f"[GEMINI PROMPT] Foydalanuvchi prompti: {original_prompt}")
@@ -686,15 +687,12 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             )
         )
         digen_ready_prompt = gemini_response.text.strip()
-
         # Agar Gemini hech narsa qaytarmasa, original promptni ishlatamiz
         if not digen_ready_prompt:
             logger.warning("[GEMINI PROMPT] Gemini javob bermadi. Original prompt ishlatilmoqda.")
             digen_ready_prompt = original_prompt # Yoki xatolik qaytaramiz
-
         logger.info(f"[GEMINI PROMPT] Digen uchun tayyor prompt: {digen_ready_prompt}")
         context.user_data["translated"] = digen_ready_prompt # Tarjima qilingan promptni saqlash
-
     except Exception as gemini_err:
         logger.error(f"[GEMINI PROMPT ERROR] Gemini API dan foydalanganda xato: {gemini_err}")
         # Xatolik yuz bersa ham, original promptni Digen ga yuboramiz
@@ -709,32 +707,28 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat_from_prompt")
             ]
         ]
-        # await update.message.reply_text(
-        #     f"Quyidagilardan birini tanlang:\n\n💬 *Sizning xabaringiz:* {escape_md(prompt)}",
-        #     parse_mode="MarkdownV2",
-        #     reply_markup=InlineKeyboardMarkup(kb)
-        # )
         # Yangilangan qatorlar, tarjima qilingan
         await update.message.reply_text(
-            f"Quyidagilardan birini tanlang:\n\n💬 *Sizning xabaringiz:* {escape_md(prompt)}",
-            f"{lang['choose_action']}\n\n*{lang['your_message']}* {escape_md(prompt)}",
+            f"{lang['choose_action']}\n*{lang['your_message']}* {escape_md(prompt)}",
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup(kb)
         )
         return
-       else:
+    else: # start_gen orqali kirilganda flow "image_pending_prompt" bo'ladi
+        # "Nechta rasm?" so'rovi chiqadi
         kb = [
-            [InlineKeyboardButton("1️⃣", callback_data="count_1")],
-            [InlineKeyboardButton("2️⃣", callback_data="count_2")],
-            [InlineKeyboardButton("4️⃣", callback_data="count_4")],
-            [InlineKeyboardButton("8️⃣", callback_data="count_8")]
+            [
+                InlineKeyboardButton("1️⃣", callback_data="count_1"),
+                InlineKeyboardButton("2️⃣", callback_data="count_2"),
+                InlineKeyboardButton("4️⃣", callback_data="count_4"),
+                InlineKeyboardButton("8️⃣", callback_data="count_8")
+            ]
         ]
         await update.message.reply_text(
             f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup(kb)
         )
-
 # ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
 # Yangilangan: context.user_data["flow"] o'rnatiladi
 async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
