@@ -1072,21 +1072,21 @@ async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------------- Tilni o'zgartirish handleri (CALLBACK) ----------------
 # ---------------- Tilni o'zgartirish handleri (CALLBACK) ----------------
 # ---------------- Tilni o'zgartirish handleri (CALLBACK) ----------------
-# ---------------- Tilni o'zgartirish handleri (CALLBACK) ----------------
 async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
+    lang_code = q.data.split("_")[1]  # Bu yerda lang_code to'g'ri olinadi
     lang_code = q.data.split("_")[1]
     user = q.from_user
     await add_user_db(context.application.bot_data["db_pool"], user, lang_code)
-    # --- YANGI QATOR: LOGGA TIL KODINI CHIQARISH ---
-    logger.info(f"[TILNI O'ZGARTIRISH] Foydalanuvchi: {user.id} | Tanlangan til kodi: {lang_code}")
-    # --- YANGI QATOR TUGADI ---
-    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-    # --- YANGI QATOR: AGAR TIL TOPILMASA, LOGGA CHIQARISH ---
-    if lang_code not in LANGUAGES:
-        logger.error(f"[TIL XATOLIK] Til kodi topilmadi: {lang_code}. Standart tilga o'tildi: {DEFAULT_LANGUAGE}")
-    # --- YANGI QATOR TUGADI ---
+    # Tilni to'g'ri olish
+    lang = LANGUAGES.get(lang_code)
+    if lang is None:
+        # Agar tanlangan til mavjud bo'lmasa, standart tilga qaytamiz
+        lang_code = DEFAULT_LANGUAGE
+        lang = LANGUAGES[DEFAULT_LANGUAGE]
+    # To'g'ridan-to'g'ri lug'atdan olish, default qiymatga ehtiyoj yo'q
+    lang = LANGUAGES[lang_code]
     # Asosiy menyuni yaratish
     kb = [
         [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
@@ -1099,6 +1099,23 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
         reply_markup=InlineKeyboardMarkup(kb)
     )
     return ConversationHandler.END
+# Yangilangan: Yangi AI chat tugmasi qo'shildi
+async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    lang_code = None
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user_id)
+        if row:
+            lang_code = row["language_code"]
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+    # Tugmalarni yaratishda faqat tarjima qilingan "AI bilan suhbat" tugmasi qo'shiladi
+    kb = [
+        [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
+        [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")], # Faqat shu qator
+        [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
+        [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
+    ]
+    await update.message.reply_text(lang["welcome"], reply_markup=InlineKeyboardMarkup(kb))
 # ---------------- Bosh menyudan AI chat ----------------
 async def start_ai_flow_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -1556,7 +1573,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Yangi: donate jarayonini belgilash
     context.user_data["current_operation"] = "donate"
-    
+
     lang_code = DEFAULT_LANGUAGE
     if update.callback_query:
         async with context.application.bot_data["db_pool"].acquire() as conn:
@@ -1586,10 +1603,10 @@ async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Agar foydalanuvchi donate jarayonida bo'lmasa, bu handler ishlamasin
         # Boshqa handlerlar bu xabarni qo'lga kiritadi
         return ConversationHandler.END # Yoki hech nishga qaytmasa ham bo'ladi
-    
+
     # Yangi: donate jarayoni tugadi, belgini o'chiramiz
     context.user_data.pop("current_operation", None)
-    
+
     lang_code = DEFAULT_LANGUAGE
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", update.effective_user.id)
