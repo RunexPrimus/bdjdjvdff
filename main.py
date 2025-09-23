@@ -541,6 +541,7 @@ async def handle_change_language(update: Update, context: ContextTypes.DEFAULT_T
     await cmd_language(update, context)
 
 # /get command
+# /get command
 async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang_code = DEFAULT_LANGUAGE
     if update.effective_chat.type == "private":
@@ -548,12 +549,9 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
             row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", update.effective_user.id)
             if row:
                 lang_code = row["language_code"]
-
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-
     if not await force_sub_if_private(update, context, lang_code):
         return
-
     chat_type = update.effective_chat.type
     if chat_type in ("group", "supergroup"):
         if not context.args:
@@ -562,19 +560,23 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
         prompt = " ".join(context.args)
     else:
         if not context.args:
-            await update.message.reply_text("✍️ Iltimos, rasm uchun matn yozing.")
+            await update.message.reply_text("✍️ Iltimos, rasm uchun matn yozing (yoki oddiy matn yuboring).")
             return
         prompt = " ".join(context.args)
-
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     context.user_data["prompt"] = prompt
     context.user_data["translated"] = prompt
-          kb = [
-        [InlineKeyboardButton("1️⃣", callback_data="count_1")], # 1-qator, 1-tugma
-        [InlineKeyboardButton("2️⃣", callback_data="count_2")], # 2-qator, 1-tugma
-        [InlineKeyboardButton("4️⃣", callback_data="count_4")], # 3-qator, 1-tugma
-        [InlineKeyboardButton("8️⃣", callback_data="count_8")]  # 4-qator, 1-tugma
+
+    # Tugmalarni yonma-yon qilish uchun bitta qatorga joylashtiramiz
+    kb = [
+        [
+            InlineKeyboardButton("1️⃣", callback_data="count_1"),
+            InlineKeyboardButton("2️⃣", callback_data="count_2"),
+            InlineKeyboardButton("4️⃣", callback_data="count_4"),
+            InlineKeyboardButton("8️⃣", callback_data="count_8")
+        ]
     ]
+
     await update.message.reply_text(
         f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
         parse_mode="MarkdownV2",
@@ -611,7 +613,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 # Vaqt o'tmagan, AI chat davom etadi
                 prompt = update.message.text
                 # AI javobini oddiy matn sifatida yuborish, maxsus belgilarsiz
-                await update.message.reply_text("🧠 AI javob berayotganicha...")
+                await update.message.reply_text("🧠 AI javob bermoqda...")
 
                 try:
                     model = genai.GenerativeModel("gemini-2.0-flash")
