@@ -722,8 +722,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=InlineKeyboardMarkup(kb)
         )
         return
-       else: # start_gen orqali kirilganda flow "image_pending_prompt" bo'ladi
-        # "Nechta rasm?" so'rovi chiqadi
+       else:
         kb = [
             [InlineKeyboardButton("1️⃣", callback_data="count_1")],
             [InlineKeyboardButton("2️⃣", callback_data="count_2")],
