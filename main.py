@@ -297,7 +297,7 @@ LANGUAGES = {
         "admin_time": "⏰ *Laikas \\(UTC\\+5\\):*",
     },
     # --- Ispancha (Meksika) (🇲🇽) ---
-    "es_MX": {
+    "esmx": {
         "flag": "🇲🇽",
         "name": "Español (México)",
         "welcome": "👋 ¡Hola!\n\nCreo imágenes para ti usando IA.",
@@ -344,7 +344,7 @@ LANGUAGES = {
         "admin_time": "⏰ *Hora \\(UTC\\+5\\):*",
     },
     # --- Ispancha (Ispaniya) (🇪🇸) ---
-    "es_ES": {
+    "eses": {
         "flag": "🇪🇸",
         "name": "Español (España)",
         "welcome": "👋 ¡Hola!\n\nCreo imágenes para ti usando IA.",
@@ -438,7 +438,7 @@ LANGUAGES = {
         "admin_time": "⏰ *Ora \\(UTC\\+5\\):*",
     },
     # --- Xitoycha (Soddalashtirilgan) (🇨🇳) ---
-    "zh_CN": {
+    "zhcn": {
         "flag": "🇨🇳",
         "name": "简体中文",
         "welcome": "👋 你好！\n\n我使用人工智能为你生成图像。",
@@ -579,7 +579,7 @@ LANGUAGES = {
         "admin_time": "⏰ *समय \\(UTC\\+5\\):*",
     },
     # --- Portugalccha (Braziliya) (🇧🇷) ---
-    "pt_BR": {
+    "ptbr": {
         "flag": "🇧🇷",
         "name": "Português (Brasil)",
         "welcome": "👋 Olá!\n\nEu crio imagens para você usando IA.",
@@ -1739,7 +1739,7 @@ def build_app():
     # Bu ogohlantirishlarni oldini oladi
 
     # Barcha 15 ta tilni qamrab oluvchi regex pattern
-    all_lang_pattern = r"lang_(uz|ru|en|id|lt|es_MX|es_ES|it|zh_CN|bn|hi|pt_BR|ar|uk|vi)"
+    all_lang_pattern = r"lang_(uz|ru|en|id|lt|esmx|eses|it|zhcn|bn|hi|ptbr|ar|uk|vi)"
 
     start_conv = ConversationHandler(
         entry_points=[CommandHandler("start", start_handler)], # CommandHandler
