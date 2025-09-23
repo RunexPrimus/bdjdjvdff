@@ -1020,36 +1020,36 @@ async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Tugmalarni 2 ustunda, oxirgi tugma alohida qatorga joylashtiramiz
     kb = [
         [
-            InlineKeyboardButton(f"{LANGUAGES['uz']['flag']} {LANGUAGES['uz']['name']}", callback_data="lang_uz"),
-            InlineKeyboardButton(f"{LANGUAGES['ru']['flag']} {LANGUAGES['ru']['name']}", callback_data="lang_ru")
+            InlineKeyboardButton("🇺🇿 O'zbekcha", callback_data="lang_uz"),
+            InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru")
         ],
         [
-            InlineKeyboardButton(f"{LANGUAGES['en']['flag']} {LANGUAGES['en']['name']}", callback_data="lang_en"),
-            InlineKeyboardButton(f"{LANGUAGES['id']['flag']} {LANGUAGES['id']['name']}", callback_data="lang_id")
+            InlineKeyboardButton("🇺🇸 English", callback_data="lang_en"),
+            InlineKeyboardButton("🇮🇩 Bahasa Indonesia", callback_data="lang_id")
         ],
         [
-            InlineKeyboardButton(f"{LANGUAGES['lt']['flag']} {LANGUAGES['lt']['name']}", callback_data="lang_lt"),
-            InlineKeyboardButton(f"{LANGUAGES['es_MX']['flag']} {LANGUAGES['es_MX']['name']}", callback_data="lang_es_MX")
+            InlineKeyboardButton("🇱🇹 Lietuvių", callback_data="lang_lt"),
+            InlineKeyboardButton("🇲🇽 Español (LatAm)", callback_data="lang_es_MX")
         ],
         [
-            InlineKeyboardButton(f"{LANGUAGES['es_ES']['flag']} {LANGUAGES['es_ES']['name']}", callback_data="lang_es_ES"),
-            InlineKeyboardButton(f"{LANGUAGES['it']['flag']} {LANGUAGES['it']['name']}", callback_data="lang_it")
+            InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es_ES"),
+            InlineKeyboardButton("🇮🇹 Italiano", callback_data="lang_it")
         ],
         [
-            InlineKeyboardButton(f"{LANGUAGES['zh_CN']['flag']} {LANGUAGES['zh_CN']['name']}", callback_data="lang_zh_CN"),
-            InlineKeyboardButton(f"{LANGUAGES['bn']['flag']} {LANGUAGES['bn']['name']}", callback_data="lang_bn")
+            InlineKeyboardButton("🇨🇳 简体中文", callback_data="lang_zh_CN"),
+            InlineKeyboardButton("🇧🇩 বাংলা", callback_data="lang_bn")
         ],
         [
-            InlineKeyboardButton(f"{LANGUAGES['hi']['flag']} {LANGUAGES['hi']['name']}", callback_data="lang_hi"),
-            InlineKeyboardButton(f"{LANGUAGES['pt_BR']['flag']} {LANGUAGES['pt_BR']['name']}", callback_data="lang_pt_BR")
+            InlineKeyboardButton("🇮🇳 हिंदी", callback_data="lang_hi"),
+            InlineKeyboardButton("🇧🇷 Português", callback_data="lang_pt_BR")
         ],
         [
-            InlineKeyboardButton(f"{LANGUAGES['ar']['flag']} {LANGUAGES['ar']['name']}", callback_data="lang_ar"),
-            InlineKeyboardButton(f"{LANGUAGES['uk']['flag']} {LANGUAGES['uk']['name']}", callback_data="lang_uk")
+            InlineKeyboardButton("🇸🇦 العربية", callback_data="lang_ar"),
+            InlineKeyboardButton("🇺🇦 Українська", callback_data="lang_uk")
         ],
         # Oxirgi tugma (Vietnamcha) alohida qatorga
         [
-            InlineKeyboardButton(f"{LANGUAGES['vi']['flag']} {LANGUAGES['vi']['name']}", callback_data="lang_vi")
+            InlineKeyboardButton("🇻🇳 Tiếng Việt", callback_data="lang_vi")
         ]
     ]
 
@@ -1507,11 +1507,6 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Tarjimalar to'g'rilangan
             # Yangilangan qatorlar, tarjima qilingan
             stats_text = (
-                f"🎨 Rasm tayyor!\n\n" 
-                f"📝 Prompt: {escaped_prompt}\n" # escape_md qilingan prompt
-                f"🔢 Soni: {count}\n"
-                f"⏰ Vaqt (UTC+5): {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                f"⏱ Yaratish uchun ketgan vaqt: {elapsed_time:.1f}s"
                 f"{lang['image_ready_header']}\n\n"
                 f"{lang['image_prompt_label']} {escaped_prompt}\n"
                 f"{lang['image_count_label']} {count}\n"
@@ -1721,7 +1716,7 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.exception("Unhandled exception:", exc_info=context.error)
     try:
         if isinstance(update, Update) and update.effective_chat:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text="⚠️ Xatolik yuz berdi. Adminga murojaat qiling.")
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="⚠️ Xatolik yuz berdi. Adminga murojaat qiling yoki qayta urunib ko'ring.")
     except Exception:
         pass
 
