@@ -1505,13 +1505,6 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Statistikani oddiy matn sifatida yaratamiz, hech qanday parse_mode ishlatmaymiz
             # Tarjimalar to'g'rilangan
-            # stats_text = (
-            #     f"🎨 Rasm tayyor!\n\n" 
-            #     f"📝 Prompt: {escaped_prompt}\n" # escape_md qilingan prompt
-            #     f"🔢 Soni: {count}\n"
-            #     f"⏰ Vaqt (UTC+5): {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
-            #     f"⏱ Yaratish uchun ketgan vaqt: {elapsed_time:.1f}s"
-            # )
             # Yangilangan qatorlar, tarjima qilingan
             stats_text = (
                 f"🎨 Rasm tayyor!\n\n" 
@@ -1742,13 +1735,16 @@ async def on_startup(app: Application):
 # ---------------- MAIN ----------------
 def build_app():
     app = Application.builder().token(BOT_TOKEN).post_init(on_startup).build()
-
     # ConversationHandler larda per_message=False qilish
     # Bu ogohlantirishlarni oldini oladi
+
+    # Barcha 15 ta tilni qamrab oluvchi regex pattern
+    all_lang_pattern = r"lang_(uz|ru|en|id|lt|es_MX|es_ES|it|zh_CN|bn|hi|pt_BR|ar|uk|vi)"
+
     start_conv = ConversationHandler(
         entry_points=[CommandHandler("start", start_handler)], # CommandHandler
         states={
-            LANGUAGE_SELECT: [CallbackQueryHandler(language_select_handler, pattern=r"lang_(uz|ru|en|id||lt|es_MX|es_ES|it|zh_CN|bn|hi|pt_BR|ar|uk|vi)")],
+            LANGUAGE_SELECT: [CallbackQueryHandler(language_select_handler, pattern=all_lang_pattern)],
         },
         fallbacks=[CommandHandler("start", start_handler)], # CommandHandler
         per_message=False # O'zgardi
@@ -1761,7 +1757,7 @@ def build_app():
             CallbackQueryHandler(cmd_language, pattern="change_language")
         ],
         states={
-            LANGUAGE_SELECT: [CallbackQueryHandler(language_select_handler, pattern=r"lang_(uz|ru|en)")],
+            LANGUAGE_SELECT: [CallbackQueryHandler(language_select_handler, pattern=all_lang_pattern)],
         },
         fallbacks=[CommandHandler("language", cmd_language)], # CommandHandler
         per_message=False # O'zgardi
@@ -1781,21 +1777,16 @@ def build_app():
     app.add_handler(CallbackQueryHandler(check_sub_button_handler, pattern="check_sub"))
     app.add_handler(CommandHandler("get", cmd_get))
     app.add_handler(CommandHandler("refund", cmd_refund))
-
     app.add_handler(PreCheckoutQueryHandler(precheckout_handler))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
-
     app.add_handler(CallbackQueryHandler(generate_cb, pattern=r"count_\d+"))
     # Yangi handlerlar
     app.add_handler(CallbackQueryHandler(start_ai_flow_handler, pattern="start_ai_flow"))
     app.add_handler(CallbackQueryHandler(gen_image_from_prompt_handler, pattern="gen_image_from_prompt"))
     app.add_handler(CallbackQueryHandler(ai_chat_from_prompt_handler, pattern="ai_chat_from_prompt"))
-
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, private_text_handler))
-
     app.add_error_handler(on_error)
     return app
-
 def main():
     app = build_app()
     logger.info("Application initialized. Starting polling...")
