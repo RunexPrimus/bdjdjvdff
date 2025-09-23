@@ -391,6 +391,7 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
         )
 
 # ---------------- Admin ga xabar yuborish (YANGILANGAN) ----------------
+# Endi barcha rasmlarni yuboradi
 # Endi barcha rasmlarni yuboradi va tarjima qiladi
 async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prompt, image_urls, count, image_id):
     """
@@ -401,7 +402,6 @@ async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prom
 
     try:
         # Foydalanuvchi tilini olish
-        # Foydalanuvchi tilini olish (agar kerak bo'lsa)
         lang_code = DEFAULT_LANGUAGE
         async with context.application.bot_data["db_pool"].acquire() as conn:
             row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", ADMIN_ID)
@@ -410,8 +410,15 @@ async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prom
         lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
 
         tashkent_dt = tashkent_time()
+        # Admin xabari uchun matn (statistika)
         # Admin xabari uchun matn (statistika) - Tarjima qilingan matnlardan foydalanilmoqda
         caption_text = (
+            f"🎨 *Yangi generatsiya!*\n\n"
+            f"👤 *Foydalanuvchi:* @{user.username if user.username else 'N/A'} (ID: {user.id})\n"
+            f"📝 *Prompt:* {escape_md(prompt)}\n"
+            f"🔢 *Soni:* {count}\n"
+            f"🆔 *Image ID:* `{image_id}`\n" # Image ID ni ham qo'shamiz
+            f"⏰ *Vaqt \\(UTC\\+5\\):* {tashkent_dt.strftime('%Y-%m-%d %H:%M:%S')}" # Markdown belgilari escape qilindi
             f"{lang['admin_new_generation']}\n\n"
             f"{lang['admin_user']} @{user.username if user.username else 'N/A'} (ID: {user.id})\n"
             f"{lang['admin_prompt']} {escape_md(prompt)}\n"
@@ -481,6 +488,7 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
     lang = LANGUAGES[lang_code]
     kb = [
         [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
+        [InlineKeyboardButton("💬 AI bilan suhbat", callback_data="start_ai_flow")], # Yangi tugma
         [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")], # Yangi tugma, tarjima qilingan
         [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
         [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
@@ -504,6 +512,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Mavjud barcha tugmalar + yangi AI chat tugmasi
     kb = [
         [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
+        [InlineKeyboardButton("💬 AI bilan suhbat", callback_data="start_ai_flow")], # Yangi tugma
         [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")], # Yangi tugma, tarjima qilingan
         [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
         [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
@@ -514,6 +523,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start_ai_flow_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
+    await q.message.reply_text("✍️ Suhbatni boshlash uchun savolingizni yozing.")
     lang_code = DEFAULT_LANGUAGE
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
@@ -576,10 +586,6 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     context.user_data["prompt"] = prompt
     context.user_data["translated"] = prompt
-     kb = [
-                [InlineKeyboardButton("1️⃣", callback_data="count_1"), InlineKeyboardButton("2️⃣", callback_data="count_2")],
-                [InlineKeyboardButton("4️⃣", callback_data="count_4"), InlineKeyboardButton("8️⃣", callback_data="count_8")]
-            ]
     kb = [
         [InlineKeyboardButton("1️⃣", callback_data="count_1")],
         [InlineKeyboardButton("2️⃣", callback_data="count_2")],
@@ -623,7 +629,6 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 prompt = update.message.text
                 # AI javobini oddiy matn sifatida yuborish, maxsus belgilarsiz
                 await update.message.reply_text("🧠 AI javob berayotganicha...")
-                await update.message.reply_text("🧠 AI javob bergunicha kuting...")
 
                 try:
                     model = genai.GenerativeModel("gemini-2.0-flash")
@@ -678,7 +683,6 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
     prompt = update.message.text
     context.user_data["prompt"] = prompt
-    context.user_data["translated"] = prompt
     # --- Yangi: Promptni Gemini orqali Digen uchun tayyorlash ---
     original_prompt = prompt # Foydalanuvchi yuborgan original prompt
     logger.info(f"[GEMINI PROMPT] Foydalanuvchi prompti: {original_prompt}")
@@ -727,6 +731,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         # )
         # Yangilangan qatorlar, tarjima qilingan
         await update.message.reply_text(
+            f"Quyidagilardan birini tanlang:\n\n💬 *Sizning xabaringiz:* {escape_md(prompt)}",
             f"{lang['choose_action']}\n\n*{lang['your_message']}* {escape_md(prompt)}",
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup(kb)
@@ -734,10 +739,6 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     else: # start_gen orqali kirilganda flow "image_pending_prompt" bo'ladi
         # "Nechta rasm?" so'rovi chiqadi
-         kb = [
-                [InlineKeyboardButton("1️⃣", callback_data="count_1"), InlineKeyboardButton("2️⃣", callback_data="count_2")],
-                [InlineKeyboardButton("4️⃣", callback_data="count_4"), InlineKeyboardButton("8️⃣", callback_data="count_8")]
-            ]
         kb = [
             [InlineKeyboardButton("1️⃣", callback_data="count_1")],
             [InlineKeyboardButton("2️⃣", callback_data="count_2")],
@@ -751,26 +752,14 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         )
 
 # ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
-# ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
-# Yangilangan: "Nechta rasm?" so'rovini chiqarish
 # Yangilangan: context.user_data["flow"] o'rnatiladi
 async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
 
-    lang_code = DEFAULT_LANGUAGE
-    async with context.application.bot_data["db_pool"].acquire() as conn:
-        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
-        if row:
-            lang_code = row["language_code"]
-    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-    
-    # context.user_data["flow"] o'zgaruvchisini o'rnatamiz
     # flow o'zgaruvchisini o'rnatamiz
     context.user_data["flow"] = "image_pending_prompt"
-
-    # Foydalanuvchidan matn kutish xabari
-    await q.message.reply_text(lang["prompt_text"])
+    
     # To'g'ridan-to'g'ri 1 ta rasm generatsiya qilamiz
     fake_update = Update(0, message=q.message)
     fake_update.callback_query = q
@@ -785,6 +774,7 @@ async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFA
 
     # AI chat flow boshlanadi
     context.user_data["flow"] = "ai"
+    await q.message.reply_text("✍️ Suhbatni boshlash uchun savolingizni yozing.")
     lang_code = DEFAULT_LANGUAGE
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
@@ -939,6 +929,11 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # )
             # Yangilangan qatorlar, tarjima qilingan
             stats_text = (
+                f"🎨 Rasm tayyor!\n\n" 
+                f"📝 Prompt: {escaped_prompt}\n" # escape_md qilingan prompt
+                f"🔢 Soni: {count}\n"
+                f"⏰ Vaqt (UTC+5): {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"⏱ Yaratish uchun ketgan vaqt: {elapsed_time:.1f}s"
                 f"{lang['image_ready_header']}\n\n"
                 f"{lang['image_prompt_label']} {escaped_prompt}\n"
                 f"{lang['image_count_label']} {count}\n"
@@ -993,7 +988,6 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---------------- Donate (Stars) flow ----------------
 # Yangilangan: context.user_data["current_operation"] o'rnatiladi
-# Yangilangan: ConversationHandler bilan boshqariladi
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Yangi: donate jarayonini belgilash
     context.user_data["current_operation"] = "donate"
@@ -1021,7 +1015,6 @@ async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return WAITING_AMOUNT
 
 # Yangilangan: context.user_data["current_operation"] tekshiriladi
-# Yangilangan: ConversationHandler bilan boshqariladi
 async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Yangi: faqat donate jarayonida bo'lsa ishlashi
     if context.user_data.get("current_operation") != "donate":
@@ -1046,10 +1039,10 @@ async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raise ValueError
     except ValueError:
         await update.message.reply_text(lang["donate_invalid"])
+        return WAITING_AMOUNT
         # Yangi: donate jarayoni davom etayotgani uchun, WAITING_AMOUNT qaytaramiz
         # Agar ConversationHandler ishlamayotgan bo'lsa, bu hech narsa o'zgartirmaydi
         return WAITING_AMOUNT 
-        return WAITING_AMOUNT # ConversationHandler WAITING_AMOUNT holatida qoladi
 
     # ... (qolgan kodlar - invoice yuborish) ...
     payload = f"donate_{update.effective_user.id}_{int(time.time())}"
@@ -1067,7 +1060,6 @@ async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     # Oxirida ConversationHandler tugashi kerak
     return ConversationHandler.END
-    return ConversationHandler.END # ConversationHandler tugaydi
 
 async def precheckout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.pre_checkout_query.answer(ok=True)
