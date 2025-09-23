@@ -731,17 +731,22 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         )
 # ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
 # Yangilangan: context.user_data["flow"] o'rnatiladi
+# ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
+# Yangilangan: context.user_data["flow"] o'rnatiladi
 async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-
     # flow o'zgaruvchisini o'rnatamiz
     context.user_data["flow"] = "image_pending_prompt"
-    
     # To'g'ridan-to'g'ri 1 ta rasm generatsiya qilamiz
-    fake_update = Update(0, message=q.message)
-    fake_update.callback_query = q
-    fake_update.callback_query.data = "count_1"
+    # Eski usul (xato beradi): fake_update.callback_query = q
+    # Yangi, to'g'ri usul: generate_cb ni to'g'ridan-to'g'ri chaqiramiz
+    # generate_cb ga callback_query ni o'zini uzatamiz
+    # generate_cb funksiyasi faqat callback_query dan foydalanadi, shuning uchun update obyektini butunlay yaratish shart emas
+    # generate_cb ni chaqirishda, update o'rniga yangi Update obyektini yaratib, callback_query ni unga beramiz
+    # 1. generate_cb ga uzatish uchun yangi Update obyektini yaratamiz
+    fake_update = Update(update.update_id, callback_query=q)
+    # 2. generate_cb ga chaqiruv
     await generate_cb(fake_update, context)
 
 # ---------------- Tanlov tugmachasi orqali AI chat ----------------
