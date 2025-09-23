@@ -1223,7 +1223,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             # Biror sababdan last_active yo'q, lekin flow "ai"
             # Bu holat kam uchraydi, lekin ehtimolni hisobga olamiz
             prompt = update.message.text
-            await update.message.reply_text(f"{lang['"your_prompt_label"']}\n{answer}")
+            await update.message.reply_text(f"{lang['your_prompt_label']}\n{answer}")
             try:
                 model = genai.GenerativeModel("gemini-2.0-flash")
                 response = await model.generate_content_async(
