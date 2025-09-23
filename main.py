@@ -696,21 +696,22 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
 
     try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        gemini_response = await model.generate_content_async(
-            gemini_full_prompt,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=100,
-                temperature=0.5
-            )
+    model = genai.GenerativeModel("gemini-2.0-flash")
+    gemini_response = await model.generate_content_async(
+        gemini_full_prompt,
+        generation_config=genai.types.GenerationConfig(
+            max_output_tokens=100,
+            temperature=0.5
         )
-        digen_ready_prompt = gemini_response.text.strip()
-        if not digen_ready_prompt:
-            digen_ready_prompt = original_prompt
-        context.user_data["translated"] = digen_ready_prompt
-    except Exception as gemini_err:
-        logger.error(f"[GEMINI PROMPT ERROR] {gemini_err}")
-        context.user_data["translated"] = original_prompt
+    )
+    digen_ready_prompt = gemini_response.text.strip()
+    if not digen_ready_prompt:
+        digen_ready_prompt = original_prompt
+    context.user_data["translated"] = digen_ready_prompt
+
+except Exception as e:  # <-- gemini_err o'rniga oddiy 'e' ishlatish
+    logger.error(f"[GEMINI PROMPT ERROR] {e}")
+    context.user_data["translated"] = original_prompt
 
     # Inline tugmalar
     kb = [
