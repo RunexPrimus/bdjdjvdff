@@ -1060,20 +1060,14 @@ async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    # "lang_zhcn" → ["lang", "zhcn"] → lang_code = "zhcn"
-    lang_code = q.data.split("_", 1)[1]  # faqat birinchi "_" bo'yicha ajratish
-    lang_code = q.data.split("_")[1]
+    # Eslatma: callback_data "lang_uz", "lang_zhcn" kabi bo'lishi kerak
+    lang_code = q.data.split("_", 1)[1]  # "lang_zhcn" → "zhcn"
+
     user = q.from_user
     await add_user_db(context.application.bot_data["db_pool"], user, lang_code)
-    # Tilni to'g'ri olish
-    lang = LANGUAGES.get(lang_code)
-    if lang is None:
-        # Agar tanlangan til mavjud bo'lmasa, standart tilga qaytamiz
-        lang_code = DEFAULT_LANGUAGE
-        lang = LANGUAGES[DEFAULT_LANGUAGE]
-    # To'g'ridan-to'g'ri lug'atdan olish, default qiymatga ehtiyoj yo'q
-    lang = LANGUAGES[lang_code]
-    # Asosiy menyuni yaratish
+
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+
     kb = [
         [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
         [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")],
@@ -1084,7 +1078,7 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
         text=lang["lang_changed"].format(lang=lang["name"]),
         reply_markup=InlineKeyboardMarkup(kb)
     )
-    return ConversationHandler.END
+    # ❌ ConversationHandler.END qaytarmaymiz, chunki handler oddiy
 # Yangilangan: Yangi AI chat tugmasi qo'shildi
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -1725,43 +1719,29 @@ async def on_startup(app: Application):
 # ---------------- MAIN ----------------
 def build_app():
     app = Application.builder().token(BOT_TOKEN).post_init(on_startup).build()
-    # ConversationHandler larda per_message=False qilish
-    # Bu ogohlantirishlarni oldini oladi
 
-    # Barcha 15 ta tilni qamrab oluvchi regex pattern
+    # Barcha tillar uchun pattern
     all_lang_pattern = r"lang_(uz|ru|en|id|lt|esmx|eses|it|zhcn|bn|hi|ptbr|ar|uk|vi)"
 
+    # /start uchun conversation (faqat tilni birinchi marta so'rash uchun, agar kerak bo'lsa)
     start_conv = ConversationHandler(
-        entry_points=[CommandHandler("start", start_handler)], # CommandHandler
+        entry_points=[CommandHandler("start", start_handler)],
         states={
             LANGUAGE_SELECT: [CallbackQueryHandler(language_select_handler, pattern=all_lang_pattern)],
         },
-        fallbacks=[CommandHandler("start", start_handler)], # CommandHandler
-        per_message=False # O'zgardi
+        fallbacks=[CommandHandler("start", start_handler)],
+        per_message=False
     )
     app.add_handler(start_conv)
 
-    lang_conv = ConversationHandler(
-        entry_points=[
-            CommandHandler("language", cmd_language), # CommandHandler
-            CallbackQueryHandler(cmd_language, pattern="change_language")
-        ],
-        states={
-            LANGUAGE_SELECT: [CallbackQueryHandler(language_select_handler, pattern=all_lang_pattern)],
-        },
-        fallbacks=[CommandHandler("language", cmd_language)], # CommandHandler
-        per_message=False # O'zgardi
-    )
-    app.add_handler(lang_conv)
+    # ⚠️ lang_conv OLIB TASHLANDI
 
-    donate_conv = ConversationHandler(
-        entry_points=[CommandHandler("donate", donate_start), CallbackQueryHandler(donate_start, pattern="donate_custom")],
-        states={WAITING_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, donate_amount)]},
-        fallbacks=[],
-        per_message=False # O'zgardi
-    )
-    app.add_handler(donate_conv)
+    # ✅ Yangi: Oddiy handlerlar
+    app.add_handler(CommandHandler("language", cmd_language))
+    app.add_handler(CallbackQueryHandler(cmd_language, pattern="change_language"))
+    app.add_handler(CallbackQueryHandler(language_select_handler, pattern=all_lang_pattern))
 
+    # ... qolgan handlerlar (donate, generate, etc.)
     # ... (qolgan handlerlar o'zgarmaydi)
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
     app.add_handler(CallbackQueryHandler(check_sub_button_handler, pattern="check_sub"))
