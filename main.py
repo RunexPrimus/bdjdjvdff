@@ -1018,40 +1018,25 @@ async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prom
 # ---------------- Tilni o'zgartirish handleri ----------------
 async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Tugmalarni 2 ustunda, oxirgi tugma alohida qatorga joylashtiramiz
+   async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [
-        [
-            InlineKeyboardButton("🇺🇿 O'zbekcha", callback_data="lang_uz"),
-            InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru")
-        ],
-        [
-            InlineKeyboardButton("🇺🇸 English", callback_data="lang_en"),
-            InlineKeyboardButton("🇮🇩 Bahasa Indonesia", callback_data="lang_id")
-        ],
-        [
-            InlineKeyboardButton("🇱🇹 Lietuvių", callback_data="lang_lt"),
-            InlineKeyboardButton("🇲🇽 Español (LatAm)", callback_data="lang_es_MX")
-        ],
-        [
-            InlineKeyboardButton("🇪🇸 Español", callback_data="lang_es_ES"),
-            InlineKeyboardButton("🇮🇹 Italiano", callback_data="lang_it")
-        ],
-        [
-            InlineKeyboardButton("🇨🇳 简体中文", callback_data="lang_zh_CN"),
-            InlineKeyboardButton("🇧🇩 বাংলা", callback_data="lang_bn")
-        ],
-        [
-            InlineKeyboardButton("🇮🇳 हिंदी", callback_data="lang_hi"),
-            InlineKeyboardButton("🇧🇷 Português", callback_data="lang_pt_BR")
-        ],
-        [
-            InlineKeyboardButton("🇸🇦 العربية", callback_data="lang_ar"),
-            InlineKeyboardButton("🇺🇦 Українська", callback_data="lang_uk")
-        ],
-        # Oxirgi tugma (Vietnamcha) alohida qatorga
-        [
-            InlineKeyboardButton("🇻🇳 Tiếng Việt", callback_data="lang_vi")
-        ]
+        [InlineKeyboardButton("🇺🇿 O'zbekcha", callback_data="lang_uz"),
+         InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru")],
+        [InlineKeyboardButton("🇺🇸 English", callback_data="lang_en"),
+         InlineKeyboardButton("🇮🇩 Bahasa Indonesia", callback_data="lang_id")],
+        [InlineKeyboardButton("🇱🇹 Lietuvių", callback_data="lang_lt"),
+         InlineKeyboardButton("🇲🇽 Español (LatAm)", callback_data="lang_esmx")],
+        [InlineKeyboardButton("🇪🇸 Español", callback_data="lang_eses"),
+         InlineKeyboardButton("🇮🇹 Italiano", callback_data="lang_it")],
+        [InlineKeyboardButton("🇨🇳 简体中文", callback_data="lang_zhcn"),
+         InlineKeyboardButton("🇧🇩 বাংলা", callback_data="lang_bn")],
+        [InlineKeyboardButton("🇮🇳 हिंदी", callback_data="lang_hi"),
+         InlineKeyboardButton("🇧🇷 Português", callback_data="lang_ptbr")],
+        [InlineKeyboardButton("🇸🇦 العربية", callback_data="lang_ar"),
+         InlineKeyboardButton("🇺🇦 Українська", callback_data="lang_uk")],
+        [[InlineKeyboardButton("🇻🇳 Tiếng Việt", callback_data="lang_vi")]]
     ]
+    # ... qolgan kodi o'zgarmaydi
 
     lang_code = DEFAULT_LANGUAGE
     if update.effective_chat.type == "private":
@@ -1075,7 +1060,8 @@ async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    lang_code = q.data.split("_")[1]  # Bu yerda lang_code to'g'ri olinadi
+    # "lang_zhcn" → ["lang", "zhcn"] → lang_code = "zhcn"
+    lang_code = q.data.split("_", 1)[1]  # faqat birinchi "_" bo'yicha ajratish
     lang_code = q.data.split("_")[1]
     user = q.from_user
     await add_user_db(context.application.bot_data["db_pool"], user, lang_code)
