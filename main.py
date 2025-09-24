@@ -1016,9 +1016,9 @@ async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prom
 
 
 # ---------------- Tilni o'zgartirish handleri ----------------
+# ---------------- Tilni o'zgartirish handleri ----------------
 async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Tugmalarni 2 ustunda, oxirgi tugma alohida qatorga joylashtiramiz
-   async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [
         [InlineKeyboardButton("🇺🇿 O'zbekcha", callback_data="lang_uz"),
          InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru")],
@@ -1034,10 +1034,8 @@ async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton("🇧🇷 Português", callback_data="lang_ptbr")],
         [InlineKeyboardButton("🇸🇦 العربية", callback_data="lang_ar"),
          InlineKeyboardButton("🇺🇦 Українська", callback_data="lang_uk")],
-        [[InlineKeyboardButton("🇻🇳 Tiếng Việt", callback_data="lang_vi")]]
+        [InlineKeyboardButton("🇻🇳 Tiếng Việt", callback_data="lang_vi")]  # ✅ Faqat bitta qavslar [...]
     ]
-    # ... qolgan kodi o'zgarmaydi
-
     lang_code = DEFAULT_LANGUAGE
     if update.effective_chat.type == "private":
         async with context.application.bot_data["db_pool"].acquire() as conn:
@@ -1045,16 +1043,12 @@ async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if row:
                 lang_code = row["language_code"]
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-
     if update.callback_query:
         await update.callback_query.answer()
         await update.callback_query.message.edit_text(lang["select_lang"], reply_markup=InlineKeyboardMarkup(kb))
     else:
         await update.message.reply_text(lang["select_lang"], reply_markup=InlineKeyboardMarkup(kb))
-# ---------------- START handleri ----------------
-# ---------------- Tilni o'zgartirish handleri (CALLBACK) ----------------
-# ---------------- Tilni o'zgartirish handleri (CALLBACK) ----------------
-# ---------------- Tilni o'zgartirish handleri (CALLBACK) ----------------
+    return LANGUAGE_SELECT
 async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
