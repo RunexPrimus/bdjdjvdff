@@ -1051,8 +1051,6 @@ async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.message.edit_text(lang["select_lang"], reply_markup=InlineKeyboardMarkup(kb))
     else:
         await update.message.reply_text(lang["select_lang"], reply_markup=InlineKeyboardMarkup(kb))
-
-    return LANGUAGE_SELECT
 # ---------------- START handleri ----------------
 # ---------------- Tilni o'zgartirish handleri (CALLBACK) ----------------
 # ---------------- Tilni o'zgartirish handleri (CALLBACK) ----------------
@@ -1060,14 +1058,10 @@ async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    # Eslatma: callback_data "lang_uz", "lang_zhcn" kabi bo'lishi kerak
     lang_code = q.data.split("_", 1)[1]  # "lang_zhcn" → "zhcn"
-
     user = q.from_user
     await add_user_db(context.application.bot_data["db_pool"], user, lang_code)
-
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-
     kb = [
         [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
         [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")],
@@ -1078,7 +1072,7 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
         text=lang["lang_changed"].format(lang=lang["name"]),
         reply_markup=InlineKeyboardMarkup(kb)
     )
-    # ❌ ConversationHandler.END qaytarmaymiz, chunki handler oddiy
+    # ❌ ConversationHandler.END qaytarmaymiz
 # Yangilangan: Yangi AI chat tugmasi qo'shildi
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -1153,7 +1147,7 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
         prompt = " ".join(context.args)
     else:
         if not context.args:
-            await update.message.reply_text("✍️ Iltimos, rasm uchun matn yozing (yoki oddiy matn yuboring).")
+            await update.message.reply_text("✍️ Iltimos, rasm uchun matn yozing.")
             return
         prompt = " ".join(context.args)
     await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
@@ -1723,39 +1717,37 @@ def build_app():
     # Barcha tillar uchun pattern
     all_lang_pattern = r"lang_(uz|ru|en|id|lt|esmx|eses|it|zhcn|bn|hi|ptbr|ar|uk|vi)"
 
-    # /start uchun conversation (faqat tilni birinchi marta so'rash uchun, agar kerak bo'lsa)
-    start_conv = ConversationHandler(
-        entry_points=[CommandHandler("start", start_handler)],
-        states={
-            LANGUAGE_SELECT: [CallbackQueryHandler(language_select_handler, pattern=all_lang_pattern)],
-        },
-        fallbacks=[CommandHandler("start", start_handler)],
-        per_message=False
-    )
-    app.add_handler(start_conv)
+    # /start — oddiy handler
+    app.add_handler(CommandHandler("start", start_handler))
 
-    # ⚠️ lang_conv OLIB TASHLANDI
-
-    # ✅ Yangi: Oddiy handlerlar
+    # Tilni o'zgartirish — oddiy handlerlar
     app.add_handler(CommandHandler("language", cmd_language))
-    app.add_handler(CallbackQueryHandler(cmd_language, pattern="change_language"))
+    app.add_handler(CallbackQueryHandler(cmd_language, pattern="^change_language$"))
     app.add_handler(CallbackQueryHandler(language_select_handler, pattern=all_lang_pattern))
 
-    # ... qolgan handlerlar (donate, generate, etc.)
-    # ... (qolgan handlerlar o'zgarmaydi)
-    app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="start_gen"))
-    app.add_handler(CallbackQueryHandler(check_sub_button_handler, pattern="check_sub"))
+    # Donate — faqat uni ConversationHandler qilish mumkin
+    donate_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(donate_start, pattern="^donate_custom$")],
+        states={WAITING_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, donate_amount)]},
+        fallbacks=[],
+        per_message=False
+    )
+    app.add_handler(donate_conv)
+
+    # Qolgan handlerlar
+    app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="^start_gen$"))
+    app.add_handler(CallbackQueryHandler(start_ai_flow_handler, pattern="^start_ai_flow$"))
+    app.add_handler(CallbackQueryHandler(check_sub_button_handler, pattern="^check_sub$"))
+    app.add_handler(CallbackQueryHandler(generate_cb, pattern=r"^count_\d+$"))
+    app.add_handler(CallbackQueryHandler(gen_image_from_prompt_handler, pattern="^gen_image_from_prompt$"))
+    app.add_handler(CallbackQueryHandler(ai_chat_from_prompt_handler, pattern="^ai_chat_from_prompt$"))
     app.add_handler(CommandHandler("get", cmd_get))
     app.add_handler(CommandHandler("refund", cmd_refund))
     app.add_handler(PreCheckoutQueryHandler(precheckout_handler))
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
-    app.add_handler(CallbackQueryHandler(generate_cb, pattern=r"count_\d+"))
-    # Yangi handlerlar
-    app.add_handler(CallbackQueryHandler(start_ai_flow_handler, pattern="start_ai_flow"))
-    app.add_handler(CallbackQueryHandler(gen_image_from_prompt_handler, pattern="gen_image_from_prompt"))
-    app.add_handler(CallbackQueryHandler(ai_chat_from_prompt_handler, pattern="ai_chat_from_prompt"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, private_text_handler))
     app.add_error_handler(on_error)
+
     return app
 def main():
     app = build_app()
