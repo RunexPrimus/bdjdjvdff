@@ -1003,10 +1003,16 @@ async def init_db(pool):
             logger.info(f"ℹ️ Columns already exist or error: {e}")
 
 # ---------------- Digen headers ----------------
+# Global indeks (bot ishga tushganda 0 bo'ladi)
+_digen_key_index = 0
+
 def get_digen_headers():
+    global _digen_key_index
     if not DIGEN_KEYS:
         return {}
-    key = random.choice(DIGEN_KEYS)
+    # Round-robin: har safar keyingi tokenni olish
+    key = DIGEN_KEYS[_digen_key_index % len(DIGEN_KEYS)]
+    _digen_key_index += 1
     return {
         "accept": "application/json, text/plain, */*",
         "content-type": "application/json",
