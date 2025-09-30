@@ -1465,7 +1465,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not available:
                 logger.warning("[GENERATE] URL not ready after wait")
                 try:
-                    await q.edit_message_text("⚠️ Rasmni tayyorlash biroz vaqt olmoqda. Keyinroq urinib ko'ring.")
+                    await q.edit_message_text("⚠️ The image is taking a while to prepare. Please try again later.")
                 except Exception:
                     pass
                 return
@@ -1524,7 +1524,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Oxirgi progress xabarini muvaffaqiyatli natija bilan almashtirish
             try:
-                await q.edit_message_text("✅ Tayyor!")
+                await q.edit_message_text("✅ Done!")
             except BadRequest:
                 pass
 
@@ -1601,7 +1601,7 @@ async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_invoice(
         chat_id=update.effective_chat.id,
         title="💖 Bot Donation",
-        description="Botni qo‘llab-quvvatlash uchun ixtiyoriy summa yuboring.",
+        description="Please send the amount of property for both supports.",
         payload=payload,
         provider_token="",
         currency="XTR",
@@ -1641,59 +1641,55 @@ async def successful_payment_handler(update: Update, context: ContextTypes.DEFAU
 async def cmd_refund(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id != ADMIN_ID:
-        await update.message.reply_text("⛔ Sizga ruxsat yo'q.")
+        await update.message.reply_text("⛔ Error.")
         return
-
     if not context.args or len(context.args) < 2:
-        await update.message.reply_text("UsageId: /refund <user_id> <donation_id>")
+        await update.message.reply_text("UsageId: /refund <user_id> <telegram_payment_charge_id>")
         return
-
     try:
         target_user_id = int(context.args[0])
-        donation_id = int(context.args[1])
+        telegram_payment_charge_id = context.args[1].strip()
     except (ValueError, IndexError):
-        await update.message.reply_text("UsageId: /refund <user_id> <donation_id>")
+        await update.message.reply_text("UsageId: /refund <user_id> <telegram_payment_charge_id>")
         return
 
+    # DB dan stars miqdorini olish (ixtiyoriy, faqat log uchun)
+    stars = 0
     pool = context.application.bot_data["db_pool"]
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT charge_id, stars FROM donations WHERE id = $1 AND user_id = $2",
-            donation_id, target_user_id
+            "SELECT stars FROM donations WHERE charge_id = $1 AND user_id = $2",
+            telegram_payment_charge_id, target_user_id
         )
-        if not row:
-            await update.message.reply_text("❌ Topilmadi yoki noto'g'ri ma'lumot.")
-            return
+        if row:
+            stars = row["stars"]
+        else:
+            # Agar topilmasa ham, refund qilishga ruxsat beramiz (masalan, eski to'lov bo'lsa)
+            logger.info(f"[REFUND] To'lov DB da topilmadi, lekin refund urinishi davom ettirilmoqda: {telegram_payment_charge_id}")
 
-        charge_id = row["charge_id"]
-        stars = row["stars"]
-
-        if not charge_id:
-            await update.message.reply_text("❌ Bu to'lovda charge_id yo'q (eski to'lov).")
-            return
-
-        try:
-            await context.bot.refund_star_payment(
-                user_id=target_user_id,
-                telegram_payment_charge_id=charge_id
-            )
-            await update.message.reply_text(f"✅ {stars} Stars muvaffaqiyatli qaytarildi foydalanuvchi {target_user_id} ga.")
-
+    try:
+        await context.bot.refund_star_payment(
+            user_id=target_user_id,
+            telegram_payment_charge_id=telegram_payment_charge_id
+        )
+        # Muvaffaqiyatli bo'lsa, DB ga refund qilinganligini belgilaymiz
+        async with pool.acquire() as conn:
             await conn.execute(
-                "UPDATE donations SET refunded_at = NOW() WHERE id = $1",
-                donation_id
+                "UPDATE donations SET refunded_at = NOW() WHERE charge_id = $1 AND user_id = $2",
+                telegram_payment_charge_id, target_user_id
             )
-
-        except Exception as e:
-            logger.exception(f"[REFUND ERROR] {e}")
-            await update.message.reply_text(f"❌ Xatolik: {str(e)}")
-
+        await update.message.reply_text(
+            f"✅ {stars} Stars muvaffaqiyatli qaytarildi foydalanuvchi {target_user_id} ga."
+        )
+    except Exception as e:
+        logger.exception(f"[REFUND ERROR] {e}")
+        await update.message.reply_text(f"❌ Xatolik: {str(e)}")
 # ---------------- Error handler ----------------
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.exception("Unhandled exception:", exc_info=context.error)
     try:
         if isinstance(update, Update) and update.effective_chat:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text="⚠️ Xatolik yuz berdi. Adminga murojaat qiling yoki qayta urunib ko'ring.")
+            await context.bot.send_message(chat_id=update.effective_chat.id, text="⚠️ An error occurred. Please contact the admin or try again.")
     except Exception:
         pass
 
