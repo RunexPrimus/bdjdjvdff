@@ -1618,25 +1618,21 @@ async def successful_payment_handler(update: Update, context: ContextTypes.DEFAU
     payment = update.message.successful_payment
     amount_stars = payment.total_amount
     user = update.effective_user
-
-    charge_id = payment.provider_payment_charge_id
-
+    # ✅ TO'G'RI: telegram_payment_charge_id
+    charge_id = payment.telegram_payment_charge_id  # <--- BU O'ZGARTIRILDI
     lang_code = DEFAULT_LANGUAGE
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user.id)
         if row:
             lang_code = row["language_code"]
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-
     await update.message.reply_text(lang["donate_thanks"].format(name=user.first_name, stars=amount_stars))
-
     pool = context.application.bot_data["db_pool"]
     async with pool.acquire() as conn:
         await conn.execute(
             "INSERT INTO donations(user_id, username, stars, payload, charge_id) VALUES($1,$2,$3,$4,$5)",
             user.id, user.username if user.username else None, amount_stars, payment.invoice_payload, charge_id
         )
-
 # ---------------- Refund handler (faqat admin uchun) ----------------
 async def cmd_refund(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
