@@ -75,6 +75,16 @@ LANGUAGES = {
         "select_count": "🔢 Nechta rasm yaratilsin?",
         "generating": "🔄 Rasm yaratilmoqda ({count})... ⏳",
         "success": "✅ Rasm tayyor! 📸",
+        "get_no_args_group": "❌ Guruhda /get dan keyin prompt yozing. Misol: /get futuristik shahar",
+"get_no_args_private": "✍️ Iltimos, rasm uchun matn yozing.",
+"generating_progress": "🔄 Rasm yaratilmoqda... {bar} {percent}%",
+"image_delayed": "⚠️ Rasm tayyorlanish biroz kechikmoqda. Keyinroq qayta urinib ko'ring.",
+"donate_title": "💖 Botga hissa",
+"donate_description": "Botni qo'llab-quvvatlash uchun Stars yuboring.",
+"done": "✅ Tayyor!",
+"error_occurred": "⚠️ Xatolik yuz berdi. Qayta urinib ko‘ring.",
+"choose_action_prompt": "Quyidagilardan birini tanlang:",
+"your_message_label": "💬 Sizning xabaringiz:",
         "error": "⚠️ Xatolik yuz berdi. Qayta urinib ko‘ring.",
         "donate_prompt": "💰 Iltimos, yubormoqchi bo‘lgan miqdorni kiriting (1–100000):",
         "donate_invalid": "❌ Iltimos, 1–100000 oralig‘ida butun son kiriting.",
@@ -122,6 +132,16 @@ LANGUAGES = {
         "select_count": "🔢 How many images to generate?",
         "generating": "🔄 Generating image ({count})... ⏳",
         "success": "✅ Image ready! 📸",
+        "get_no_args_group": "❌ In groups, write a prompt after /get. Example: /get futuristic city",
+"get_no_args_private": "✍️ Please enter a text prompt for the image.",
+"generating_progress": "🔄 Generating image... {bar} {percent}%",
+"image_delayed": "⚠️ The image is taking a while to prepare. Please try again later.",
+"donate_title": "💖 Support the Bot",
+"donate_description": "Send Stars to support the bot.",
+"done": "✅ Done!",
+"error_occurred": "⚠️ An error occurred. Please try again.",
+"choose_action_prompt": "Choose one of the following:",
+"your_message_label": "💬 Your message:",
         "error": "⚠️ An error occurred. Please try again.",
         "donate_prompt": "💰 Please enter the amount you wish to send (1–100000):",
         "donate_invalid": "❌ Please enter a whole number between 1 and 100000.",
@@ -169,6 +189,16 @@ LANGUAGES = {
         "select_count": "🔢 Сколько изображений создать?",
         "generating": "🔄 Создаю изображение ({count})... ⏳",
         "success": "✅ Изображение готово! 📸",
+        "get_no_args_group": "❌ В группах напишите промпт после /get. Пример: /get футуристический город",
+"get_no_args_private": "✍️ Пожалуйста, введите текст для генерации изображения.",
+"generating_progress": "🔄 Создаю изображение... {bar} {percent}%",
+"image_delayed": "⚠️ Подготовка изображения занимает больше времени. Попробуйте позже.",
+"donate_title": "💖 Поддержать бота",
+"donate_description": "Отправьте Stars, чтобы поддержать бота.",
+"done": "✅ Готово!",
+"error_occurred": "⚠️ Произошла ошибка. Попробуйте снова.",
+"choose_action_prompt": "Выберите один из вариантов:",
+"your_message_label": "💬 Ваше сообщение:",
         "error": "⚠️ Произошла ошибка. Попробуйте еще раз.",
         "donate_prompt": "💰 Пожалуйста, введите сумму для отправки (1–100000):",
         "donate_invalid": "❌ Пожалуйста, введите целое число от 1 до 100000.",
@@ -216,6 +246,16 @@ LANGUAGES = {
         "select_count": "🔢 Berapa banyak gambar yang akan dibuat?",
         "generating": "🔄 Membuat gambar ({count})... ⏳",
         "success": "✅ Gambar siap! 📸",
+        "get_no_args_group": "❌ Di grup, tulis prompt setelah /get. Contoh: /get kota futuristik",
+"get_no_args_private": "✍️ Harap masukkan teks untuk membuat gambar.",
+"generating_progress": "🔄 Membuat gambar... {bar} {percent}%",
+"image_delayed": "⚠️ Pembuatan gambar sedang tertunda. Coba lagi nanti.",
+"donate_title": "💖 Dukung Bot",
+"donate_description": "Kirim Stars untuk mendukung bot.",
+"done": "✅ Selesai!",
+"error_occurred": "⚠️ Terjadi kesalahan. Silakan coba lagi.",
+"choose_action_prompt": "Pilih salah satu opsi berikut:",
+"your_message_label": "💬 Pesan Anda:",
         "error": "⚠️ Terjadi kesalahan. Silakan coba lagi.",
         "donate_prompt": "💰 Silakan masukkan jumlah yang ingin Anda kirim (1–100000):",
         "donate_invalid": "❌ Harap masukkan angka bulat antara 1 dan 100000.",
@@ -263,7 +303,16 @@ LANGUAGES = {
         "select_count": "🔢 Kiek paveikslėlių generuoti?",
         "generating": "🔄 Generuojamas paveikslėlis ({count})... ⏳",
         "success": "✅ Paveikslėlis paruoštas! 📸",
-        "error": "⚠️ Įvyko klaida. Bandykite dar kartą.",
+        "get_no_args_group": "❌ Grupėse po /get įveskite užduotį. Pavyzdys: /get futuristinis miestas",
+"get_no_args_private": "✍️ Įveskite tekstą paveikslėlio kūrimui.",
+"generating_progress": "🔄 Kuriamas paveikslėlis... {bar} {percent}%",
+"image_delayed": "⚠️ Paveikslėlio paruošimas užtrunka. Bandykite vėliau.",
+"donate_title": "💖 Paremkite botą",
+"donate_description": "Siųskite Stars, kad paremtumėte botą.",
+"done": "✅ Atlikta!",
+"error_occurred": "⚠️ Įvyko klaida. Bandykite dar kartą.",
+"choose_action_prompt": "Pasirinkite vieną iš šių parinkčių:",
+"your_message_label": "💬 Jūsų žinutė:",
         "donate_prompt": "💰 Įveskite sumą, kurią norite išsiųsti (1–100000):",
         "donate_invalid": "❌ Įveskite sveikąjį skaičių nuo 1 iki 100000.",
         "donate_thanks": "✅ Ačiū, {name}! Jūs išsiuntėte {stars} Stars.",
@@ -310,6 +359,16 @@ LANGUAGES = {
         "select_count": "🔢 ¿Cuántas imágenes generar?",
         "generating": "🔄 Generando imagen ({count})... ⏳",
         "success": "✅ ¡Imagen lista! 📸",
+        "get_no_args_group": "❌ En grupos, escribe un prompt después de /get. Ejemplo: /get ciudad futurista",
+"get_no_args_private": "✍️ Por favor, escribe un texto para generar la imagen.",
+"generating_progress": "🔄 Generando imagen... {bar} {percent}%",
+"image_delayed": "⚠️ La imagen tarda en prepararse. Intenta más tarde.",
+"donate_title": "💖 Apoya al Bot",
+"donate_description": "Envía Stars para apoyar al bot.",
+"done": "✅ ¡Listo!",
+"error_occurred": "⚠️ Ocurrió un error. Por favor, inténtalo de nuevo.",
+"choose_action_prompt": "Elige una de las siguientes opciones:",
+"your_message_label": "💬 Tu mensaje:",
         "error": "⚠️ Ocurrió un error. Por favor, inténtalo de nuevo.",
         "donate_prompt": "💰 Por favor, ingresa la cantidad que deseas enviar (1–100000):",
         "donate_invalid": "❌ Por favor, ingresa un número entero entre 1 y 100000.",
@@ -357,6 +416,16 @@ LANGUAGES = {
         "select_count": "🔢 ¿Cuántas imágenes generar?",
         "generating": "🔄 Generando imagen ({count})... ⏳",
         "success": "✅ ¡Imagen lista! 📸",
+        "get_no_args_group": "❌ En grupos, escribe un texto después de /get. Ejemplo: /get ciudad futurista",
+"get_no_args_private": "✍️ Por favor, introduce un texto para generar la imagen.",
+"generating_progress": "🔄 Generando imagen... {bar} {percent}%",
+"image_delayed": "⚠️ La imagen tarda en prepararse. Inténtalo más tarde.",
+"donate_title": "💖 Apoya al Bot",
+"donate_description": "Envía Stars para apoyar al bot.",
+"done": "✅ ¡Listo!",
+"error_occurred": "⚠️ Ha ocurrido un error. Por favor, inténtalo de nuevo.",
+"choose_action_prompt": "Elige una de las siguientes opciones:",
+"your_message_label": "💬 Tu mensaje:",
         "error": "⚠️ Ha ocurrido un error. Por favor, inténtalo de nuevo.",
         "donate_prompt": "💰 Por favor, introduce la cantidad que deseas enviar (1–100000):",
         "donate_invalid": "❌ Por favor, introduce un número entero entre 1 y 100000.",
@@ -404,6 +473,16 @@ LANGUAGES = {
         "select_count": "🔢 Quante immagini generare?",
         "generating": "🔄 Generazione immagine ({count})... ⏳",
         "success": "✅ Immagine pronta! 📸",
+        "get_no_args_group": "❌ Nei gruppi, scrivi un prompt dopo /get. Esempio: /get città futuristica",
+"get_no_args_private": "✍️ Inserisci un testo per generare l'immagine.",
+"generating_progress": "🔄 Generazione in corso... {bar} {percent}%",
+"image_delayed": "⚠️ L'immagine sta impiegando più tempo del previsto. Riprova più tardi.",
+"donate_title": "💖 Supporta il Bot",
+"donate_description": "Invia Stars per supportare il bot.",
+"done": "✅ Fatto!",
+"error_occurred": "⚠️ Si è verificato un errore. Riprova.",
+"choose_action_prompt": "Scegli una delle seguenti opzioni:",
+"your_message_label": "💬 Il tuo messaggio:",
         "error": "⚠️ Si è verificato un errore. Riprova.",
         "donate_prompt": "💰 Inserisci l'importo che desideri inviare (1–100000):",
         "donate_invalid": "❌ Inserisci un numero intero compreso tra 1 e 100000.",
@@ -451,6 +530,16 @@ LANGUAGES = {
         "select_count": "🔢 生成多少张图像？",
         "generating": "🔄 正在生成图像 ({count})... ⏳",
         "success": "✅ 图像已准备好！ 📸",
+        "get_no_args_group": "❌ 在群组中，请在 /get 后输入提示词。例如：/get 未来城市",
+"get_no_args_private": "✍️ 请输入用于生成图像的文本。",
+"generating_progress": "🔄 正在生成图像... {bar} {percent}%",
+"image_delayed": "⚠️ 图像生成需要更长时间。请稍后再试。",
+"donate_title": "💖 支持机器人",
+"donate_description": "发送 Stars 以支持机器人。",
+"done": "✅ 完成！",
+"error_occurred": "⚠️ 发生错误。请重试。",
+"choose_action_prompt": "请选择以下选项之一：",
+"your_message_label": "💬 您的消息：",
         "error": "⚠️ 发生错误。请重试。",
         "donate_prompt": "💰 请输入您要发送的金额 (1–100000)：",
         "donate_invalid": "❌ 请输入1到100000之间的整数。",
@@ -498,6 +587,16 @@ LANGUAGES = {
         "select_count": "🔢 কতগুলি ছবি তৈরি করবেন?",
         "generating": "🔄 ছবি তৈরি করা হচ্ছে ({count})... ⏳",
         "success": "✅ ছবি প্রস্তুত! 📸",
+        "get_no_args_group": "❌ গ্রুপে, /get এর পরে একটি প্রম্পট লিখুন। উদাহরণ: /get ফিউচারিস্টিক সিটি",
+"get_no_args_private": "✍️ দয়া করে ছবির জন্য একটি টেক্সট লিখুন।",
+"generating_progress": "🔄 ছবি তৈরি হচ্ছে... {bar} {percent}%",
+"image_delayed": "⚠️ ছবি তৈরি করতে আরও সময় লাগছে। পরে আবার চেষ্টা করুন।",
+"donate_title": "💖 বটকে সমর্থন করুন",
+"donate_description": "বটকে সমর্থন করতে Stars পাঠান।",
+"done": "✅ সম্পন্ন!",
+"error_occurred": "⚠️ একটি ত্রুটি ঘটেছে। অনুগ্রহ করে আবার চেষ্টা করুন।",
+"choose_action_prompt": "নিচের যেকোনো একটি নির্বাচন করুন:",
+"your_message_label": "💬 আপনার বার্তা:",
         "error": "⚠️ একটি ত্রুটি ঘটেছে। অনুগ্রহ করে আবার চেষ্টা করুন।",
         "donate_prompt": "💰 অনুগ্রহ করে আপনি যে পরিমাণ পাঠাতে চান তা লিখুন (1–100000):",
         "donate_invalid": "❌ অনুগ্রহ করে 1 থেকে 100000 এর মধ্যে একটি পূর্ণসংখ্যা লিখুন।",
@@ -545,6 +644,16 @@ LANGUAGES = {
         "select_count": "🔢 कितनी छवियाँ उत्पन्न करें?",
         "generating": "🔄 छवि उत्पन्न हो रही है ({count})... ⏳",
         "success": "✅ छवि तैयार है! 📸",
+        "get_no_args_group": "❌ समूह में, /get के बाद एक प्रॉम्प्ट लिखें। उदाहरण: /get भविष्य का शहर",
+"get_no_args_private": "✍️ कृपया छवि के लिए एक पाठ दर्ज करें।",
+"generating_progress": "🔄 छवि बन रही है... {bar} {percent}%",
+"image_delayed": "⚠️ छवि तैयार होने में थोड़ा समय लग रहा है। बाद में पुनः प्रयास करें।",
+"donate_title": "💖 बॉट का समर्थन करें",
+"donate_description": "बॉट का समर्थन करने के लिए Stars भेजें।",
+"done": "✅ हो गया!",
+"error_occurred": "⚠️ एक त्रुटि हुई। कृपया पुनः प्रयास करें।",
+"choose_action_prompt": "निम्नलिखित में से एक चुनें:",
+"your_message_label": "💬 आपका संदेश:",
         "error": "⚠️ एक त्रुटि हुई। कृपया पुनः प्रयास करें।",
         "donate_prompt": "💰 कृपया वह राशि दर्ज करें जो आप भेजना चाहते हैं (1–100000):",
         "donate_invalid": "❌ कृपया 1 से 100000 के बीच एक पूर्णांक दर्ज करें।",
@@ -592,6 +701,16 @@ LANGUAGES = {
         "select_count": "🔢 Quantas imagens gerar?",
         "generating": "🔄 Gerando imagem ({count})... ⏳",
         "success": "✅ Imagem pronta! 📸",
+        "get_no_args_group": "❌ Em grupos, escreva um prompt após /get. Exemplo: /get cidade futurista",
+"get_no_args_private": "✍️ Por favor, digite um texto para gerar a imagem.",
+"generating_progress": "🔄 Gerando imagem... {bar} {percent}%",
+"image_delayed": "⚠️ A imagem está demorando para ser preparada. Tente novamente mais tarde.",
+"donate_title": "💖 Apoie o Bot",
+"donate_description": "Envie Stars para apoiar o bot.",
+"done": "✅ Pronto!",
+"error_occurred": "⚠️ Ocorreu um erro. Por favor, tente novamente.",
+"choose_action_prompt": "Escolha uma das opções a seguir:",
+"your_message_label": "💬 Sua mensagem:",
         "error": "⚠️ Ocorreu um erro. Por favor, tente novamente.",
         "donate_prompt": "💰 Por favor, insira o valor que deseja enviar (1–100000):",
         "donate_invalid": "❌ Por favor, insira um número inteiro entre 1 e 100000.",
@@ -639,6 +758,16 @@ LANGUAGES = {
         "select_count": "🔢 كم عدد الصور التي سيتم إنشاؤها؟",
         "generating": "🔄 يتم إنشاء الصورة ({count})... ⏳",
         "success": "✅ الصورة جاهزة! 📸",
+        "get_no_args_group": "❌ في المجموعات، اكتب موجهًا بعد /get. مثال: /get مدينة مستقبلية",
+"get_no_args_private": "✍️ يرجى إدخال نص لإنشاء الصورة.",
+"generating_progress": "🔄 يتم إنشاء الصورة... {bar} {percent}%",
+"image_delayed": "⚠️ تستغرق الصورة وقتًا أطول من المعتاد. حاول مرة أخرى لاحقًا.",
+"donate_title": "💖 دعم البوت",
+"donate_description": "أرسل Stars لدعم البوت.",
+"done": "✅ تم!",
+"error_occurred": "⚠️ حدث خطأ. يرجى المحاولة مرة أخرى.",
+"choose_action_prompt": "اختر واحدة من الخيارات التالية:",
+"your_message_label": "💬 رسالتك:",
         "error": "⚠️ حدث خطأ. يرجى المحاولة مرة أخرى.",
         "donate_prompt": "💰 يرجى إدخال المبلغ الذي ترغب في إرساله (1–100000):",
         "donate_invalid": "❌ يرجى إدخال رقم صحيح بين 1 و 100000.",
@@ -686,6 +815,16 @@ LANGUAGES = {
         "select_count": "🔢 Скільки зображень створити?",
         "generating": "🔄 Створюю зображення ({count})... ⏳",
         "success": "✅ Зображення готове! 📸",
+        "get_no_args_group": "❌ У групах напишіть промпт після /get. Приклад: /get футуристичне місто",
+"get_no_args_private": "✍️ Будь ласка, введіть текст для створення зображення.",
+"generating_progress": "🔄 Створення зображення... {bar} {percent}%",
+"image_delayed": "⚠️ Підготовка зображення займає більше часу. Спробуйте пізніше.",
+"donate_title": "💖 Підтримати бота",
+"donate_description": "Надішліть Stars, щоб підтримати бота.",
+"done": "✅ Готово!",
+"error_occurred": "⚠️ Сталася помилка. Спробуйте ще раз.",
+"choose_action_prompt": "Виберіть один із варіантів:",
+"your_message_label": "💬 Ваше повідомлення:",
         "error": "⚠️ Сталася помилка. Будь ласка, спробуйте ще раз.",
         "donate_prompt": "💰 Будь ласка, введіть суму, яку ви хочете надіслати (1–100000):",
         "donate_invalid": "❌ Будь ласка, введіть ціле число від 1 до 100000.",
@@ -733,6 +872,16 @@ LANGUAGES = {
         "select_count": "🔢 Tạo bao nhiêu hình ảnh?",
         "generating": "🔄 Đang tạo hình ảnh ({count})... ⏳",
         "success": "✅ Hình ảnh đã sẵn sàng! 📸",
+        "get_no_args_group": "❌ Trong nhóm, hãy viết prompt sau /get. Ví dụ: /get thành phố tương lai",
+"get_no_args_private": "✍️ Vui lòng nhập văn bản để tạo hình ảnh.",
+"generating_progress": "🔄 Đang tạo hình ảnh... {bar} {percent}%",
+"image_delayed": "⚠️ Hình ảnh đang mất nhiều thời gian để chuẩn bị. Vui lòng thử lại sau.",
+"donate_title": "💖 Ủng hộ Bot",
+"donate_description": "Gửi Stars để ủng hộ bot.",
+"done": "✅ Xong!",
+"error_occurred": "⚠️ Đã xảy ra lỗi. Vui lòng thử lại.",
+"choose_action_prompt": "Chọn một trong các tùy chọn sau:",
+"your_message_label": "💬 Tin nhắn của bạn:",
         "error": "⚠️ Đã xảy ra lỗi. Vui lòng thử lại.",
         "donate_prompt": "💰 Vui lòng nhập số tiền bạn muốn gửi (1–100000):",
         "donate_invalid": "❌ Vui lòng nhập một số nguyên từ 1 đến 100000.",
@@ -1075,11 +1224,17 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user_id)
         if row:
             lang_code = row["language_code"]
+
+    if lang_code is None:
+        # Yangi foydalanuvchi — til tanlasin
+        await cmd_language(update, context)
+        return
+
+    # Eski foydalanuvchi — asosiy menyu
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-    # Tugmalarni yaratishda faqat tarjima qilingan "AI bilan suhbat" tugmasi qo'shiladi
     kb = [
         [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
-        [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")], # Faqat shu qator
+        [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")],
         [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
         [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
     ]
@@ -1384,7 +1539,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bar = '█' * filled_length + '░' * (bar_length - filled_length)
         try:
             # Eski xabarni yangilash uchun Markdown ishlatmaymiz
-            await q.edit_message_text(f"🔄 Rasm yaratilmoqda... {bar} {percent}%")
+            await q.edit_message_text(lang["generating_progress"].format(bar=bar, percent=percent))
         except Exception:
             pass # Xatolikni e'tiborsiz qoldirish mumkin
 
@@ -1465,7 +1620,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not available:
                 logger.warning("[GENERATE] URL not ready after wait")
                 try:
-                    await q.edit_message_text("⚠️ The image is taking a while to prepare. Please try again later.")
+                    await q.edit_message_text(lang["image_delayed"])
                 except Exception:
                     pass
                 return
@@ -1524,7 +1679,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Oxirgi progress xabarini muvaffaqiyatli natija bilan almashtirish
             try:
-                await q.edit_message_text("✅ Done!")
+                await q.edit_message_text(lang["done"])
             except BadRequest:
                 pass
 
@@ -1600,8 +1755,8 @@ async def donate_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_invoice(
         chat_id=update.effective_chat.id,
-        title="💖 Bot Donation",
-        description="Please send the amount of property for both supports.",
+        title=lang["donate_title"],
+        description=lang["donate_description"],
         payload=payload,
         provider_token="",
         currency="XTR",
