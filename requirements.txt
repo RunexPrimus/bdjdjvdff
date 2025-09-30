@@ -1,5 +1,4 @@
-python-telegram-bot==20.7
+python-telegram-bot==20.4
 aiohttp
 asyncpg
-python-dotenv
-google-generativeai==0.5.4
+google-generativeai
