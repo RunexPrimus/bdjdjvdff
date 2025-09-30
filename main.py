@@ -1509,9 +1509,10 @@ async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFA
 
 # GENERATE (robust) - Yangilangan versiya (Prompt - Gemini - Digen)
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"[START] Foydalanuvchi {user.id} generatsiya boshladi")
     q = update.callback_query
     await q.answer()
-logger.info(f"[START] Foydalanuvchi {user.id} generatsiya boshladi")
+
     lang_code = DEFAULT_LANGUAGE
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
