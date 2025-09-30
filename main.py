@@ -1691,12 +1691,10 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
     except Exception as e:
-        logger.info(f"[END] Foydalanuvchi {user.id} generatsiya tugadi")
         try:
             await q.edit_message_text(lang["error"])
         except Exception:
             pass
-
 # ---------------- Donate (Stars) flow ----------------
 # Yangilangan: context.user_data["current_operation"] o'rnatiladi
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
