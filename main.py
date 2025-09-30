@@ -38,7 +38,7 @@ CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@SizningKanal")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1001234567890"))
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
 DIGEN_URL = os.getenv("DIGEN_URL", "https://api.digen.ai/v2/tools/text_to_image")
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = None
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not BOT_TOKEN:
