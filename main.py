@@ -2051,21 +2051,16 @@ async def on_startup(app: Application):
 # ---------------- MAIN ----------------
 def build_app():
     app = Application.builder().token(BOT_TOKEN).post_init(on_startup).build()
-    # Barcha tillar uchun pattern
     all_lang_pattern = r"lang_(uz|ru|en|id|lt|esmx|eses|it|zhcn|bn|hi|ptbr|ar|uk|vi)"
     
-    # --- Yangi handlerlar ---
+    # --- Handlers ---
     app.add_handler(CallbackQueryHandler(show_stats_handler, pattern="^show_stats$"))
-    
-    # /start — oddiy handler
     app.add_handler(CommandHandler("stats", cmd_public_stats))
-    app.add_handler(CallbackQueryHandler(show_stats_handler, pattern="^show_stats$"))
     app.add_handler(CommandHandler("start", start_handler))
-    # Tilni o'zgartirish
     app.add_handler(CommandHandler("language", cmd_language))
     app.add_handler(CallbackQueryHandler(cmd_language, pattern="^change_language$"))
     app.add_handler(CallbackQueryHandler(language_select_handler, pattern=all_lang_pattern))
-    
+
     # Donate
     donate_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(donate_start, pattern="^donate_custom$")],
@@ -2076,34 +2071,25 @@ def build_app():
     app.add_handler(donate_conv)
 
     # Ban
-ban_conv = ConversationHandler(
-    entry_points=[CallbackQueryHandler(admin_ban_start, pattern="^admin_ban$")],
-    states={BAN_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_ban_confirm)]},
-    fallbacks=[],
-    per_message=False
-)
-app.add_handler(ban_conv)
-
-# Unban
-unban_conv = ConversationHandler(
-    entry_points=[CallbackQueryHandler(admin_unban_start, pattern="^admin_unban$")],
-    states={UNBAN_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_unban_confirm)]},
-    fallbacks=[],
-    per_message=False
-)
-app.add_handler(unban_conv)
-
-    # Admin panel
-    app.add_handler(CallbackQueryHandler(admin_panel_handler, pattern="^admin_panel$"))
-    app.add_handler(CallbackQueryHandler(show_stats_handler, pattern="^show_stats$"))
-
-    # Ban
     ban_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin_ban_start, pattern="^admin_ban$")],
         states={BAN_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_ban_confirm)]},
-        fallbacks=[]
+        fallbacks=[],
+        per_message=False
     )
     app.add_handler(ban_conv)
+
+    # Unban
+    unban_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(admin_unban_start, pattern="^admin_unban$")],
+        states={UNBAN_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_unban_confirm)]},
+        fallbacks=[],
+        per_message=False
+    )
+    app.add_handler(unban_conv)
+
+    # Admin panel
+    app.add_handler(CallbackQueryHandler(admin_panel_handler, pattern="^admin_panel$"))
 
     # Broadcast
     broadcast_conv = ConversationHandler(
@@ -2129,8 +2115,8 @@ app.add_handler(unban_conv)
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, private_text_handler))
     app.add_error_handler(on_error)
-    return app
 
+    return app
 
 def main():
     app = build_app()
