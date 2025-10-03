@@ -1480,19 +1480,19 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     # Agar hech qanday flow boshlanmagan bo'lsa (faqat oddiy matn)
     if flow is None: 
-        kb = [
-            [
-                InlineKeyboardButton("🖼 Rasm yaratish", callback_data="gen_image_from_prompt"),
-                InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat_from_prompt")
-            ]
+    context.user_data["flow"] = "image_pending_prompt"  # Tanlov tugmalari uchun flow
+    kb = [
+        [
+            InlineKeyboardButton("🖼 Rasm yaratish", callback_data="gen_image_from_prompt"),
+            InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat_from_prompt")
         ]
-        # Yangilangan qatorlar, tarjima qilingan
-        await update.message.reply_text(
-            f"{lang['choose_action']}\n*{lang['your_message']}* {escape_md(prompt)}",
-            parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup(kb)
-        )
-        return
+    ]
+    await update.message.reply_text(
+        f"{lang['choose_action']}\n*{lang['your_message']}* {escape_md(prompt)}",
+        parse_mode="MarkdownV2",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+    return
     else: # start_gen orqali kirilganda flow "image_pending_prompt" bo'ladi
         # "Nechta rasm?" so'rovi chiqadi
         kb = [
@@ -2037,7 +2037,6 @@ def build_app():
     all_lang_pattern = r"lang_(uz|ru|en|id|lt|esmx|eses|it|zhcn|bn|hi|ptbr|ar|uk|vi)"
     
     # --- Yangi handlerlar ---
-    app.add_handler(CommandHandler("stats", cmd_public_stats))
     app.add_handler(CallbackQueryHandler(show_stats_handler, pattern="^show_stats$"))
     
     # /start — oddiy handler
