@@ -1211,13 +1211,17 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
     user = q.from_user
     await add_user_db(context.application.bot_data["db_pool"], user, lang_code)
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-    kb = [
-        [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
-        [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")],
-        [InlineKeyboardButton("📊 Statistika", callback_data="show_stats")],  # ✅ Yangi
-        [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
-        [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
-    ]
+   # start_handler ichida:
+kb = [
+    [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
+    [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")],
+    [InlineKeyboardButton("📈 Statistika", callback_data="show_stats")],
+    [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
+    [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
+]
+# Faqat admin uchun
+if user_id == ADMIN_ID:
+    kb.insert(-1, [InlineKeyboardButton("🔐 Admin Panel", callback_data="admin_panel")])
     await q.edit_message_text(
         text=lang["lang_changed"].format(lang=lang["name"]),
         reply_markup=InlineKeyboardMarkup(kb)
@@ -1233,13 +1237,17 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cmd_language(update, context)
         return
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-    kb = [
-        [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
-        [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")],
-        [InlineKeyboardButton("📊 Statistika", callback_data="show_stats")],  # ✅ Yangi
-        [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
-        [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
-    ]
+    # start_handler ichida:
+kb = [
+    [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
+    [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")],
+    [InlineKeyboardButton("📈 Statistika", callback_data="show_stats")],
+    [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
+    [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
+]
+# Faqat admin uchun
+if user_id == ADMIN_ID:
+    kb.insert(-1, [InlineKeyboardButton("🔐 Admin Panel", callback_data="admin_panel")])
     await update.message.reply_text(lang["welcome"], reply_markup=InlineKeyboardMarkup(kb))
 # ---------------- Bosh menyudan AI chat ----------------
 async def start_ai_flow_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1486,7 +1494,6 @@ async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DE
     fake_update = Update(update.update_id, callback_query=q)
     # 2. generate_cb ga chaqiruv
     await generate_cb(fake_update, context)
-
 # ---------------- Tanlov tugmachasi orqali AI chat ----------------
 # Yangilangan: context.user_data["flow"] o'rnatiladi
 async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1668,16 +1675,10 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await q.message.reply_text(lang["success"])
 
             # --- Yangi: Admin xabarnomasi (barcha rasmlar bilan) ---
-            # log_generation uchun ham kerakli o'zgaruvchilarni saqlaymiz
-            digen_prompt_for_logging = translated # Log uchun saqlaymiz
+            digen_prompt_for_logging
             if ADMIN_ID and urls:
-                 # notify_admin_generation ga urls (barcha rasmlar ro'yxati) uzatiladi
                  await notify_admin_generation(context, user, prompt, urls, count, image_id)
-            # --- Yangi tugadi ---
-
-            # --- Yangi: log_generation ga to'g'ri translated_prompt uzatiladi ---
             await log_generation(context.application.bot_data["db_pool"], user, prompt, digen_prompt_for_logging, image_id, count)
-            # --- Yangi tugadi ---
 
             # Oxirgi progress xabarini muvaffaqiyatli natija bilan almashtirish
             try:
@@ -1690,6 +1691,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text(lang["error"])
         except Exception:
             pass
+    logger.info(f"[DEBUG LOG] User {user.id} generatsiya qildi: {count} ta rasm")
 # ---------------- Donate (Stars) flow ----------------
 # Yangilangan: context.user_data["current_operation"] o'rnatiladi
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1846,7 +1848,7 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE):
 #--------------------------------------------------
 
 # ---------------- Public Statistika (Hamma uchun) ----------------
-async def cmd_public_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, edit=False):
+async def cmd_public_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_mode=False):
     user = update.effective_user
     pool = context.application.bot_data["db_pool"]
     now = utc_now()
@@ -1862,7 +1864,6 @@ async def cmd_public_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, e
 
     fake_ping = random.randint(30, 80)
 
-    # Emoji + rangli dizayn (Markdown)
     stats_text = (
         "🤖 **Digen AI Statistikasi**\n\n"
         f"⚡ **Ping:** `{fake_ping}ms`\n"
@@ -1873,10 +1874,9 @@ async def cmd_public_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, e
         f"👤 **Siz yaratdingiz:** `{user_images}`"
     )
 
-    # Inline tugma: Yangilash
     kb = [[InlineKeyboardButton("🔄 Yangilash", callback_data="show_stats")]]
 
-    if edit and update.callback_query:
+    if edit_mode and update.callback_query:
         try:
             await update.callback_query.edit_message_text(
                 text=stats_text,
@@ -1884,13 +1884,93 @@ async def cmd_public_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, e
                 reply_markup=InlineKeyboardMarkup(kb)
             )
         except Exception:
-            pass
+            pass  # Xabar o'zgarmagan bo'lsa, xatolik berishi mumkin
     else:
         await update.message.reply_text(
             stats_text,
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(kb)
         )
+
+#-------------------------------------------------------------------------------
+async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    q = update.callback_query
+    await q.answer()
+    kb = [
+        [InlineKeyboardButton("🚫 Foydalanuvchi Ban", callback_data="admin_ban")],
+        [InlineKeyboardButton("📣 Broadcast", callback_data="admin_broadcast")],
+        [InlineKeyboardButton("🔗 Majburiy Obuna", callback_data="admin_channels")],
+        [InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]
+    ]
+    await q.edit_message_text("🔐 **Admin Panel**", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+
+#------------------------------------------------------------------------------------------
+BAN_STATE = 100
+
+async def admin_ban_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    q = update.callback_query
+    await q.answer()
+    await q.message.reply_text("👤 Ban qilish uchun foydalanuvchi ID sini yuboring:")
+    return BAN_STATE
+
+async def admin_ban_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    try:
+        user_id = int(update.message.text.strip())
+        # DB ga ban qo'shish (yoki Redis, yoki oddiy fayl)
+        # Hozircha oddiy log
+        logger.info(f"[BAN] Foydalanuvchi {user_id} ban qilindi")
+        await update.message.reply_text(f"✅ Foydalanuvchi {user_id} muvaffaqiyatli ban qilindi.")
+    except ValueError:
+        await update.message.reply_text("❌ Noto'g'ri ID. Faqat raqam yuboring.")
+    return ConversationHandler.END
+
+#-------------------------------------------------------------------------------------
+BROADCAST_STATE = 101
+
+async def admin_broadcast_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    q = update.callback_query
+    await q.answer()
+    await q.message.reply_text("📣 Broadcast xabarini yuboring (matn, rasm, video, fayl...):")
+    return BROADCAST_STATE
+
+async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    # Barcha foydalanuvchilarni olish
+    pool = context.application.bot_data["db_pool"]
+    async with pool.acquire() as conn:
+        users = await conn.fetch("SELECT id FROM users")
+    
+    sent = 0
+    for row in users:
+        try:
+            if update.message.text:
+                await context.bot.send_message(chat_id=row["id"], text=update.message.text)
+            elif update.message.photo:
+                await context.bot.send_photo(chat_id=row["id"], photo=update.message.photo[-1].file_id, caption=update.message.caption)
+            elif update.message.video:
+                await context.bot.send_video(chat_id=row["id"], video=update.message.video.file_id, caption=update.message.caption)
+            elif update.message.document:
+                await context.bot.send_document(chat_id=row["id"], document=update.message.document.file_id, caption=update.message.caption)
+            else:
+                await context.bot.copy_message(chat_id=row["id"], from_chat_id=update.effective_chat.id, message_id=update.message.message_id)
+            sent += 1
+        except Exception as e:
+            logger.warning(f"[BROADCAST] {row['id']} ga yuborishda xatolik: {e}")
+    
+    await update.message.reply_text(f"✅ {sent} ta foydalanuvchiga xabar yuborildi.")
+    return ConversationHandler.END
+
+#-----------------------------------------------------------------------------------
+
 #-------------------------------------------------------------------------
 async def show_stats_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -1931,7 +2011,30 @@ def build_app():
         per_message=False
     )
     app.add_handler(donate_conv)
-    
+
+    # Admin panel
+app.add_handler(CallbackQueryHandler(admin_panel_handler, pattern="^admin_panel$"))
+app.add_handler(CallbackQueryHandler(show_stats_handler, pattern="^show_stats$"))
+
+# Ban
+ban_conv = ConversationHandler(
+    entry_points=[CallbackQueryHandler(admin_ban_start, pattern="^admin_ban$")],
+    states={BAN_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_ban_confirm)]},
+    fallbacks=[]
+)
+app.add_handler(ban_conv)
+
+# Broadcast
+broadcast_conv = ConversationHandler(
+    entry_points=[CallbackQueryHandler(admin_broadcast_start, pattern="^admin_broadcast$")],
+    states={BROADCAST_STATE: [MessageHandler(filters.ALL & ~filters.COMMAND, admin_broadcast_send)]},
+    fallbacks=[]
+)
+app.add_handler(broadcast_conv)
+
+# Kanallar
+app.add_handler(CallbackQueryHandler(admin_channels_handler, pattern="^admin_channels$"))
+
     # Qolgan handlerlar
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="^start_gen$"))
     app.add_handler(CallbackQueryHandler(start_ai_flow_handler, pattern="^start_ai_flow$"))
