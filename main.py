@@ -1881,7 +1881,8 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE):
 #--------------------------------------------------
 
 # ---------------- Public Statistika (Hamma uchun) ----------------
-async def cmd_public_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_mode=False):
+async def show_stats_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await cmd_public_stats(update, context, edit_mode=True)
     user = update.effective_user
     pool = context.application.bot_data["db_pool"]
     now = utc_now()
