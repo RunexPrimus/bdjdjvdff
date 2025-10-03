@@ -1251,26 +1251,40 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     lang_code = None
+    
+    # Foydalanuvchining tilini olish
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user_id)
         if row:
             lang_code = row["language_code"]
+    
+    # Agar til yo'q bo'lsa, til tanlash menyusini ko‘rsatamiz
     if lang_code is None:
         await cmd_language(update, context)
         return
+    
+    # Tilni aniqlash
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-    # start_handler ichida:
-kb = [
-    [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
-    [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")],
-    [InlineKeyboardButton("📈 Statistika", callback_data="show_stats")],
-    [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
-    [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
-]
-# Faqat admin uchun
-if user_id == ADMIN_ID:
-    kb.insert(-1, [InlineKeyboardButton("🔐 Admin Panel", callback_data="admin_panel")])
-    await update.message.reply_text(lang["welcome"], reply_markup=InlineKeyboardMarkup(kb))
+
+    # Klaviatura yaratish
+    kb = [
+        [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
+        [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")],
+        [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
+        [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")],
+        [InlineKeyboardButton("📈 Statistika", callback_data="show_stats")]
+    ]
+
+    # Faqat admin uchun tugma
+    if user_id == ADMIN_ID:
+        kb.insert(-1, [InlineKeyboardButton("🔐 Admin Panel", callback_data="admin_panel")])
+
+    # Xush kelibsiz matnini yuborish
+    await update.message.reply_text(
+        lang["welcome"],
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
 # ---------------- Bosh menyudan AI chat ----------------
 async def start_ai_flow_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
