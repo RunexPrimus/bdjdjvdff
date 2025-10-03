@@ -80,7 +80,7 @@ LANGUAGES = {
 "get_no_args_private": "✍️ Iltimos, rasm uchun matn yozing.",
 "generating_progress": "🔄 Rasm yaratilmoqda... {bar} {percent}%",
 "image_delayed": "⚠️ Rasm tayyorlanish biroz kechikmoqda. Keyinroq qayta urinib ko'ring.",
-"donate_title": "💖 Botga hissa",
+"donate_title": "💖 Botga Yordam",
 "donate_description": "Botni qo'llab-quvvatlash uchun Stars yuboring.",
 "done": "✅ Tayyor!",
 "error_occurred": "⚠️ Xatolik yuz berdi. Qayta urinib ko‘ring.",
