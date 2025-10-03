@@ -951,6 +951,7 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT,
     first_seen TIMESTAMPTZ,
     last_seen TIMESTAMPTZ,
+    is_banned BOOLEAN DEFAULT FALSE,
     language_code TEXT DEFAULT 'uz'
 );
 
@@ -997,6 +998,12 @@ async def init_db(pool):
             logger.info(f"ℹ️ Column 'language_code' already exists or error: {e}")
 
         try:
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE")
+            logger.info("✅ Added column 'is_banned' to table 'users'")
+        except Exception as e:
+            logger.info(f"ℹ️ Column 'is_banned' already exists or error: {e}")
+
+        try:
             await conn.execute("ALTER TABLE donations ADD COLUMN IF NOT EXISTS charge_id TEXT")
             await conn.execute("ALTER TABLE donations ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ")
             logger.info("✅ Added columns 'charge_id', 'refunded_at' to table 'donations'")
@@ -1025,6 +1032,14 @@ def get_digen_headers():
         "referer": "https://rm.digen.ai/",
     }
 
+
+#--------------------------
+async def check_ban(user_id: int, pool) -> bool:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT is_banned FROM users WHERE id = $1", user_id)
+        if row and row["is_banned"]:
+            return True
+    return False
 # ---------------- subscription check ----------------
 async def check_subscription(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
     """
@@ -1380,20 +1395,14 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     # Agar foydalanuvchi oldin "AI chat" tugmasini bosgan bo'lsa
     flow = context.user_data.get("flow")
     if flow == "ai":
-        # Oxirgi faollik vaqtini tekshirish
         last_active = context.user_data.get("last_active")
         now = datetime.now(timezone.utc)
         if last_active:
-            # 15 daqiqa = 900 sekund
             if (now - last_active).total_seconds() > 900:
-                # Vaqt o'tgan, flow ni bekor qilamiz
                 context.user_data["flow"] = None
                 context.user_data["last_active"] = None
-                # Quyidagi kod oddiy matn yuborilganda ishlaydi (pastga tushadi)
             else:
-                # Vaqt o'tmagan, AI chat davom etadi
                 prompt = update.message.text
-                # AI javobini oddiy matn sifatida yuborish, maxsus belgilarsiz
                 await update.message.reply_text("🧠 AI javob bermoqda...")
                 try:
                     model = genai.GenerativeModel("gemini-2.0-flash")
@@ -1407,19 +1416,14 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                     answer = response.text.strip()
                     if not answer:
                         answer = "⚠️ Javob topilmadi."
-                except Exception as e:
+                except Exception:
                     logger.exception("[GEMINI ERROR]")
                     answer = lang["error"]
-                # AI javobini oddiy matn sifatida yuborish, Markdown formatlashsiz
                 await update.message.reply_text(f"{lang['ai_response_header']}\n{answer}")
-                # Oxirgi faollik vaqtini yangilash
                 context.user_data["last_active"] = datetime.now(timezone.utc)
                 return
         else:
-            # Biror sababdan last_active yo'q, lekin flow "ai"
-            # Bu holat kam uchraydi, lekin ehtimolni hisobga olamiz
             prompt = update.message.text
-            await update.message.reply_text(f"{lang['your_prompt_label']}\n{answer}")
             try:
                 model = genai.GenerativeModel("gemini-2.0-flash")
                 response = await model.generate_content_async(
@@ -1432,7 +1436,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 answer = response.text.strip()
                 if not answer:
                     answer = "⚠️ Javob topilmadi."
-            except Exception as e:
+            except Exception:
                 logger.exception("[GEMINI ERROR]")
                 answer = lang["error"]
             await update.message.reply_text(f"{lang['ai_response_header']}\n{answer}")
@@ -1440,7 +1444,6 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             return
 
     # Agar hech qanday maxsus flow bo'lmasa, oddiy rasm generatsiya jarayoni ketaveradi
-    # (start_gen orqali kirilganda ham, oddiy matn yuborilganda ham)
     if not await force_sub_if_private(update, context, lang_code):
         return
 
@@ -1448,11 +1451,8 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     prompt = update.message.text
     context.user_data["prompt"] = prompt
 
-    # --- Yangi: Promptni Gemini orqali Digen uchun tayyorlash ---
-    original_prompt = prompt # Foydalanuvchi yuborgan original prompt
-    logger.info(f"[GEMINI PROMPT] Foydalanuvchi prompti: {original_prompt}")
-
-    # Qadam 1: Gemini API ga yuborish uchun prompt tayyorlash
+    # --- Promptni Gemini orqali tarjima qilish ---
+    original_prompt = prompt
     gemini_instruction = "Auto detect this language and translate this text to English for image generation. No other text, just the translated prompt:"
     gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
 
@@ -1461,55 +1461,48 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         gemini_response = await model.generate_content_async(
             gemini_full_prompt,
             generation_config=genai.types.GenerationConfig(
-                max_output_tokens=100, # Qisqa tarjima yetarli
+                max_output_tokens=100,
                 temperature=0.5
             )
         )
         digen_ready_prompt = gemini_response.text.strip()
-        # Agar Gemini hech narsa qaytarmasa, original promptni ishlatamiz
         if not digen_ready_prompt:
-            logger.warning("[GEMINI PROMPT] Gemini javob bermadi. Original prompt ishlatilmoqda.")
-            digen_ready_prompt = original_prompt # Yoki xatolik qaytaramiz
-        logger.info(f"[GEMINI PROMPT] Digen uchun tayyor prompt: {digen_ready_prompt}")
-        context.user_data["translated"] = digen_ready_prompt # Tarjima qilingan promptni saqlash
+            digen_ready_prompt = original_prompt
+        context.user_data["translated"] = digen_ready_prompt
     except Exception as gemini_err:
-        logger.error(f"[GEMINI PROMPT ERROR] Gemini API dan foydalanganda xato: {gemini_err}")
-        # Xatolik yuz bersa ham, original promptni Digen ga yuboramiz
+        logger.error(f"[GEMINI PROMPT ERROR] {gemini_err}")
         context.user_data["translated"] = original_prompt
     # --- Yangi tugadi ---
 
-    # Agar hech qanday flow boshlanmagan bo'lsa (faqat oddiy matn)
-   # Agar hech qanday flow boshlanmagan bo'lsa (faqat oddiy matn)
-if flow is None: 
-    context.user_data["flow"] = "image_pending_prompt"  # Tanlov tugmalari uchun flow
-    kb = [
-        [
-            InlineKeyboardButton("🖼 Rasm yaratish", callback_data="gen_image_from_prompt"),
-            InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat_from_prompt")
+    # ❗ Mana shu qism funksiya ichida bo‘lishi shart
+    if flow is None:
+        context.user_data["flow"] = "image_pending_prompt"
+        kb = [
+            [
+                InlineKeyboardButton("🖼 Rasm yaratish", callback_data="gen_image_from_prompt"),
+                InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat_from_prompt")
+            ]
         ]
-    ]
-    await update.message.reply_text(
-        f"{lang['choose_action']}\n*{lang['your_message']}* {escape_md(prompt)}",
-        parse_mode="MarkdownV2",
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
-    return
-else:  # start_gen orqali kirilganda flow "image_pending_prompt" bo'ladi
-    # "Nechta rasm?" so'rovi chiqadi
-    kb = [
-        [
-            InlineKeyboardButton("1️⃣", callback_data="count_1"),
-            InlineKeyboardButton("2️⃣", callback_data="count_2"),
-            InlineKeyboardButton("4️⃣", callback_data="count_4"),
-            InlineKeyboardButton("8️⃣", callback_data="count_8")
+        await update.message.reply_text(
+            f"{lang['choose_action']}\n*{lang['your_message']}* {escape_md(prompt)}",
+            parse_mode="MarkdownV2",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
+        return
+    else:
+        kb = [
+            [
+                InlineKeyboardButton("1️⃣", callback_data="count_1"),
+                InlineKeyboardButton("2️⃣", callback_data="count_2"),
+                InlineKeyboardButton("4️⃣", callback_data="count_4"),
+                InlineKeyboardButton("8️⃣", callback_data="count_8")
+            ]
         ]
-    ]
-    await update.message.reply_text(
-        f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
-        parse_mode="MarkdownV2",
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
-
+        await update.message.reply_text(
+            f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
+            parse_mode="MarkdownV2",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
 # ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
 # Yangilangan: context.user_data["flow"] o'rnatiladi
 # ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
@@ -1940,6 +1933,7 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     await q.answer()
     kb = [
         [InlineKeyboardButton("🚫 Foydalanuvchi Ban", callback_data="admin_ban")],
+        [InlineKeyboardButton("🔓 Unban", callback_data="admin_unban")],
         [InlineKeyboardButton("📣 Broadcast", callback_data="admin_broadcast")],
         [InlineKeyboardButton("🔗 Majburiy Obuna", callback_data="admin_channels")],
         [InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]
@@ -2020,7 +2014,30 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
     return ConversationHandler.END
 
 #-----------------------------------------------------------------------------------
+async def admin_unban_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    q = update.callback_query
+    await q.answer()
+    await q.message.reply_text("🔓 Bandan chiqarish uchun foydalanuvchi ID sini yuboring:")
+    return UNBAN_STATE
 
+async def admin_unban_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    try:
+        user_id = int(update.message.text.strip())
+        pool = context.application.bot_data["db_pool"]
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow("SELECT id FROM users WHERE id = $1", user_id)
+            if not row:
+                await update.message.reply_text(f"❌ Foydalanuvchi `{user_id}` topilmadi.", parse_mode="Markdown")
+                return
+            await conn.execute("UPDATE users SET is_banned = FALSE WHERE id = $1", user_id)
+        await update.message.reply_text(f"✅ Foydalanuvchi `{user_id}` muvaffaqiyatli **bandan chiqarildi**.", parse_mode="Markdown")
+    except ValueError:
+        await update.message.reply_text("❌ Noto'g'ri ID. Faqat raqam yuboring.")
+    return ConversationHandler.END
 #-------------------------------------------------------------------------
 async def show_stats_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await cmd_public_stats(update, context, edit_mode=True)
@@ -2057,6 +2074,24 @@ def build_app():
         per_message=False
     )
     app.add_handler(donate_conv)
+
+    # Ban
+ban_conv = ConversationHandler(
+    entry_points=[CallbackQueryHandler(admin_ban_start, pattern="^admin_ban$")],
+    states={BAN_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_ban_confirm)]},
+    fallbacks=[],
+    per_message=False
+)
+app.add_handler(ban_conv)
+
+# Unban
+unban_conv = ConversationHandler(
+    entry_points=[CallbackQueryHandler(admin_unban_start, pattern="^admin_unban$")],
+    states={UNBAN_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_unban_confirm)]},
+    fallbacks=[],
+    per_message=False
+)
+app.add_handler(unban_conv)
 
     # Admin panel
     app.add_handler(CallbackQueryHandler(admin_panel_handler, pattern="^admin_panel$"))
