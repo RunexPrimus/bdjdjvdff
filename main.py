@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 # ---------------- ENV ----------------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
+ADMIN_ID = int(os.getenv("ADMIN_ID", "7440949683"))
 CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@Digen_Ai")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1002618178138"))
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
@@ -1846,7 +1846,7 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE):
 #--------------------------------------------------
 
 # ---------------- Public Statistika (Hamma uchun) ----------------
-async def cmd_public_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_public_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, edit=False):
     user = update.effective_user
     pool = context.application.bot_data["db_pool"]
     now = utc_now()
@@ -1856,34 +1856,42 @@ async def cmd_public_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     async with pool.acquire() as conn:
         total_users = await conn.fetchval("SELECT COUNT(*) FROM users")
         new_users_30d = await conn.fetchval("SELECT COUNT(*) FROM users WHERE first_seen >= $1", thirty_days_ago)
-        total_images = await conn.fetchval("SELECT SUM(image_count) FROM generations") or 0
-        today_images = await conn.fetchval("SELECT SUM(image_count) FROM generations WHERE created_at >= $1", today_start) or 0
-        user_images = await conn.fetchval("SELECT SUM(image_count) FROM generations WHERE user_id = $1", user.id) or 0
+        total_images = await conn.fetchval("SELECT COALESCE(SUM(image_count), 0) FROM generations")
+        today_images = await conn.fetchval("SELECT COALESCE(SUM(image_count), 0) FROM generations WHERE created_at >= $1", today_start)
+        user_images = await conn.fetchval("SELECT COALESCE(SUM(image_count), 0) FROM generations WHERE user_id = $1", user.id)
 
-    # Soxta ping (30-80 ms)
     fake_ping = random.randint(30, 80)
 
-    # Foydalanuvchi tilini olish
-    lang_code = DEFAULT_LANGUAGE
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user.id)
-        if row:
-            lang_code = row["language_code"]
-    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-
+    # Emoji + rangli dizayn (Markdown)
     stats_text = (
-        "📊 *Bot Statistikasi*\n\n"
-        f"⏱ *Ping:* {fake_ping}ms\n"
-        f"🖼 *Jami rasmlar:* {total_images}\n"
-        f"📅 *Bugun:* {today_images}\n"
-        f"👥 *Jami foydalanuvchilar:* {total_users}\n"
-        f"🆕 *Oxirgi 30 kun:* {new_users_30d}\n"
-        f"👤 *Siz yaratdingiz:* {user_images}"
+        "🤖 **Digen AI Statistikasi**\n\n"
+        f"⚡ **Ping:** `{fake_ping}ms`\n"
+        f"🖼 **Jami rasmlar:** `{total_images}`\n"
+        f"📆 **Bugun:** `{today_images}`\n"
+        f"👥 **Foydalanuvchilar:** `{total_users}`\n"
+        f"🆕 **30 kun:** `{new_users_30d}`\n"
+        f"👤 **Siz yaratdingiz:** `{user_images}`"
     )
 
-    await update.message.reply_text(stats_text, parse_mode="Markdown")
+    # Inline tugma: Yangilash
+    kb = [[InlineKeyboardButton("🔄 Yangilash", callback_data="show_stats")]]
 
-
+    if edit and update.callback_query:
+        try:
+            await update.callback_query.edit_message_text(
+                text=stats_text,
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(kb)
+            )
+        except Exception:
+            pass
+    else:
+        await update.message.reply_text(
+            stats_text,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
+#-------------------------------------------------------------------------
 async def show_stats_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
