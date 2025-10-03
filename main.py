@@ -1249,19 +1249,19 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
 
     # Keyboard yaratish
-   kb = [
-    [
-        InlineKeyboardButton(lang["gen_button"], callback_data="start_gen"),
-        InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")
-    ],
-    [
-        InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom"),
-        InlineKeyboardButton(lang["lang_button"], callback_data="change_language")
-    ],
-    [
-        InlineKeyboardButton("📈 Statistika", callback_data="show_stats")
+    kb = [
+        [
+            InlineKeyboardButton(lang["gen_button"], callback_data="start_gen"),
+            InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")
+        ],
+        [
+            InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom"),
+            InlineKeyboardButton(lang["lang_button"], callback_data="change_language")
+        ],
+        [
+            InlineKeyboardButton("📈 Statistika", callback_data="show_stats")
+        ]
     ]
-]
 
     # Faqat admin uchun tugma qo‘shamiz
     if user.id == ADMIN_ID:
@@ -1292,20 +1292,19 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
 
     # Klaviatura yaratish
-   kb = [
-    [
-        InlineKeyboardButton(lang["gen_button"], callback_data="start_gen"),
-        InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")
-    ],
-    [
-        InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom"),
-        InlineKeyboardButton(lang["lang_button"], callback_data="change_language")
-    ],
-    [
-        InlineKeyboardButton("📈 Statistika", callback_data="show_stats")
+    kb = [
+        [
+            InlineKeyboardButton(lang["gen_button"], callback_data="start_gen"),
+            InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")
+        ],
+        [
+            InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom"),
+            InlineKeyboardButton(lang["lang_button"], callback_data="change_language")
+        ],
+        [
+            InlineKeyboardButton("📈 Statistika", callback_data="show_stats")
+        ]
     ]
-]
-
 
     # Faqat admin uchun tugma
     if user_id == ADMIN_ID:
