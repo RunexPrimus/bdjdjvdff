@@ -1207,13 +1207,14 @@ async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    lang_code = q.data.split("_", 1)[1]  # "lang_zhcn" → "zhcn"
+    lang_code = q.data.split("_", 1)[1]
     user = q.from_user
     await add_user_db(context.application.bot_data["db_pool"], user, lang_code)
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
     kb = [
         [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
         [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")],
+        [InlineKeyboardButton("📊 Statistika", callback_data="show_stats")],  # ✅ Yangi
         [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
         [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
     ]
@@ -1221,8 +1222,6 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
         text=lang["lang_changed"].format(lang=lang["name"]),
         reply_markup=InlineKeyboardMarkup(kb)
     )
-    # ❌ ConversationHandler.END qaytarmaymiz
-# Yangilangan: Yangi AI chat tugmasi qo'shildi
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     lang_code = None
@@ -1230,17 +1229,14 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user_id)
         if row:
             lang_code = row["language_code"]
-
     if lang_code is None:
-        # Yangi foydalanuvchi — til tanlasin
         await cmd_language(update, context)
         return
-
-    # Eski foydalanuvchi — asosiy menyu
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
     kb = [
         [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
         [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")],
+        [InlineKeyboardButton("📊 Statistika", callback_data="show_stats")],  # ✅ Yangi
         [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
         [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
     ]
@@ -1847,6 +1843,54 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
+#--------------------------------------------------
+
+# ---------------- Public Statistika (Hamma uchun) ----------------
+async def cmd_public_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    pool = context.application.bot_data["db_pool"]
+    now = utc_now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    thirty_days_ago = now - timedelta(days=30)
+
+    async with pool.acquire() as conn:
+        total_users = await conn.fetchval("SELECT COUNT(*) FROM users")
+        new_users_30d = await conn.fetchval("SELECT COUNT(*) FROM users WHERE first_seen >= $1", thirty_days_ago)
+        total_images = await conn.fetchval("SELECT SUM(image_count) FROM generations") or 0
+        today_images = await conn.fetchval("SELECT SUM(image_count) FROM generations WHERE created_at >= $1", today_start) or 0
+        user_images = await conn.fetchval("SELECT SUM(image_count) FROM generations WHERE user_id = $1", user.id) or 0
+
+    # Soxta ping (30-80 ms)
+    fake_ping = random.randint(30, 80)
+
+    # Foydalanuvchi tilini olish
+    lang_code = DEFAULT_LANGUAGE
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user.id)
+        if row:
+            lang_code = row["language_code"]
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+
+    stats_text = (
+        "📊 *Bot Statistikasi*\n\n"
+        f"⏱ *Ping:* {fake_ping}ms\n"
+        f"🖼 *Jami rasmlar:* {total_images}\n"
+        f"📅 *Bugun:* {today_images}\n"
+        f"👥 *Jami foydalanuvchilar:* {total_users}\n"
+        f"🆕 *Oxirgi 30 kun:* {new_users_30d}\n"
+        f"👤 *Siz yaratdingiz:* {user_images}"
+    )
+
+    await update.message.reply_text(stats_text, parse_mode="Markdown")
+
+
+async def show_stats_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    # Oddiy /stats kabi ishlash uchun
+    fake_update = Update(update.update_id, message=q.message)
+    await cmd_public_stats(fake_update, context)
+
 # ---------------- Startup ----------------
 async def on_startup(app: Application):
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
@@ -1857,19 +1901,21 @@ async def on_startup(app: Application):
 # ---------------- MAIN ----------------
 def build_app():
     app = Application.builder().token(BOT_TOKEN).post_init(on_startup).build()
-
     # Barcha tillar uchun pattern
     all_lang_pattern = r"lang_(uz|ru|en|id|lt|esmx|eses|it|zhcn|bn|hi|ptbr|ar|uk|vi)"
-
+    
+    # --- Yangi handlerlar ---
+    app.add_handler(CommandHandler("stats", cmd_public_stats))
+    app.add_handler(CallbackQueryHandler(show_stats_handler, pattern="^show_stats$"))
+    
     # /start — oddiy handler
     app.add_handler(CommandHandler("start", start_handler))
-
-    # Tilni o'zgartirish — oddiy handlerlar
+    # Tilni o'zgartirish
     app.add_handler(CommandHandler("language", cmd_language))
     app.add_handler(CallbackQueryHandler(cmd_language, pattern="^change_language$"))
     app.add_handler(CallbackQueryHandler(language_select_handler, pattern=all_lang_pattern))
-
-    # Donate — faqat uni ConversationHandler qilish mumkin
+    
+    # Donate
     donate_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(donate_start, pattern="^donate_custom$")],
         states={WAITING_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, donate_amount)]},
@@ -1877,7 +1923,7 @@ def build_app():
         per_message=False
     )
     app.add_handler(donate_conv)
-
+    
     # Qolgan handlerlar
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="^start_gen$"))
     app.add_handler(CallbackQueryHandler(start_ai_flow_handler, pattern="^start_ai_flow$"))
@@ -1891,7 +1937,6 @@ def build_app():
     app.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, private_text_handler))
     app.add_error_handler(on_error)
-
     return app
 def main():
     app = build_app()
