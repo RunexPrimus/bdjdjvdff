@@ -1940,6 +1940,16 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     await q.edit_message_text("🔐 **Admin Panel**", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
 #------------------------------------------------------------------------------------------
+async def admin_channels_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    q = update.callback_query
+    await q.answer()
+    # Hozircha statik kanal ko'rsatiladi
+    channels_list = "\n".join([f"• {ch['username']}" for ch in MANDATORY_CHANNELS]) if MANDATORY_CHANNELS else "❌ Hech narsa yo'q"
+    text = f"🔗 **Majburiy obuna kanallari:**\n\n{channels_list}\n\nℹ️ Kanallarni o'zgartirish uchun `.env` faylini tahrirlang."
+    await q.message.reply_text(text, parse_mode="Markdown")
+#------------------------------------------------------------------------------------------------
 BAN_STATE = 100
 
 async def admin_ban_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
