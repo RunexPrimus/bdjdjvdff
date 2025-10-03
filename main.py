@@ -2023,26 +2023,27 @@ def build_app():
     app.add_handler(donate_conv)
 
     # Admin panel
-app.add_handler(CallbackQueryHandler(admin_panel_handler, pattern="^admin_panel$"))
-app.add_handler(CallbackQueryHandler(show_stats_handler, pattern="^show_stats$"))
+    app.add_handler(CallbackQueryHandler(admin_panel_handler, pattern="^admin_panel$"))
+    app.add_handler(CallbackQueryHandler(show_stats_handler, pattern="^show_stats$"))
 
-# Ban
-ban_conv = ConversationHandler(
-    entry_points=[CallbackQueryHandler(admin_ban_start, pattern="^admin_ban$")],
-    states={BAN_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_ban_confirm)]},
-    fallbacks=[]
-)
-app.add_handler(ban_conv)
-# Broadcast
-broadcast_conv = ConversationHandler(
-    entry_points=[CallbackQueryHandler(admin_broadcast_start, pattern="^admin_broadcast$")],
-    states={BROADCAST_STATE: [MessageHandler(filters.ALL & ~filters.COMMAND, admin_broadcast_send)]},
-    fallbacks=[]
-)
-app.add_handler(broadcast_conv)
+    # Ban
+    ban_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(admin_ban_start, pattern="^admin_ban$")],
+        states={BAN_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_ban_confirm)]},
+        fallbacks=[]
+    )
+    app.add_handler(ban_conv)
 
-# Kanallar
-app.add_handler(CallbackQueryHandler(admin_channels_handler, pattern="^admin_channels$"))
+    # Broadcast
+    broadcast_conv = ConversationHandler(
+        entry_points=[CallbackQueryHandler(admin_broadcast_start, pattern="^admin_broadcast$")],
+        states={BROADCAST_STATE: [MessageHandler(filters.ALL & ~filters.COMMAND, admin_broadcast_send)]},
+        fallbacks=[]
+    )
+    app.add_handler(broadcast_conv)
+
+    # Kanallar
+    app.add_handler(CallbackQueryHandler(admin_channels_handler, pattern="^admin_channels$"))
 
     # Qolgan handlerlar
     app.add_handler(CallbackQueryHandler(handle_start_gen, pattern="^start_gen$"))
@@ -2058,10 +2059,13 @@ app.add_handler(CallbackQueryHandler(admin_channels_handler, pattern="^admin_cha
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE, private_text_handler))
     app.add_error_handler(on_error)
     return app
+
+
 def main():
     app = build_app()
     logger.info("Application initialized. Starting polling...")
     app.run_polling()
+
 
 if __name__ == "__main__":
     main()
