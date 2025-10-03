@@ -1479,7 +1479,8 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     # --- Yangi tugadi ---
 
     # Agar hech qanday flow boshlanmagan bo'lsa (faqat oddiy matn)
-    if flow is None: 
+   # Agar hech qanday flow boshlanmagan bo'lsa (faqat oddiy matn)
+if flow is None: 
     context.user_data["flow"] = "image_pending_prompt"  # Tanlov tugmalari uchun flow
     kb = [
         [
@@ -1493,21 +1494,22 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         reply_markup=InlineKeyboardMarkup(kb)
     )
     return
-    else: # start_gen orqali kirilganda flow "image_pending_prompt" bo'ladi
-        # "Nechta rasm?" so'rovi chiqadi
-        kb = [
-            [
-                InlineKeyboardButton("1️⃣", callback_data="count_1"),
-                InlineKeyboardButton("2️⃣", callback_data="count_2"),
-                InlineKeyboardButton("4️⃣", callback_data="count_4"),
-                InlineKeyboardButton("8️⃣", callback_data="count_8")
-            ]
+else:  # start_gen orqali kirilganda flow "image_pending_prompt" bo'ladi
+    # "Nechta rasm?" so'rovi chiqadi
+    kb = [
+        [
+            InlineKeyboardButton("1️⃣", callback_data="count_1"),
+            InlineKeyboardButton("2️⃣", callback_data="count_2"),
+            InlineKeyboardButton("4️⃣", callback_data="count_4"),
+            InlineKeyboardButton("8️⃣", callback_data="count_8")
         ]
-        await update.message.reply_text(
-            f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
-            parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup(kb)
-        )
+    ]
+    await update.message.reply_text(
+        f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
+        parse_mode="MarkdownV2",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
 # ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
 # Yangilangan: context.user_data["flow"] o'rnatiladi
 # ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
@@ -1881,9 +1883,13 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE):
 #--------------------------------------------------
 
 # ---------------- Public Statistika (Hamma uchun) ----------------
-async def show_stats_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await cmd_public_stats(update, context, edit_mode=True)
-    user = update.effective_user
+async def cmd_public_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, edit_mode=False):
+    # Foydalanuvchini to'g'ri aniqlash
+    if update.callback_query:
+        user = update.callback_query.from_user
+    else:
+        user = update.effective_user
+
     pool = context.application.bot_data["db_pool"]
     now = utc_now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -1918,14 +1924,14 @@ async def show_stats_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 reply_markup=InlineKeyboardMarkup(kb)
             )
         except Exception:
-            pass  # Xabar o'zgarmagan bo'lsa, xatolik berishi mumkin
+            pass
     else:
+        # /stats komandasi uchun
         await update.message.reply_text(
             stats_text,
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(kb)
         )
-
 #-------------------------------------------------------------------------------
 async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -2017,12 +2023,7 @@ async def admin_broadcast_send(update: Update, context: ContextTypes.DEFAULT_TYP
 
 #-------------------------------------------------------------------------
 async def show_stats_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-    # Oddiy /stats kabi ishlash uchun
-    fake_update = Update(update.update_id, message=q.message)
-    await cmd_public_stats(fake_update, context)
-
+    await cmd_public_stats(update, context, edit_mode=True)
 # ---------------- Startup ----------------
 async def on_startup(app: Application):
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
@@ -2040,6 +2041,8 @@ def build_app():
     app.add_handler(CallbackQueryHandler(show_stats_handler, pattern="^show_stats$"))
     
     # /start — oddiy handler
+    app.add_handler(CommandHandler("stats", cmd_public_stats))
+    app.add_handler(CallbackQueryHandler(show_stats_handler, pattern="^show_stats$"))
     app.add_handler(CommandHandler("start", start_handler))
     # Tilni o'zgartirish
     app.add_handler(CommandHandler("language", cmd_language))
