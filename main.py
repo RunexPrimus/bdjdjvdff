@@ -30,7 +30,11 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
-
+# ---------------- STATES ----------------
+BAN_STATE = 1
+UNBAN_STATE = 2
+BROADCAST_STATE = 3
+WAITING_AMOUNT = 4
 # ---------------- ENV ----------------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "7440949683"))
