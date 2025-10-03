@@ -1222,23 +1222,32 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
     await q.answer()
     lang_code = q.data.split("_", 1)[1]
     user = q.from_user
+
+    # Foydalanuvchini bazaga yozamiz
     await add_user_db(context.application.bot_data["db_pool"], user, lang_code)
+
+    # Tilni olish
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-   # start_handler ichida:
-kb = [
-    [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
-    [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")],
-    [InlineKeyboardButton("📈 Statistika", callback_data="show_stats")],
-    [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
-    [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")]
-]
-# Faqat admin uchun
-if user_id == ADMIN_ID:
-    kb.insert(-1, [InlineKeyboardButton("🔐 Admin Panel", callback_data="admin_panel")])
+
+    # Keyboard yaratish
+    kb = [
+        [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
+        [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")],
+        [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
+        [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")],
+        [InlineKeyboardButton("📈 Statistika", callback_data="show_stats")]
+    ]
+
+    # Faqat admin uchun tugma qo‘shamiz
+    if user.id == ADMIN_ID:
+        kb.insert(-1, [InlineKeyboardButton("🔐 Admin Panel", callback_data="admin_panel")])
+
+    # Til o‘zgarganligini xabar qilish
     await q.edit_message_text(
         text=lang["lang_changed"].format(lang=lang["name"]),
         reply_markup=InlineKeyboardMarkup(kb)
     )
+
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     lang_code = None
