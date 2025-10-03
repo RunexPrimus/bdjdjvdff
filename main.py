@@ -1283,18 +1283,15 @@ async def start_ai_flow_handler(update: Update, context: ContextTypes.DEFAULT_TY
 async def handle_start_gen(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-
     lang_code = DEFAULT_LANGUAGE
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
         if row:
             lang_code = row["language_code"]
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-
     await q.message.reply_text(lang["prompt_text"])
     # flow o'zgaruvchisini o'rnatamiz
     context.user_data["flow"] = "image_pending_prompt"
-
 # ---------------- Bosh menyuga qaytish tugmasi ----------------
 async def handle_change_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await cmd_language(update, context)
