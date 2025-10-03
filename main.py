@@ -34,8 +34,9 @@ logger = logging.getLogger(__name__)
 # ---------------- ENV ----------------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "7440949683"))
-CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "@Digen_Ai")
-CHANNEL_ID = int(os.getenv("CHANNEL_ID", "-1002618178138"))
+MANDATORY_CHANNELS = json.loads(os.getenv("MANDATORY_CHANNELS", "[]"))
+if not MANDATORY_CHANNELS:
+    MANDATORY_CHANNELS = [{"username": "@Digen_Ai", "id": -1002618178138}]
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
 DIGEN_URL = os.getenv("DIGEN_URL", "https://api.digen.ai/v2/tools/text_to_image")
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -1026,23 +1027,33 @@ def get_digen_headers():
 
 # ---------------- subscription check ----------------
 async def check_subscription(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    try:
-        member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
-        return member.status in ("member", "administrator", "creator")
-    except Exception as e:
-        logger.debug(f"[SUB CHECK ERROR] {e}")
-        return False
-
+    """
+    Foydalanuvchi barcha majburiy kanallarga obuna bo'lganligini tekshiradi.
+    """
+    for channel in MANDATORY_CHANNELS:
+        try:
+            member = await context.bot.get_chat_member(channel["id"], user_id)
+            if member.status not in ("member", "administrator", "creator"):
+                return False
+        except Exception as e:
+            logger.debug(f"[SUB CHECK ERROR] Kanal {channel['id']}: {e}")
+            return False
+    return True
+    
 async def force_sub_if_private(update: Update, context: ContextTypes.DEFAULT_TYPE, lang_code=None) -> bool:
     if update.effective_chat.type != "private":
         return True
     ok = await check_subscription(update.effective_user.id, context)
     if not ok:
         lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE]) if lang_code else LANGUAGES[DEFAULT_LANGUAGE]
-        kb = [
-            [InlineKeyboardButton(lang["sub_url_text"], url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
-            [InlineKeyboardButton(lang["sub_check"], callback_data="check_sub")]
-        ]
+        kb = []
+        # Barcha kanallar uchun tugmalar
+        for channel in MANDATORY_CHANNELS:
+            kb.append([InlineKeyboardButton(
+                f"{lang['sub_url_text']} {channel['username']}",
+                url=f"https://t.me/{channel['username'].strip('@')}"
+            )])
+        kb.append([InlineKeyboardButton(lang["sub_check"], callback_data="check_sub")])
         if update.callback_query:
             await update.callback_query.answer()
             await update.callback_query.message.reply_text(lang["sub_prompt"], reply_markup=InlineKeyboardMarkup(kb))
@@ -1061,14 +1072,16 @@ async def check_sub_button_handler(update: Update, context: ContextTypes.DEFAULT
         if row:
             lang_code = row["language_code"]
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-
     if await check_subscription(user_id, context):
         await q.edit_message_text(lang["sub_thanks"])
     else:
-        kb = [
-            [InlineKeyboardButton(lang["sub_url_text"], url=f"https://t.me/{CHANNEL_USERNAME.strip('@')}")],
-            [InlineKeyboardButton(lang["sub_check"], callback_data="check_sub")]
-        ]
+        kb = []
+        for channel in MANDATORY_CHANNELS:
+            kb.append([InlineKeyboardButton(
+                f"{lang['sub_url_text']} {channel['username']}",
+                url=f"https://t.me/{channel['username'].strip('@')}"
+            )])
+        kb.append([InlineKeyboardButton(lang["sub_check"], callback_data="check_sub")])
         await q.edit_message_text(lang["sub_still_not"], reply_markup=InlineKeyboardMarkup(kb))
 
 # ---------------- DB user/session/logging ----------------
@@ -2023,7 +2036,6 @@ ban_conv = ConversationHandler(
     fallbacks=[]
 )
 app.add_handler(ban_conv)
-
 # Broadcast
 broadcast_conv = ConversationHandler(
     entry_points=[CallbackQueryHandler(admin_broadcast_start, pattern="^admin_broadcast$")],
