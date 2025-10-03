@@ -1249,13 +1249,19 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
 
     # Keyboard yaratish
-    kb = [
-        [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
-        [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")],
-        [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
-        [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")],
-        [InlineKeyboardButton("📈 Statistika", callback_data="show_stats")]
+   kb = [
+    [
+        InlineKeyboardButton(lang["gen_button"], callback_data="start_gen"),
+        InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")
+    ],
+    [
+        InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom"),
+        InlineKeyboardButton(lang["lang_button"], callback_data="change_language")
+    ],
+    [
+        InlineKeyboardButton("📈 Statistika", callback_data="show_stats")
     ]
+]
 
     # Faqat admin uchun tugma qo‘shamiz
     if user.id == ADMIN_ID:
@@ -1286,13 +1292,20 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
 
     # Klaviatura yaratish
-    kb = [
-        [InlineKeyboardButton(lang["gen_button"], callback_data="start_gen")],
-        [InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")],
-        [InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom")],
-        [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")],
-        [InlineKeyboardButton("📈 Statistika", callback_data="show_stats")]
+   kb = [
+    [
+        InlineKeyboardButton(lang["gen_button"], callback_data="start_gen"),
+        InlineKeyboardButton(lang["ai_button"], callback_data="start_ai_flow")
+    ],
+    [
+        InlineKeyboardButton(lang["donate_button"], callback_data="donate_custom"),
+        InlineKeyboardButton(lang["lang_button"], callback_data="change_language")
+    ],
+    [
+        InlineKeyboardButton("📈 Statistika", callback_data="show_stats")
     ]
+]
+
 
     # Faqat admin uchun tugma
     if user_id == ADMIN_ID:
@@ -1923,7 +1936,6 @@ async def cmd_public_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, e
         except Exception:
             pass
     else:
-        # /stats komandasi uchun
         await update.message.reply_text(
             stats_text,
             parse_mode="Markdown",
@@ -2058,8 +2070,8 @@ def build_app():
     all_lang_pattern = r"lang_(uz|ru|en|id|lt|esmx|eses|it|zhcn|bn|hi|ptbr|ar|uk|vi)"
     
     # --- Handlers ---
-    app.add_handler(CallbackQueryHandler(show_stats_handler, pattern="^show_stats$"))
     app.add_handler(CommandHandler("stats", cmd_public_stats))
+    app.add_handler(CallbackQueryHandler(show_stats_handler, pattern="^show_stats$"))
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("language", cmd_language))
     app.add_handler(CallbackQueryHandler(cmd_language, pattern="^change_language$"))
