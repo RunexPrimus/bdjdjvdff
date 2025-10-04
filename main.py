@@ -8,6 +8,8 @@ import os
 import json
 import random
 import time
+import io
+import urllib.request
 from datetime import datetime, timezone, timedelta
 
 # Yangi import qo'shildi
@@ -1036,7 +1038,52 @@ def get_digen_headers():
         "referer": "https://rm.digen.ai/",
     }
 
+#---------------------------
+async def enhance_with_genapi(image_url: str) -> str:
+    """
+    Gen-API orqali Real-ESRGAN 4x+ (RealESRGAN_x4plus) ishlatadi.
+    Kiruvchi: rasm URL
+    Qaytaruv: kengaytirilgan rasmning URL
+    """
+    token = os.getenv("GEN_API_TOKEN")
+    if not token:
+        logger.warning("GEN_API_TOKEN yo'q. ESRGAN ishlatilmaydi.")
+        return image_url
 
+    api_url = "https://api.gen-api.ru/api/v1/networks/real-esrgan"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+    payload = {
+        "images": {
+            "image": {"url_or_file": image_url},
+            "scale": 4,
+            "model": "RealESRGAN_x4plus",
+            "is_sync": True  # Sizga natija darhol kerak
+        }
+    }
+
+    try:
+        logger.info(f"[GEN-API] Enhancing: {image_url}")
+        async with aiohttp.ClientSession() as session:
+            async with session.post(api_url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=120)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    # Synchronous javob: data["output"] — kengaytirilgan rasm URL
+                    enhanced_url = data.get("output")
+                    if enhanced_url:
+                        logger.info(f"[GEN-API] Enhanced URL: {enhanced_url}")
+                        return enhanced_url
+                    else:
+                        logger.error(f"[GEN-API] Natija topilmadi: {data}")
+                else:
+                    error_text = await resp.text()
+                    logger.error(f"[GEN-API] Xatolik {resp.status}: {error_text}")
+    except Exception as e:
+        logger.exception(f"[GEN-API ERROR] {e}")
+    return image_url
 #--------------------------
 async def check_ban(user_id: int, pool) -> bool:
     async with pool.acquire() as conn:
@@ -1523,6 +1570,56 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 # Yangilangan: context.user_data["flow"] o'rnatiladi
 # ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
 # Yangilangan: context.user_data["flow"] o'rnatiladi
+
+
+# ---------------- Gen-API orqali Real-ESRGAN 4x+ ----------------
+async def enhance_with_genapi(image_url: str) -> str:
+    token = os.getenv("GEN_API_TOKEN")
+    if not token:
+        logger.warning("GEN_API_TOKEN yo'q. ESRGAN ishlatilmaydi.")
+        return image_url
+
+    api_url = "https://api.gen-api.ru/api/v1/networks/real-esrgan"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+    payload = {
+        "images": {
+            "image": {"url_or_file": image_url},
+            "scale": 4,
+            "model": "RealESRGAN_x4plus",
+            "is_sync": True
+        }
+    }
+
+    try:
+        logger.info(f"[GEN-API] Enhancing: {image_url}")
+        async with aiohttp.ClientSession() as session:
+            async with session.post(api_url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=120)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    enhanced_url = data.get("output")
+                    if enhanced_url:
+                        logger.info(f"[GEN-API] Enhanced URL: {enhanced_url}")
+                        return enhanced_url
+                else:
+                    error_text = await resp.text()
+                    logger.error(f"[GEN-API] Xatolik {resp.status}: {error_text}")
+    except Exception as e:
+        logger.exception(f"[GEN-API ERROR] {e}")
+    return image_url
+
+# ---------------- Rasmni bytes sifatida yuklash ----------------
+async def download_image_bytes(url: str) -> bytes:
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            return response.read()
+    except Exception as e:
+        logger.exception(f"[DOWNLOAD ERROR] {url}: {e}")
+        raise
+#---------------------------------------
 async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -1555,17 +1652,16 @@ async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFA
     await q.message.reply_text(lang["ai_prompt_text"])
 
 # GENERATE (robust) - Yangilangan versiya (Prompt - Gemini - Digen)
+# GENERATE (robust) - Yangilangan versiya (Prompt - Gemini - Digen + Real-ESRGAN 4x+ + Bytes)
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-
     lang_code = DEFAULT_LANGUAGE
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
         if row:
             lang_code = row["language_code"]
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-
     try:
         count = int(q.data.split("_")[1])
     except Exception:
@@ -1574,34 +1670,24 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
         return
-
     user = q.from_user
     prompt = context.user_data.get("prompt", "")
-    # --- Yangi: Tarjima qilingan promptni olish ---
-    # Agar private_text_handler da tarjima qilinmagan bo'lsa, bu yerda ham tarjima qilish mumkin edi,
-    # lekin endi u private_text_handler da qilingani uchun bu yerda faqat olinadi.
-    translated = context.user_data.get("translated", prompt) # Digen uchun tayyor prompt
-    # --- Yangi tugadi ---
+    translated = context.user_data.get("translated", prompt)
+    start_time = time.time()
 
-    start_time = time.time() # Vaqtni boshlash
-
-    # Yangi: Oddiy progress bar (soxta)
     async def update_progress(percent):
         bar_length = 10
         filled_length = int(bar_length * percent // 100)
         bar = '█' * filled_length + '░' * (bar_length - filled_length)
         try:
-            # Eski xabarni yangilash uchun Markdown ishlatmaymiz
             await q.edit_message_text(lang["generating_progress"].format(bar=bar, percent=percent))
         except Exception:
-            pass # Xatolikni e'tiborsiz qoldirish mumkin
+            pass
 
-    # Dastlabki progress
     await update_progress(10)
 
-    # --- Yangi: payload da tarjima qilingan promptdan foydalanamiz ---
     payload = {
-        "prompt": translated, # Yangilangan qator
+        "prompt": translated,
         "image_size": "512x512",
         "width": 512,
         "height": 512,
@@ -1610,25 +1696,18 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "reference_images": [],
         "strength": ""
     }
-    # --- Yangi tugadi ---
-
     headers = get_digen_headers()
     sess_timeout = aiohttp.ClientTimeout(total=180)
+
     try:
-        # Progressni yangilash (soxta)
         await asyncio.sleep(0.5)
         await update_progress(30)
-
         async with aiohttp.ClientSession(timeout=sess_timeout) as session:
-            # Progressni yangilash (soxta)
             await asyncio.sleep(0.5)
             await update_progress(50)
-
             async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
-                # Progressni yangilash (soxta)
                 await asyncio.sleep(0.5)
                 await update_progress(70)
-
                 text_resp = await resp.text()
                 logger.info(f"[DIGEN] status={resp.status}")
                 try:
@@ -1639,7 +1718,6 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     return
 
             logger.debug(f"[DIGEN DATA] {json.dumps(data)[:2000]}")
-
             image_id = None
             if isinstance(data, dict):
                 image_id = (data.get("data") or {}).get("id") or data.get("id")
@@ -1651,86 +1729,122 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
             logger.info(f"[GENERATE] urls: {urls}")
 
-            available = False
-            max_wait = 60
-            waited = 0
-            interval = 1.5
-            while waited < max_wait:
-                # Progressni yangilash (soxta)
-                progress_percent = min(90, 70 + int((waited / max_wait) * 20))
-                await update_progress(progress_percent)
+            # --- Real-ESRGAN 4x+ (Gen-API) orqali kengaytirish ---
+            use_esrgan = bool(os.getenv("GEN_API_TOKEN"))
+            if use_esrgan:
+                await q.edit_message_text("🔍 Real-ESRGAN 4x+ qayta ishlash boshlandi...")
+                enhanced_urls = []
+                for url in urls:
+                    try:
+                        enhanced_url = await enhance_with_genapi(url)
+                        enhanced_urls.append(enhanced_url)
+                    except Exception as e:
+                        logger.error(f"[ESRGAN FAIL] {e}")
+                        enhanced_urls.append(url)
+                final_urls = enhanced_urls
+            else:
+                # Eski "wait for image" logikasi
+                available = False
+                max_wait = 60
+                waited = 0
+                interval = 1.5
+                while waited < max_wait:
+                    progress_percent = min(90, 70 + int((waited / max_wait) * 20))
+                    await update_progress(progress_percent)
+                    try:
+                        async with session.get(urls[0]) as chk:
+                            if chk.status == 200:
+                                available = True
+                                break
+                    except Exception:
+                        pass
+                    await asyncio.sleep(interval)
+                    waited += interval
+                if not available:
+                    logger.warning("[GENERATE] URL not ready after wait")
+                    try:
+                        await q.edit_message_text(lang["image_delayed"])
+                    except Exception:
+                        pass
+                    return
+                final_urls = urls
 
-                try:
-                    async with session.get(urls[0]) as chk:
-                        if chk.status == 200:
-                            available = True
-                            break
-                except Exception:
-                    pass
-                await asyncio.sleep(interval)
-                waited += interval
-
-            if not available:
-                logger.warning("[GENERATE] URL not ready after wait")
-                try:
-                    await q.edit_message_text(lang["image_delayed"])
-                except Exception:
-                    pass
+            # --- Rasmlarni bytes sifatida yuklab olish ---
+            try:
+                image_bytes_list = []
+                for url in final_urls:
+                    img_bytes = await download_image_bytes(url)
+                    image_bytes_list.append(img_bytes)
+            except Exception as e:
+                logger.error(f"[IMAGE DOWNLOAD FAILED] {e}")
+                await q.edit_message_text(lang["error"])
                 return
 
             # 100% progress
             await update_progress(100)
-
             end_time = time.time()
             elapsed_time = end_time - start_time
 
-            # Yangi: Statistika bilan rasm(lar)ni yuborish (Oddiy matn sifatida)
-            # escape_md dan foydalanib, maxsus belgilarni to'g'ri qo'yamiz
-            escaped_prompt = escape_md(prompt) # Original promptni log qilamiz
-
-            # Statistikani oddiy matn sifatida yaratamiz, hech qanday parse_mode ishlatmaymiz
-            # Tarjimalar to'g'rilangan
-            # Yangilangan qatorlar, tarjima qilingan
+            escaped_prompt = escape_md(prompt)
             stats_text = (
-                f"{lang['image_ready_header']}\n\n"
+                f"{lang['image_ready_header']}\n"
                 f"{lang['image_prompt_label']} {escaped_prompt}\n"
                 f"{lang['image_count_label']} {count}\n"
                 f"{lang['image_time_label']} {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
                 f"{lang['image_elapsed_label']} {elapsed_time:.1f}s"
             )
 
+            # --- Rasmlarni yuborish (bytes sifatida) ---
             try:
-                # Birinchi rasmga statistika, qolganlariga yo'q. parse_mode ishlatmaymiz.
-                media = [InputMediaPhoto(u, caption=stats_text if i == 0 else None) for i, u in enumerate(urls)]
+                media = [InputMediaPhoto(io.BytesIO(img_bytes), caption=stats_text if i == 0 else None)
+                         for i, img_bytes in enumerate(image_bytes_list)]
                 await q.message.reply_media_group(media)
             except TelegramError as e:
                 logger.exception(f"[MEDIA_GROUP ERROR] {e}; fallback to single photos")
-                # Agar MediaGroup ishlamasa, birinchi rasmga statistika bilan, qolganlariga yo'q holda yuboramiz
                 try:
-                    await q.message.reply_photo(urls[0], caption=stats_text) # parse_mode ishlatmaymiz
-                    for u in urls[1:]:
+                    await q.message.reply_photo(io.BytesIO(image_bytes_list[0]), caption=stats_text)
+                    for img_bytes in image_bytes_list[1:]:
                         try:
-                            await q.message.reply_photo(u)
+                            await q.message.reply_photo(io.BytesIO(img_bytes))
                         except Exception as ex:
                             logger.exception(f"[SINGLE SEND ERR] {ex}")
                 except Exception as e2:
                     logger.exception(f"[FALLBACK PHOTO ERROR] {e2}")
-                    # Agar bu ham ishlamasa, oddiy matn sifatida xabar beramiz
                     await q.message.reply_text(lang["success"])
 
-            # --- Yangi: Admin xabarnomasi (barcha rasmlar bilan) ---
-            digen_prompt_for_logging
-            if ADMIN_ID and urls:
-                 await notify_admin_generation(context, user, prompt, urls, count, image_id)
-            await log_generation(context.application.bot_data["db_pool"], user, prompt, digen_prompt_for_logging, image_id, count)
+            # --- Admin xabari (bytes sifatida) ---
+            if ADMIN_ID and image_bytes_list:
+                first_img_bytes = image_bytes_list[0]
+                tashkent_dt = tashkent_time()
+                caption_text = (
+                    f"🎨 *Yangi generatsiya!*\n"
+                    f"👤 *Foydalanuvchi:* @{user.username if user.username else 'N/A'} (ID: {user.id})\n"
+                    f"📝 *Prompt:* {escape_md(prompt)}\n"
+                    f"🔢 *Soni:* {count}\n"
+                    f"🆔 *Image ID:* `{image_id}`\n"
+                    f"⏰ *Vaqt \\(UTC\\+5\\):* {tashkent_dt.strftime('%Y-%m-%d %H:%M:%S')}"
+                )
+                try:
+                    await context.bot.send_photo(
+                        chat_id=ADMIN_ID,
+                        photo=io.BytesIO(first_img_bytes),
+                        caption=caption_text,
+                        parse_mode="MarkdownV2"
+                    )
+                    for img_bytes in image_bytes_list[1:]:
+                        await context.bot.send_photo(chat_id=ADMIN_ID, photo=io.BytesIO(img_bytes))
+                except Exception as e:
+                    logger.exception(f"[ADMIN NOTIFY ERROR] {e}")
 
-            # Oxirgi progress xabarini muvaffaqiyatli natija bilan almashtirish
+            await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
+
             try:
                 await q.edit_message_text(lang["done"])
             except BadRequest:
                 pass
 
     except Exception as e:
+        logger.exception(f"[GENERATE ERROR] {e}")
         try:
             await q.edit_message_text(lang["error"])
         except Exception:
