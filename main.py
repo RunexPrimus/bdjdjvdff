@@ -8,9 +8,7 @@ import os
 import json
 import random
 import time
-import replicate
 from datetime import datetime, timezone, timedelta
-
 
 # Yangi import qo'shildi
 from telegram.error import BadRequest, TelegramError
@@ -1040,34 +1038,6 @@ def get_digen_headers():
 
 
 #--------------------------
-async def enhance_with_replicate(image_url: str) -> str:
-    """
-    Replicate orqali Real-ESRGAN 4x+ (General - v3) ishlatadi.
-    Kiruvchi: rasm URL (Digen dan kelgan)
-    Qaytaruv: kengaytirilgan rasmning URL (Replicate tomonidan berilgan)
-    """
-    try:
-        token = os.getenv("REPLICATE_API_TOKEN")
-        if not token:
-            logger.warning("REPLICATE_API_TOKEN yo'q. ESRGAN ishlatilmaydi.")
-            return image_url
-
-        model_version = "xinntao/realesrgan:1b976a4d456ed9e4d1a846597b7614e79eadad3032e9124fa63859db0fd59b56"
-        input_data = {
-            "img": image_url,
-            "version": "General - v3"  # ✅ 4x+ umumiy rasmlar uchun
-        }
-
-        logger.info(f"[REPLICATE] Enhancing: {image_url}")
-        output = replicate.run(model_version, input=input_data)
-        enhanced_url = output.url() if hasattr(output, 'url') else str(output)
-        logger.info(f"[REPLICATE] Enhanced URL: {enhanced_url}")
-        return enhanced_url
-
-    except Exception as e:
-        logger.exception(f"[REPLICATE ERROR] {e}")
-        return image_url  # Xatolikda asl rasmni qaytaramiz
-#-------------------------------
 async def check_ban(user_id: int, pool) -> bool:
     async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT is_banned FROM users WHERE id = $1", user_id)
@@ -1616,42 +1586,22 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     start_time = time.time() # Vaqtni boshlash
 
     # Yangi: Oddiy progress bar (soxta)
-# GENERATE (robust) - Yangilangan versiya (Prompt - Gemini - Digen + Real-ESRGAN 4x+)
-async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-    lang_code = DEFAULT_LANGUAGE
-    async with context.application.bot_data["db_pool"].acquire() as conn:
-        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
-        if row:
-            lang_code = row["language_code"]
-    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-    try:
-        count = int(q.data.split("_")[1])
-    except Exception:
-        try:
-            await q.edit_message_text(lang["error"])
-        except Exception:
-            pass
-        return
-    user = q.from_user
-    prompt = context.user_data.get("prompt", "")
-    translated = context.user_data.get("translated", prompt)
-    start_time = time.time()
-
     async def update_progress(percent):
         bar_length = 10
         filled_length = int(bar_length * percent // 100)
         bar = '█' * filled_length + '░' * (bar_length - filled_length)
         try:
+            # Eski xabarni yangilash uchun Markdown ishlatmaymiz
             await q.edit_message_text(lang["generating_progress"].format(bar=bar, percent=percent))
         except Exception:
-            pass
+            pass # Xatolikni e'tiborsiz qoldirish mumkin
 
+    # Dastlabki progress
     await update_progress(10)
 
+    # --- Yangi: payload da tarjima qilingan promptdan foydalanamiz ---
     payload = {
-        "prompt": translated,
+        "prompt": translated, # Yangilangan qator
         "image_size": "512x512",
         "width": 512,
         "height": 512,
@@ -1660,18 +1610,25 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "reference_images": [],
         "strength": ""
     }
+    # --- Yangi tugadi ---
+
     headers = get_digen_headers()
     sess_timeout = aiohttp.ClientTimeout(total=180)
-
     try:
+        # Progressni yangilash (soxta)
         await asyncio.sleep(0.5)
         await update_progress(30)
+
         async with aiohttp.ClientSession(timeout=sess_timeout) as session:
+            # Progressni yangilash (soxta)
             await asyncio.sleep(0.5)
             await update_progress(50)
+
             async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
+                # Progressni yangilash (soxta)
                 await asyncio.sleep(0.5)
                 await update_progress(70)
+
                 text_resp = await resp.text()
                 logger.info(f"[DIGEN] status={resp.status}")
                 try:
@@ -1682,6 +1639,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     return
 
             logger.debug(f"[DIGEN DATA] {json.dumps(data)[:2000]}")
+
             image_id = None
             if isinstance(data, dict):
                 image_id = (data.get("data") or {}).get("id") or data.get("id")
@@ -1693,54 +1651,48 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
             logger.info(f"[GENERATE] urls: {urls}")
 
-            # --- Real-ESRGAN 4x+ integratsiyasi ---
-            use_esrgan = bool(os.getenv("REPLICATE_API_TOKEN"))
-            if use_esrgan:
-                await q.edit_message_text("🔍 Real-ESRGAN 4x+ qayta ishlash boshlandi...")
-                enhanced_urls = []
-                for url in urls:
-                    try:
-                        enhanced_url = await enhance_with_replicate(url)
-                        enhanced_urls.append(enhanced_url)
-                    except Exception as e:
-                        logger.error(f"[ESRGAN FAIL] {e}")
-                        enhanced_urls.append(url)
-                final_urls = enhanced_urls
-            else:
-                # Eski "wait for image" logikasi
-                available = False
-                max_wait = 60
-                waited = 0
-                interval = 1.5
-                while waited < max_wait:
-                    progress_percent = min(90, 70 + int((waited / max_wait) * 20))
-                    await update_progress(progress_percent)
-                    try:
-                        async with session.get(urls[0]) as chk:
-                            if chk.status == 200:
-                                available = True
-                                break
-                    except Exception:
-                        pass
-                    await asyncio.sleep(interval)
-                    waited += interval
-                if not available:
-                    logger.warning("[GENERATE] URL not ready after wait")
-                    try:
-                        await q.edit_message_text(lang["image_delayed"])
-                    except Exception:
-                        pass
-                    return
-                final_urls = urls
+            available = False
+            max_wait = 60
+            waited = 0
+            interval = 1.5
+            while waited < max_wait:
+                # Progressni yangilash (soxta)
+                progress_percent = min(90, 70 + int((waited / max_wait) * 20))
+                await update_progress(progress_percent)
+
+                try:
+                    async with session.get(urls[0]) as chk:
+                        if chk.status == 200:
+                            available = True
+                            break
+                except Exception:
+                    pass
+                await asyncio.sleep(interval)
+                waited += interval
+
+            if not available:
+                logger.warning("[GENERATE] URL not ready after wait")
+                try:
+                    await q.edit_message_text(lang["image_delayed"])
+                except Exception:
+                    pass
+                return
 
             # 100% progress
             await update_progress(100)
+
             end_time = time.time()
             elapsed_time = end_time - start_time
 
-            escaped_prompt = escape_md(prompt)
+            # Yangi: Statistika bilan rasm(lar)ni yuborish (Oddiy matn sifatida)
+            # escape_md dan foydalanib, maxsus belgilarni to'g'ri qo'yamiz
+            escaped_prompt = escape_md(prompt) # Original promptni log qilamiz
+
+            # Statistikani oddiy matn sifatida yaratamiz, hech qanday parse_mode ishlatmaymiz
+            # Tarjimalar to'g'rilangan
+            # Yangilangan qatorlar, tarjima qilingan
             stats_text = (
-                f"{lang['image_ready_header']}\n"
+                f"{lang['image_ready_header']}\n\n"
                 f"{lang['image_prompt_label']} {escaped_prompt}\n"
                 f"{lang['image_count_label']} {count}\n"
                 f"{lang['image_time_label']} {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
@@ -1748,33 +1700,37 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             try:
-                media = [InputMediaPhoto(u, caption=stats_text if i == 0 else None) for i, u in enumerate(final_urls)]
+                # Birinchi rasmga statistika, qolganlariga yo'q. parse_mode ishlatmaymiz.
+                media = [InputMediaPhoto(u, caption=stats_text if i == 0 else None) for i, u in enumerate(urls)]
                 await q.message.reply_media_group(media)
             except TelegramError as e:
                 logger.exception(f"[MEDIA_GROUP ERROR] {e}; fallback to single photos")
+                # Agar MediaGroup ishlamasa, birinchi rasmga statistika bilan, qolganlariga yo'q holda yuboramiz
                 try:
-                    await q.message.reply_photo(final_urls[0], caption=stats_text)
-                    for u in final_urls[1:]:
+                    await q.message.reply_photo(urls[0], caption=stats_text) # parse_mode ishlatmaymiz
+                    for u in urls[1:]:
                         try:
                             await q.message.reply_photo(u)
                         except Exception as ex:
                             logger.exception(f"[SINGLE SEND ERR] {ex}")
                 except Exception as e2:
                     logger.exception(f"[FALLBACK PHOTO ERROR] {e2}")
+                    # Agar bu ham ishlamasa, oddiy matn sifatida xabar beramiz
                     await q.message.reply_text(lang["success"])
 
-            # Admin xabari va log
-            if ADMIN_ID and final_urls:
-                await notify_admin_generation(context, user, prompt, final_urls, count, image_id)
-            await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
+            # --- Yangi: Admin xabarnomasi (barcha rasmlar bilan) ---
+            digen_prompt_for_logging
+            if ADMIN_ID and urls:
+                 await notify_admin_generation(context, user, prompt, urls, count, image_id)
+            await log_generation(context.application.bot_data["db_pool"], user, prompt, digen_prompt_for_logging, image_id, count)
 
+            # Oxirgi progress xabarini muvaffaqiyatli natija bilan almashtirish
             try:
                 await q.edit_message_text(lang["done"])
             except BadRequest:
                 pass
 
     except Exception as e:
-        logger.exception(f"[GENERATE ERROR] {e}")
         try:
             await q.edit_message_text(lang["error"])
         except Exception:
