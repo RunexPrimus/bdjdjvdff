@@ -1712,70 +1712,76 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # 100% progress
             await update_progress(100)
-
             end_time = time.time()
             elapsed_time = end_time - start_time
 
-            # Yangi: Statistika bilan rasm(lar)ni yuborish (Oddiy matn sifatida)
-            # escape_md dan foydalanib, maxsus belgilarni to'g'ri qo'yamiz
-            escaped_prompt = escape_md(prompt) # Original promptni log qilamiz
-
-            # Statistikani oddiy matn sifatida yaratamiz, hech qanday parse_mode ishlatmaymiz
-            # Tarjimalar to'g'rilangan
-            # Yangilangan qatorlar, tarjima qilingan
+            # Statistika
+            escaped_prompt = escape_md(prompt)
             stats_text = (
-                f"{lang['image_ready_header']}\n\n"
+                f"{lang['image_ready_header']}\n"
                 f"{lang['image_prompt_label']} {escaped_prompt}\n"
                 f"{lang['image_count_label']} {count}\n"
                 f"{lang['image_time_label']} {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
                 f"{lang['image_elapsed_label']} {elapsed_time:.1f}s"
             )
 
+            # --- Real-ESRGAN orqali upscale qilish ---
+            upscaled_paths = []
+            for url in urls:
+                try:
+                    async with aiohttp.ClientSession() as dl_sess:
+                        async with dl_sess.get(url) as resp:
+                            if resp.status == 200:
+                                content = await resp.read()
+                                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+                                    tmp.write(content)
+                                    tmp_path = tmp.name
+
+                                # Upscale qilish
+                                upscaled_path = await upscale_with_realesrgan(tmp_path)
+                                upscaled_paths.append(upscaled_path)
+
+                                # Vaqtinchalik faylni o'chirish
+                                os.unlink(tmp_path)
+                            else:
+                                upscaled_paths.append(None)
+                except Exception as e:
+                    logger.error(f"[DOWNLOAD/UPSCALE ERROR] {e}")
+                    upscaled_paths.append(None)
+            # --- Upscale tugadi ---
+
             try:
-                # Birinchi rasmga statistika, qolganlariga yo'q. parse_mode ishlatmaymiz.
-                # Upscale qilingan rasmlarni yuborish
-valid_paths = [p for p in upscaled_paths if p and os.path.exists(p)]
-if valid_paths:
-    media = [InputMediaPhoto(open(p, 'rb'), caption=stats_text if i == 0 else None) for i, p in enumerate(valid_paths)]
-else:
-    # Agar upscale ishlamasa, asl rasmlarni yuborish
-    media = [InputMediaPhoto(u, caption=stats_text if i == 0 else None) for i, u in enumerate(urls)]
+                valid_paths = [p for p in upscaled_paths if p and os.path.exists(p)]
+                if valid_paths:
+                    media = [InputMediaPhoto(open(p, 'rb'), caption=stats_text if i == 0 else None) for i, p in enumerate(valid_paths)]
+                else:
+                    media = [InputMediaPhoto(u, caption=stats_text if i == 0 else None) for i, u in enumerate(urls)]
+
                 await q.message.reply_media_group(media)
+
+                # Fayllarni yopish va tozalash
+                for item in media:
+                    if hasattr(item.media, 'close'):
+                        item.media.close()
+                for p in valid_paths:
+                    if os.path.exists(p):
+                        os.unlink(p)
+
             except TelegramError as e:
                 logger.exception(f"[MEDIA_GROUP ERROR] {e}; fallback to single photos")
-                # Agar MediaGroup ishlamasa, birinchi rasmga statistika bilan, qolganlariga yo'q holda yuboramiz
                 try:
-                    await q.message.reply_photo(urls[0], caption=stats_text) # parse_mode ishlatmaymiz
+                    await q.message.reply_photo(urls[0], caption=stats_text)
                     for u in urls[1:]:
-                        try:
-                            await q.message.reply_photo(u)
-                        except Exception as ex:
-                            logger.exception(f"[SINGLE SEND ERR] {ex}")
+                        await q.message.reply_photo(u)
                 except Exception as e2:
                     logger.exception(f"[FALLBACK PHOTO ERROR] {e2}")
-                    # Agar bu ham ishlamasa, oddiy matn sifatida xabar beramiz
                     await q.message.reply_text(lang["success"])
 
-            # --- Yangi: Admin xabarnomasi (barcha rasmlar bilan) ---
-            digen_prompt_for_logging
+            # Admin xabari
             if ADMIN_ID and urls:
-                 await notify_admin_generation(context, user, prompt, urls, count, image_id)
-            await log_generation(context.application.bot_data["db_pool"], user, prompt, digen_prompt_for_logging, image_id, count)
+                await notify_admin_generation(context, user, prompt, urls, count, image_id)
+            await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
 
-            # Fayllarni yopish va o'chirish
-for item in media:
-    if hasattr(item.media, 'close'):
-        item.media.close()
-    if isinstance(item.media, str) and item.media.startswith("/tmp/"):
-        if os.path.exists(item.media):
-            os.unlink(item.media)
-
-# Agar valid_paths bo'lsa, ularni ham tozalash
-for p in valid_paths:
-    if os.path.exists(p):
-        os.unlink(p)
-
-            # Oxirgi progress xabarini muvaffaqiyatli natija bilan almashtirish
             try:
                 await q.edit_message_text(lang["done"])
             except BadRequest:
