@@ -1657,28 +1657,31 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.info(f"[GENERATE] urls: {urls}")
 
             # --- Real-ESRGAN orqali upscale qilish ---
-upscaled_paths = []
-for url in urls:
-    try:
-        async with aiohttp.ClientSession() as dl_sess:
-            async with dl_sess.get(url) as resp:
-                if resp.status == 200:
-                    content = await resp.read()
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-                        tmp.write(content)
-                        tmp_path = tmp.name
+            # --- Real-ESRGAN orqali upscale qilish ---
+            upscaled_paths = []
+            for url in urls:
+                try:
+                    async with aiohttp.ClientSession() as dl_sess:
+                        async with dl_sess.get(url) as resp:
+                            if resp.status == 200:
+                                content = await resp.read()
+                                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+                                    tmp.write(content)
+                                    tmp_path = tmp.name
 
-                    # Upscale qilish
-                    upscaled_path = await upscale_with_realesrgan(tmp_path)
-                    upscaled_paths.append(upscaled_path)
+                                # Upscale qilish
+                                upscaled_path = await upscale_with_realesrgan(tmp_path)
+                                upscaled_paths.append(upscaled_path)
 
-                    # Vaqtinchalik faylni o'chirish
-                    os.unlink(tmp_path)
-                else:
+                                # Vaqtinchalik faylni o'chirish
+                                os.unlink(tmp_path)
+                            else:
+                                upscaled_paths.append(None)
+                except Exception as e:
+                    logger.error(f"[DOWNLOAD/UPSCALE ERROR] {e}")
                     upscaled_paths.append(None)
-    except Exception as e:
-        logger.error(f"[DOWNLOAD/UPSCALE ERROR] {e}")
-        upscaled_paths.append(None)
+            # --- Upscale tugadi ---
+
 # --- Upscale tugadi ---
             available = False
             max_wait = 60
