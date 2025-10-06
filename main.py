@@ -1607,9 +1607,9 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- Yangi: payload da tarjima qilingan promptdan foydalanamiz ---
     payload = {
         "prompt": translated, # Yangilangan qator
-        "image_size": "2048x2048",
-        "width": 2048,
-        "height": 2048,
+        "image_size": "1024",
+        "width": 1024,
+        "height": 1024,
         "lora_id": "",
         "batch_size": count,
         "reference_images": [],
