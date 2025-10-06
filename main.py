@@ -8,11 +8,6 @@ import os
 import json
 import random
 import time
-# Real-ESRGAN uchun
-import subprocess
-import tempfile
-import uuid
-import shutil
 from datetime import datetime, timezone, timedelta
 
 # Yangi import qo'shildi
@@ -1656,33 +1651,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
             logger.info(f"[GENERATE] urls: {urls}")
 
-            # --- Real-ESRGAN orqali upscale qilish ---
-            # --- Real-ESRGAN orqali upscale qilish ---
-            upscaled_paths = []
-            for url in urls:
-                try:
-                    async with aiohttp.ClientSession() as dl_sess:
-                        async with dl_sess.get(url) as resp:
-                            if resp.status == 200:
-                                content = await resp.read()
-                                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-                                    tmp.write(content)
-                                    tmp_path = tmp.name
-
-                                # Upscale qilish
-                                upscaled_path = await upscale_with_realesrgan(tmp_path)
-                                upscaled_paths.append(upscaled_path)
-
-                                # Vaqtinchalik faylni o'chirish
-                                os.unlink(tmp_path)
-                            else:
-                                upscaled_paths.append(None)
-                except Exception as e:
-                    logger.error(f"[DOWNLOAD/UPSCALE ERROR] {e}")
-                    upscaled_paths.append(None)
-            # --- Upscale tugadi ---
-
-# --- Upscale tugadi ---
+        
             available = False
             max_wait = 300
             waited = 0
@@ -1710,12 +1679,11 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pass
                 return
 
-            # 100% progress
+                       # 100% progress
             await update_progress(100)
             end_time = time.time()
             elapsed_time = end_time - start_time
 
-            # Statistika
             escaped_prompt = escape_md(prompt)
             stats_text = (
                 f"{lang['image_ready_header']}\n"
@@ -1725,48 +1693,9 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{lang['image_elapsed_label']} {elapsed_time:.1f}s"
             )
 
-            # --- Real-ESRGAN orqali upscale qilish ---
-            upscaled_paths = []
-            for url in urls:
-                try:
-                    async with aiohttp.ClientSession() as dl_sess:
-                        async with dl_sess.get(url) as resp:
-                            if resp.status == 200:
-                                content = await resp.read()
-                                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-                                    tmp.write(content)
-                                    tmp_path = tmp.name
-
-                                # Upscale qilish
-                                upscaled_path = await upscale_with_realesrgan(tmp_path)
-                                upscaled_paths.append(upscaled_path)
-
-                                # Vaqtinchalik faylni o'chirish
-                                os.unlink(tmp_path)
-                            else:
-                                upscaled_paths.append(None)
-                except Exception as e:
-                    logger.error(f"[DOWNLOAD/UPSCALE ERROR] {e}")
-                    upscaled_paths.append(None)
-            # --- Upscale tugadi ---
-
             try:
-                valid_paths = [p for p in upscaled_paths if p and os.path.exists(p)]
-                if valid_paths:
-                    media = [InputMediaPhoto(open(p, 'rb'), caption=stats_text if i == 0 else None) for i, p in enumerate(valid_paths)]
-                else:
-                    media = [InputMediaPhoto(u, caption=stats_text if i == 0 else None) for i, u in enumerate(urls)]
-
+                media = [InputMediaPhoto(u, caption=stats_text if i == 0 else None) for i, u in enumerate(urls)]
                 await q.message.reply_media_group(media)
-
-                # Fayllarni yopish va tozalash
-                for item in media:
-                    if hasattr(item.media, 'close'):
-                        item.media.close()
-                for p in valid_paths:
-                    if os.path.exists(p):
-                        os.unlink(p)
-
             except TelegramError as e:
                 logger.exception(f"[MEDIA_GROUP ERROR] {e}; fallback to single photos")
                 try:
@@ -1777,7 +1706,6 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logger.exception(f"[FALLBACK PHOTO ERROR] {e2}")
                     await q.message.reply_text(lang["success"])
 
-            # Admin xabari
             if ADMIN_ID and urls:
                 await notify_admin_generation(context, user, prompt, urls, count, image_id)
             await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
