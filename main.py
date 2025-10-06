@@ -1684,7 +1684,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Upscale tugadi ---
             available = False
-            max_wait = 60
+            max_wait = 300
             waited = 0
             interval = 1.5
             while waited < max_wait:
