@@ -925,19 +925,20 @@ LANGUAGES = {
 }
 DEFAULT_LANGUAGE = "uz"
 DIGEN_MODELS = [
-    {"id": "", "title": "Default Mode", "description": "No special style. Pure base model generation."},
-    {"id": "86", "title": "Kawaii Figurine", "description": "Generate exquisite cute figure-style images."},
-    {"id": "89", "title": "Fluxlisimo Drawing", "description": "Generate detailed manga-style artistic portraits and illustrations."},
-    {"id": "88", "title": "Gustave", "description": "Generate classical elegant artistic style images."},
-    {"id": "87", "title": "Brick World", "description": "Generate classic LEGO brick style images."},
-    {"id": "82", "title": "Galactic Sentinel", "description": "A powerful and mysterious style blending mechs with cosmic elements."},
-    {"id": "81", "title": "Dark Allure", "description": "The seductive charm of shadows and forbidden beauty."},
-    {"id": "83", "title": "In the Moment", "description": "See the world through my eyes in this immersive experience."},
-    {"id": "84", "title": "Anime Phantom", "description": "Vibrant anime style with expressive characters."},
-    {"id": "85", "title": "Ghibli", "description": "Explore a magical world inspired by Ghibli's charm."},
-    {"id": "79", "title": "Sorcerers", "description": "Sorcerers wield spells to navigate mystical realms."},
-    {"id": "80", "title": "Mythos", "description": "Mythical Styles combine fantasy and elegance."},
+    {"id": "", "title": "🖼 Oddiy uslub", "description": "Hech qanday maxsus effektlarsiz, tabiiy va sof tasvir yaratadi."},
+    {"id": "86", "title": "🧸 Kawaii Figuralar", "description": "Juda yoqimli va o‘yinchoq uslubidagi shirin rasm turlari."},
+    {"id": "89", "title": "🎨 Manga Chizmasi", "description": "Yaponcha manga uslubida, chiroyli va detalli portretlar."},
+    {"id": "88", "title": "🏛 Klassik San’at (Gustave)", "description": "Renessans va klassik uslubdagi nafis rasmlar."},
+    {"id": "87", "title": "🧱 LEGO Dunyo", "description": "LEGO bloklaridan yasalgan ko‘rinishdagi qiziqarli tasvirlar."},
+    {"id": "82", "title": "🌌 Galaktik Qo‘riqchi", "description": "Koinot va texnologiya uyg‘unligidagi kuchli fantaziya uslubi."},
+    {"id": "81", "title": "🌑 Qorong‘u Sehr (Dark Allure)", "description": "Sirli, jozibali va sal qorong‘u estetika bilan bezatilgan."},
+    {"id": "83", "title": "👁 Lahzani His Et (In the Moment)", "description": "Haqiqiy his-tuyg‘ularni jonli tasvir bilan ifodalaydi."},
+    {"id": "84", "title": "🎭 Anime Fantom", "description": "Rang-barang, jonli va ifodali anime uslubidagi tasvirlar."},
+    {"id": "85", "title": "✨ Ghibli Sehrli Olami", "description": "Ghibli filmlaridagi kabi mo‘jizaviy va iliq muhit yaratadi."},
+    {"id": "79", "title": "🧙 Sehrgarlar Olami", "description": "Sehr, afsonalar va sirli kuchlarga boy fantastik uslub."},
+    {"id": "80", "title": "🧚 Afsonaviy Dunyolar (Mythos)", "description": "Afsonalar va fantaziya uyg‘unligida yaratilgan go‘zal tasvirlar."}
 ]
+
 # ---------------- helpers ----------------
 def escape_md(text: str) -> str:
     """
@@ -1230,18 +1231,24 @@ async def set_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def select_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
+
+    # Tugmalar 2 ustunda
     kb = []
-    for model in DIGEN_MODELS:
-        kb.append([InlineKeyboardButton(
-            model["title"],
-            callback_data=f"confirm_model_{model['id']}"
-        )])
+    models = DIGEN_MODELS
+    for i in range(0, len(models), 2):
+        row = []
+        row.append(InlineKeyboardButton(models[i]["title"], callback_data=f"confirm_model_{models[i]['id']}"))
+        if i + 1 < len(models):
+            row.append(InlineKeyboardButton(models[i+1]["title"], callback_data=f"confirm_model_{models[i+1]['id']}"))
+        kb.append(row)
     kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="open_settings")])
-    await q.edit_message_text(
-        "🖼 **Image Modelni tanlang**\nHar bir model boshqa uslubda rasm yaratadi.",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
+
+    # Rasmli matn
+    caption = "🖼 **Image Modelni tanlang**\nHar bir model boshqa uslubda rasm yaratadi."
+    photo_url = "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/fluxlisimo.webp"  # 👈 Siz o'zgartirasiz
+
+    await q.message.reply_photo(photo=photo_url, caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+    await q.message.delete()  # Eski xabarni o'chirish
 # ---------------- Tilni o'zgartirish handleri ----------------
 async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prompt, image_urls, count, image_id):
     if not ADMIN_ID:
@@ -1367,22 +1374,15 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     lang_code = None
-    
-    # Foydalanuvchining tilini olish
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user_id)
         if row:
             lang_code = row["language_code"]
-    
-    # Agar til yo'q bo'lsa, til tanlash menyusini ko‘rsatamiz
     if lang_code is None:
         await cmd_language(update, context)
         return
-    
-    # Tilni aniqlash
-    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
 
-    # Klaviatura yaratish
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
     kb = [
         [
             InlineKeyboardButton(lang["gen_button"], callback_data="start_gen"),
@@ -1397,17 +1397,15 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("⚙️ Sozlamalar", callback_data="open_settings")
         ]
     ]
-
-    # Faqat admin uchun tugma
     if user_id == ADMIN_ID:
         kb.insert(-1, [InlineKeyboardButton("🔐 Admin Panel", callback_data="admin_panel")])
 
-    # Xush kelibsiz matnini yuborish
-    await update.message.reply_text(
-        lang["welcome"],
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
-
+    # ✅ Xavfsiz javob: callback yoki message
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.message.reply_text(lang["welcome"], reply_markup=InlineKeyboardMarkup(kb))
+    else:
+        await update.message.reply_text(lang["welcome"], reply_markup=InlineKeyboardMarkup(kb))
 # ---------------- Bosh menyudan AI chat ----------------
 async def start_ai_flow_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -1719,25 +1717,36 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
         "strength": ""
     }
     headers = get_digen_headers()
-    timeout = aiohttp.ClientTimeout(total=300)
+    timeout = aiohttp.ClientTimeout(total=1000)
 
     # Progress bar yordamchi funksiya
     async def _update_progress(percent: int):
-        bar_length = 10
+steps = [
+        (10, "🧠 Prompt tahlil qilinmoqda..."),
+        (25, "🎨 Model tanlanmoqda..."),
+        (40, "🌈 Ranglar va kompozitsiya yaratilmoqda..."),
+        (60, "💡 Yorug‘lik va soya muvozanatlantirilmoqda..."),
+        (80, "🧩 Detallar yakunlanmoqda..."),
+        (100, "✅ Tayyorlanmoqda...")
+    ]
+
+    bar_length = 10
+    for percent, text in steps:
         filled = int(bar_length * percent // 100)
         bar = "█" * filled + "░" * (bar_length - filled)
         try:
             await context.bot.edit_message_text(
                 chat_id=chat_id,
                 message_id=message_id,
-                text=lang["generating_progress"].format(bar=bar, percent=percent)
+                text=f"{text}\n{bar} {percent}%"
             )
-        except BadRequest:
-            pass  # Xabar o'chirilgan bo'lishi mumkin
+        except:
+            pass
+        await asyncio.sleep(1.5)
 
     try:
         # 1. Digen API ga so'rov yuborish (10-20%)
-        await _update_progress(30)
+        await _update_progress(10)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             await _update_progress(70)
             async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
