@@ -924,7 +924,20 @@ LANGUAGES = {
     },
 }
 DEFAULT_LANGUAGE = "uz"
-
+DIGEN_MODELS = [
+    {"id": "", "title": "Default Mode", "description": "No special style. Pure base model generation."},
+    {"id": "86", "title": "Kawaii Figurine", "description": "Generate exquisite cute figure-style images."},
+    {"id": "89", "title": "Fluxlisimo Drawing", "description": "Generate detailed manga-style artistic portraits and illustrations."},
+    {"id": "88", "title": "Gustave", "description": "Generate classical elegant artistic style images."},
+    {"id": "87", "title": "Brick World", "description": "Generate classic LEGO brick style images."},
+    {"id": "82", "title": "Galactic Sentinel", "description": "A powerful and mysterious style blending mechs with cosmic elements."},
+    {"id": "81", "title": "Dark Allure", "description": "The seductive charm of shadows and forbidden beauty."},
+    {"id": "83", "title": "In the Moment", "description": "See the world through my eyes in this immersive experience."},
+    {"id": "84", "title": "Anime Phantom", "description": "Vibrant anime style with expressive characters."},
+    {"id": "85", "title": "Ghibli", "description": "Explore a magical world inspired by Ghibli's charm."},
+    {"id": "79", "title": "Sorcerers", "description": "Sorcerers wield spells to navigate mystical realms."},
+    {"id": "80", "title": "Mythos", "description": "Mythical Styles combine fantasy and elegance."},
+]
 # ---------------- helpers ----------------
 def escape_md(text: str) -> str:
     """
@@ -1109,26 +1122,36 @@ async def check_sub_button_handler(update: Update, context: ContextTypes.DEFAULT
         await q.edit_message_text(lang["sub_still_not"], reply_markup=InlineKeyboardMarkup(kb))
 
 # ---------------- DB user/session/logging ----------------
-async def add_user_db(pool, tg_user, lang_code=None):
+async def add_user_db(pool, tg_user, lang_code=None, image_model_id=None):
     now = utc_now()
     async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT id FROM users WHERE id = $1", tg_user.id)
         if row:
-            if lang_code:
-                await conn.execute(
-                    "UPDATE users SET username=$1, last_seen=$2, language_code=$3 WHERE id=$4",
-                    tg_user.username if tg_user.username else None, now, lang_code, tg_user.id
-                )
-            else:
-                await conn.execute(
-                    "UPDATE users SET username=$1, last_seen=$2 WHERE id=$3",
-                    tg_user.username if tg_user.username else None, now, tg_user.id
-                )
+            updates = []
+            params = []
+            idx = 1
+            if lang_code is not None:
+                updates.append(f"language_code=${idx}")
+                params.append(lang_code)
+                idx += 1
+            if image_model_id is not None:
+                updates.append(f"image_model_id=${idx}")
+                params.append(image_model_id)
+                idx += 1
+            updates.append(f"username=${idx}")
+            updates.append(f"last_seen=${idx+1}")
+            params.extend([tg_user.username if tg_user.username else None, now, tg_user.id])
+            if updates:
+                query = f"UPDATE users SET {', '.join(updates)} WHERE id=${len(params)}"
+                await conn.execute(query, *params)
         else:
             lang_code = lang_code or DEFAULT_LANGUAGE
+            image_model_id = image_model_id or ""
             await conn.execute(
-                "INSERT INTO users(id, username, first_seen, last_seen, language_code) VALUES($1,$2,$3,$4,$5)",
-                tg_user.id, tg_user.username if tg_user.username else None, now, now, lang_code
+                "INSERT INTO users(id, username, first_seen, last_seen, language_code, image_model_id) "
+                "VALUES($1,$2,$3,$4,$5,$6)",
+                tg_user.id, tg_user.username if tg_user.username else None,
+                now, now, lang_code, image_model_id
             )
         await conn.execute("INSERT INTO sessions(user_id, started_at) VALUES($1,$2)", tg_user.id, now)
 
@@ -1142,12 +1165,77 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
             prompt, translated, image_id, count, now
         )
 
-# ---------------- Admin ga xabar yuborish (YANGILANGAN) ----------------
-# Endi barcha rasmlarni yuboradi
-# Endi barcha rasmlarni yuboradi va tarjima qiladi
+#-------------Sozlamalar--------------------
+async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    user_id = q.from_user.id
+    lang_code = DEFAULT_LANGUAGE
+    image_model_id = ""
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code, image_model_id FROM users WHERE id = $1", user_id)
+        if row:
+            lang_code = row["language_code"] or DEFAULT_LANGUAGE
+            image_model_id = row["image_model_id"] or ""
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
 
+    # Joriy model nomini topish
+    current_model_title = "Default Mode"
+    for m in DIGEN_MODELS:
+        if m["id"] == image_model_id:
+            current_model_title = m["title"]
+            break
 
+    kb = [
+        [InlineKeyboardButton(f"🖼 Image Model: {current_model_title}", callback_data="select_image_model")],
+        [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")],
+        [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
+    ]
+    await q.edit_message_text("⚙️ **Sozlamalar**", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 
+#--------------------------------------------------
+async def confirm_model_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    model_id = q.data.split("_", 2)[2]
+    model = next((m for m in DIGEN_MODELS if m["id"] == model_id), None)
+    if not model:
+        return
+    kb = [
+        [InlineKeyboardButton("✅ Tanlash", callback_data=f"set_model_{model_id}")],
+        [InlineKeyboardButton("⬅️ Orqaga", callback_data="select_image_model")]
+    ]
+    await q.edit_message_text(
+        f"🖼 **{model['title']}**\n\n{model['description']}\n\nTanlaysizmi?",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
+async def set_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    model_id = q.data.split("_", 2)[2]
+    user = q.from_user
+    # DB ga saqlash
+    await add_user_db(context.application.bot_data["db_pool"], user, image_model_id=model_id)
+    # Sozlamalarga qaytish
+    await settings_menu(update, context)
+#------------------------------------------------
+async def select_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    kb = []
+    for model in DIGEN_MODELS:
+        kb.append([InlineKeyboardButton(
+            model["title"],
+            callback_data=f"confirm_model_{model['id']}"
+        )])
+    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="open_settings")])
+    await q.edit_message_text(
+        "🖼 **Image Modelni tanlang**\nHar bir model boshqa uslubda rasm yaratadi.",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
 # ---------------- Tilni o'zgartirish handleri ----------------
 async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prompt, image_urls, count, image_id):
     if not ADMIN_ID:
@@ -1255,7 +1343,8 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
             InlineKeyboardButton(lang["lang_button"], callback_data="change_language")
         ],
         [
-            InlineKeyboardButton("📈 Statistika", callback_data="show_stats")
+            InlineKeyboardButton("📈 Statistika", callback_data="show_stats"),
+            InlineKeyboardButton("⚙️ Sozlamalar", callback_data="open_settings")
         ]
     ]
 
@@ -1298,7 +1387,8 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(lang["lang_button"], callback_data="change_language")
         ],
         [
-            InlineKeyboardButton("📈 Statistika", callback_data="show_stats")
+            InlineKeyboardButton("📈 Statistika", callback_data="show_stats"),
+            InlineKeyboardButton("⚙️ Sozlamalar", callback_data="open_settings")
         ]
     ]
 
@@ -1604,12 +1694,20 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def _background_generate(context, user, prompt, translated, count, chat_id, message_id, lang):
     start_time = time.time()
+
+    # ✅ Foydalanuvchining tanlagan modelini DB dan olish
+    lora_id = ""
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT image_model_id FROM users WHERE id = $1", user.id)
+        if row and row["image_model_id"]:
+            lora_id = row["image_model_id"]
+
     payload = {
         "prompt": translated,
         "image_size": "1024",
         "width": 1024,
         "height": 1024,
-        "lora_id": "",
+        "lora_id": lora_id,
         "batch_size": count,
         "reference_images": [],
         "strength": ""
@@ -1633,9 +1731,9 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
 
     try:
         # 1. Digen API ga so'rov yuborish (10-20%)
-        await _update_progress(10)
+        await _update_progress(30)
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            await _update_progress(20)
+            await _update_progress(70)
             async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
                 text_resp = await resp.text()
                 logger.info(f"[DIGEN] status={resp.status}")
