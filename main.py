@@ -1160,7 +1160,7 @@ async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prom
         # Admin xabari uchun matn (statistika)
         # Admin xabari uchun matn (statistika) - Tarjima qilingan matnlardan foydalanilmoqda
         caption_text = (
-            f"🎨 *Yangi generatsiya!*\n\n"
+            f"🎨 *Yangi generatsiya\!*\n\n"
             f"👤 *Foydalanuvchi:* @{user.username if user.username else 'N/A'} (ID: {user.id})\n"
             f"📝 *Prompt:* {escape_md(prompt)}\n"
             f"🔢 *Soni:* {count}\n"
