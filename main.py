@@ -1613,7 +1613,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- Yangi tugadi ---
 
     headers = get_digen_headers()
-    sess_timeout = aiohttp.ClientTimeout(total=180)
+    sess_timeout = aiohttp.ClientTimeout(total=300)
     try:
         # Progressni yangilash (soxta)
         await asyncio.sleep(0.5)
