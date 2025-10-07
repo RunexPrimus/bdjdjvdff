@@ -25,6 +25,7 @@ from telegram.ext import (
     ContextTypes, filters, ConversationHandler, PreCheckoutQueryHandler
 )
 
+logging.getLogger("httpx").setLevel(logging.WARNING)
 # ---------------- LOG ----------------
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -1514,10 +1515,6 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup(kb)
         )
-# ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
-# Yangilangan: context.user_data["flow"] o'rnatiladi
-# ---------------- Tanlov tugmachasi orqali rasm generatsiya ----------------
-# Yangilangan: context.user_data["flow"] o'rnatiladi
 async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -1586,10 +1583,10 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = context.user_data.get("prompt", "")
     translated = context.user_data.get("translated", prompt)
 
-    # ✅ Foydalanuvchiga darhol javob — "🔄 Rasm yaratilmoqda..."
-    await q.edit_message_text(lang["generating"].format(count=count))
+    # ✅ Darhol javob — progress boshlanadi
+    await q.edit_message_text(lang["generating_progress"].format(bar="░░░░░░░░░░", percent=0))
 
-    # ✅ Orqa fonda generatsiya — parallel ishlash uchun
+    # ✅ Orqa fonda generatsiya — parallel
     asyncio.create_task(
         _background_generate(
             context=context,
@@ -1598,12 +1595,14 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
             translated=translated,
             count=count,
             chat_id=q.message.chat_id,
+            message_id=q.message.message_id,  # ← Yangi: xabarni yangilash uchun
             lang=lang
         )
     )
 
 # ---------------- Orqa fonda generatsiya: _background_generate ----------------
-async def _background_generate(context, user, prompt, translated, count, chat_id, lang):
+
+async def _background_generate(context, user, prompt, translated, count, chat_id, message_id, lang):
     start_time = time.time()
     payload = {
         "prompt": translated,
@@ -1618,9 +1617,25 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
     headers = get_digen_headers()
     timeout = aiohttp.ClientTimeout(total=300)
 
+    # Progress bar yordamchi funksiya
+    async def _update_progress(percent: int):
+        bar_length = 10
+        filled = int(bar_length * percent // 100)
+        bar = "█" * filled + "░" * (bar_length - filled)
+        try:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=lang["generating_progress"].format(bar=bar, percent=percent)
+            )
+        except BadRequest:
+            pass  # Xabar o'chirilgan bo'lishi mumkin
+
     try:
-        # 🔸 1. Digen API ga so'rov yuborish
+        # 1. Digen API ga so'rov yuborish (10-20%)
+        await _update_progress(10)
         async with aiohttp.ClientSession(timeout=timeout) as session:
+            await _update_progress(20)
             async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
                 text_resp = await resp.text()
                 logger.info(f"[DIGEN] status={resp.status}")
@@ -1642,12 +1657,16 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
         urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
         logger.info(f"[GENERATE] urls: {urls}")
 
-        # 🔸 2. Rasm tayyorligini tekshirish (har safar yangi session)
+        # 2. Rasm tayyorligini kutish (20% → 90%)
         available = False
         max_wait = 300
         waited = 0
-        interval = 1.5
+        interval = 2.0  # Har 2 soniyada tekshirish
+
         while waited < max_wait:
+            progress = 20 + int((waited / max_wait) * 70)  # 20% dan 90% gacha
+            await _update_progress(min(progress, 90))
+
             try:
                 async with aiohttp.ClientSession() as check_session:
                     async with check_session.get(urls[0]) as chk:
@@ -1656,6 +1675,7 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
                             break
             except Exception:
                 pass
+
             await asyncio.sleep(interval)
             waited += interval
 
@@ -1663,7 +1683,11 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
             await context.bot.send_message(chat_id, lang["image_delayed"])
             return
 
-        # 🔸 3. Natijani yuborish
+        # 3. Tayyor! (100%)
+        await _update_progress(100)
+        await asyncio.sleep(0.5)  # Kichik kechikish
+
+        # Natijani yuborish
         end_time = time.time()
         elapsed_time = end_time - start_time
         escaped_prompt = escape_md(prompt)
@@ -1687,7 +1711,7 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
                 logger.exception(f"[FALLBACK PHOTO ERROR] {e2}")
                 await context.bot.send_message(chat_id, lang["success"])
 
-        # 🔸 4. Admin notify va log
+        # Admin notify va log
         if ADMIN_ID and urls:
             await notify_admin_generation(context, user, prompt, urls, count, image_id)
         await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
