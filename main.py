@@ -1140,12 +1140,17 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
 # ---------------- Admin ga xabar yuborish (YANGILANGAN) ----------------
 # Endi barcha rasmlarni yuboradi
 # Endi barcha rasmlarni yuboradi va tarjima qiladi
+
+
+
+# ---------------- Tilni o'zgartirish handleri ----------------
 async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prompt, image_urls, count, image_id):
     """
     Foydalanuvchi rasm generatsiya qilganda, barcha rasmlarni admin foydalanuvchisiga yuboradi.
+    HTML formatda, xatolarga chidamli.
     """
     if not ADMIN_ID:
-        return # Agar ADMIN_ID o'rnatilmagan bo'lsa, hech narsa yuborilmaydi
+        return  # Agar ADMIN_ID o'rnatilmagan bo'lsa, hech narsa yuborilmaydi
 
     try:
         # Foydalanuvchi tilini olish
@@ -1157,52 +1162,48 @@ async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prom
         lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
 
         tashkent_dt = tashkent_time()
-        # Admin xabari uchun matn (statistika)
-        # Admin xabari uchun matn (statistika) - Tarjima qilingan matnlardan foydalanilmoqda
+
+        # Admin xabari uchun matn (HTML formatda)
         caption_text = (
-            f"🎨 *Yangi generatsiya\!*\n\n"
-            f"👤 *Foydalanuvchi:* @{user.username if user.username else 'N/A'} (ID: {user.id})\n"
-            f"📝 *Prompt:* {escape_md(prompt)}\n"
-            f"🔢 *Soni:* {count}\n"
-            f"🆔 *Image ID:* `{image_id}`\n" # Image ID ni ham qo'shamiz
-            f"⏰ *Vaqt \\(UTC\\+5\\):* {tashkent_dt.strftime('%Y-%m-%d %H:%M:%S')}" # Markdown belgilari escape qilindi
-            f"{lang['admin_new_generation']}\n\n"
-            f"{lang['admin_user']} @{user.username if user.username else 'N/A'} (ID: {user.id})\n"
-            f"{lang['admin_prompt']} {escape_md(prompt)}\n"
-            f"{lang['admin_count']} {count}\n"
-            f"{lang['admin_image_id']} `{image_id}`\n" # Image ID ni ham qo'shamiz
-            f"{lang['admin_time']} {tashkent_dt.strftime('%Y-%m-%d %H:%M:%S')}" # Markdown belgilari escape qilindi
+            f"🎨 <b>Yangi generatsiya!</b>\n\n"
+            f"👤 <b>Foydalanuvchi:</b> @{user.username if user.username else 'N/A'} "
+            f"(ID: <code>{user.id}</code>)\n"
+            f"📝 <b>Prompt:</b> <code>{prompt}</code>\n"
+            f"🔢 <b>Soni:</b> {count}\n"
+            f"🆔 <b>Image ID:</b> <code>{image_id}</code>\n"
+            f"⏰ <b>Vaqt (UTC+5):</b> {tashkent_dt.strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
-        # 1. Avval statistikani yuboramiz (1-rasmga biriktiriladi)
+        # 1️⃣ Birinchi rasmni statistika bilan yuboramiz
         if image_urls:
             first_image_url = image_urls[0]
             await context.bot.send_photo(
                 chat_id=ADMIN_ID,
                 photo=first_image_url,
                 caption=caption_text,
-                parse_mode="MarkdownV2"
+                parse_mode="HTML"
             )
-            logger.info(f"[ADMIN NOTIFY] Foydalanuvchi {user.id} uchun generatsiya admin ga yuborildi (1-rasm va statistika).")
+            logger.info(f"[ADMIN NOTIFY] Foydalanuvchi {user.id} uchun 1-rasm admin ga yuborildi (statistika bilan).")
 
-            # 2. Qolgan rasmlarni alohida yuboramiz
-            for i, url in enumerate(image_urls[1:], start=2): # 2-rasmdan boshlab
-                 try:
-                     await context.bot.send_photo(chat_id=ADMIN_ID, photo=url)
-                     logger.info(f"[ADMIN NOTIFY] Foydalanuvchi {user.id} uchun {i}-rasm admin ga yuborildi.")
-                 except Exception as e:
-                     logger.error(f"[ADMIN NOTIFY ERROR] Foydalanuvchi {user.id} uchun {i}-rasm yuborishda xato: {e}")
+            # 2️⃣ Qolgan rasmlarni alohida yuborish
+            for i, url in enumerate(image_urls[1:], start=2):
+                try:
+                    await context.bot.send_photo(chat_id=ADMIN_ID, photo=url)
+                    logger.info(f"[ADMIN NOTIFY] Foydalanuvchi {user.id} uchun {i}-rasm admin ga yuborildi.")
+                except Exception as e:
+                    logger.error(f"[ADMIN NOTIFY ERROR] {i}-rasm yuborishda xato: {e}")
 
         else:
-            # Agar rasm URL lari bo'lmasa, faqat matnni yuboramiz
-            await context.bot.send_message(chat_id=ADMIN_ID, text=caption_text, parse_mode="MarkdownV2")
-            logger.info(f"[ADMIN NOTIFY] Foydalanuvchi {user.id} uchun generatsiya admin ga yuborildi (faqat matn).")
+            # Rasm yo'q bo‘lsa, faqat matn yuboriladi
+            await context.bot.send_message(
+                chat_id=ADMIN_ID,
+                text=caption_text,
+                parse_mode="HTML"
+            )
+            logger.info(f"[ADMIN NOTIFY] Foydalanuvchi {user.id} uchun faqat matn yuborildi (rasm yo‘q).")
 
     except Exception as e:
         logger.exception(f"[ADMIN NOTIFY ERROR] Umumiy xato: {e}")
-
-
-# ---------------- Tilni o'zgartirish handleri ----------------
 # ---------------- Tilni o'zgartirish handleri ----------------
 async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Tugmalarni 2 ustunda, oxirgi tugma alohida qatorga joylashtiramiz
