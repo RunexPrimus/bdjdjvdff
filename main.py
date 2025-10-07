@@ -971,7 +971,8 @@ CREATE TABLE IF NOT EXISTS users (
     first_seen TIMESTAMPTZ,
     last_seen TIMESTAMPTZ,
     is_banned BOOLEAN DEFAULT FALSE,
-    language_code TEXT DEFAULT 'uz'
+    language_code TEXT DEFAULT 'uz',
+    image_model_id TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -1022,6 +1023,11 @@ async def init_db(pool):
         except Exception as e:
             logger.info(f"ℹ️ Column 'is_banned' already exists or error: {e}")
 
+        try:
+            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS image_model_id TEXT DEFAULT ''")
+            logger.info("✅ Added column 'image_model_id' to table 'users'")
+        except Exception as e:
+            logger.info(f"ℹ️ Column 'image_model_id' already exists or error: {e}")
         try:
             await conn.execute("ALTER TABLE donations ADD COLUMN IF NOT EXISTS charge_id TEXT")
             await conn.execute("ALTER TABLE donations ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ")
@@ -2196,6 +2202,12 @@ def build_app():
     app.add_handler(CommandHandler("language", cmd_language))
     app.add_handler(CallbackQueryHandler(cmd_language, pattern="^change_language$"))
     app.add_handler(CallbackQueryHandler(language_select_handler, pattern=all_lang_pattern))
+    app.add_handler(CallbackQueryHandler(settings_menu, pattern="^open_settings$"))
+    app.add_handler(CallbackQueryHandler(settings_menu, pattern="^open_settings$"))
+    app.add_handler(CallbackQueryHandler(select_image_model, pattern="^select_image_model$"))
+    app.add_handler(CallbackQueryHandler(confirm_model_selection, pattern=r"^confirm_model_.*$"))
+    app.add_handler(CallbackQueryHandler(set_image_model, pattern=r"^set_model_.*$"))
+    app.add_handler(CallbackQueryHandler(start_handler, pattern="^back_to_main$"))
 
     # Donate
     donate_conv = ConversationHandler(
@@ -2223,7 +2235,7 @@ def build_app():
         per_message=False
     )
     app.add_handler(unban_conv)
-
+    
     # Admin panel
     app.add_handler(CallbackQueryHandler(admin_panel_handler, pattern="^admin_panel$"))
 
