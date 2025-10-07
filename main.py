@@ -1719,36 +1719,46 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
     headers = get_digen_headers()
     timeout = aiohttp.ClientTimeout(total=1000)
 
-    # Progress bar yordamchi funksiya
-    async def _update_progress(percent: int):
-steps = [
-        (10, "🧠 Prompt tahlil qilinmoqda..."),
-        (25, "🎨 Model tanlanmoqda..."),
-        (40, "🌈 Ranglar va kompozitsiya yaratilmoqda..."),
-        (60, "💡 Yorug‘lik va soya muvozanatlantirilmoqda..."),
-        (80, "🧩 Detallar yakunlanmoqda..."),
-        (100, "✅ Tayyorlanmoqda...")
-    ]
+    # ✅ Progress bar yordamchi funksiya
+    async def _update_progress():
+        steps = [
+            (10, "🧠 Prompt tahlil qilinmoqda..."),
+            (25, "🎨 Model tanlanmoqda..."),
+            (40, "🌈 Ranglar va kompozitsiya yaratilmoqda..."),
+            (60, "💡 Yorug‘lik va soya muvozanatlantirilmoqda..."),
+            (80, "🧩 Detallar yakunlanmoqda..."),
+            (100, "✅ Tayyorlanmoqda...")
+        ]
 
-    bar_length = 10
-    for percent, text in steps:
-        filled = int(bar_length * percent // 100)
-        bar = "█" * filled + "░" * (bar_length - filled)
-        try:
-            await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=f"{text}\n{bar} {percent}%"
-            )
-        except:
-            pass
-        await asyncio.sleep(1.5)
+        bar_length = 10
+        for percent, text in steps:
+            filled = int(bar_length * percent // 100)
+            bar = "█" * filled + "░" * (bar_length - filled)
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=f"{text}\n{bar} {percent}%"
+                )
+            except:
+                pass
+
+            # 🕐 Realistik kutish: boshlanishda sekin, o‘rtada tez, oxirida yana sekin
+            if percent < 30:
+                delay = random.uniform(1.8, 2.4)
+            elif percent < 70:
+                delay = random.uniform(1.0, 1.6)
+            else:
+                delay = random.uniform(1.3, 2.0)
+
+            await asyncio.sleep(delay)
 
     try:
-        # 1. Digen API ga so'rov yuborish (10-20%)
-        await _update_progress(10)
+        # Progress barni parallel ravishda ishga tushirish
+        progress_task = asyncio.create_task(_update_progress())
+
+        # 1️⃣ Digen API ga so‘rov yuborish
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            await _update_progress(70)
             async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
                 text_resp = await resp.text()
                 logger.info(f"[DIGEN] status={resp.status}")
@@ -1757,6 +1767,7 @@ steps = [
                 except Exception:
                     logger.error(f"[DIGEN PARSE ERROR] status={resp.status} text={text_resp}")
                     await context.bot.send_message(chat_id, lang["error"])
+                    progress_task.cancel()
                     return
 
         image_id = None
@@ -1765,21 +1776,19 @@ steps = [
         if not image_id:
             logger.error("[DIGEN] image_id olinmadi")
             await context.bot.send_message(chat_id, lang["error"])
+            progress_task.cancel()
             return
 
         urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
         logger.info(f"[GENERATE] urls: {urls}")
 
-        # 2. Rasm tayyorligini kutish (20% → 90%)
+        # 2️⃣ Rasm tayyorligini kutish
         available = False
         max_wait = 300
         waited = 0
-        interval = 2.0  # Har 2 soniyada tekshirish
+        interval = 2.0
 
         while waited < max_wait:
-            progress = 20 + int((waited / max_wait) * 70)  # 20% dan 90% gacha
-            await _update_progress(min(progress, 90))
-
             try:
                 async with aiohttp.ClientSession() as check_session:
                     async with check_session.get(urls[0]) as chk:
@@ -1794,13 +1803,14 @@ steps = [
 
         if not available:
             await context.bot.send_message(chat_id, lang["image_delayed"])
+            progress_task.cancel()
             return
 
-        # 3. Tayyor! (100%)
-        await _update_progress(100)
-        await asyncio.sleep(0.5)  # Kichik kechikish
+        # Kutish tugagach progressni 100% da yakunlash
+        await progress_task
+        await asyncio.sleep(0.3)
 
-        # Natijani yuborish
+        # 3️⃣ Natijani yuborish
         end_time = time.time()
         elapsed_time = end_time - start_time
         escaped_prompt = escape_md(prompt)
@@ -1824,7 +1834,7 @@ steps = [
                 logger.exception(f"[FALLBACK PHOTO ERROR] {e2}")
                 await context.bot.send_message(chat_id, lang["success"])
 
-        # Admin notify va log
+        # 4️⃣ Admin va log
         if ADMIN_ID and urls:
             await notify_admin_generation(context, user, prompt, urls, count, image_id)
         await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
