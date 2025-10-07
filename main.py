@@ -8,6 +8,7 @@ import os
 import json
 import random
 import time
+import threading
 from datetime import datetime, timezone, timedelta
 
 # Yangi import qo'shildi
@@ -1015,16 +1016,19 @@ async def init_db(pool):
             logger.info(f"ℹ️ Columns already exist or error: {e}")
 
 # ---------------- Digen headers ----------------
-# Global indeks (bot ishga tushganda 0 bo'ladi)
+import threading
+
+# Global indeks va lock
 _digen_key_index = 0
+_digen_lock = threading.Lock()
 
 def get_digen_headers():
     global _digen_key_index
     if not DIGEN_KEYS:
         return {}
-    # Round-robin: har safar keyingi tokenni olish
-    key = DIGEN_KEYS[_digen_key_index % len(DIGEN_KEYS)]
-    _digen_key_index += 1
+    with _digen_lock:
+        key = DIGEN_KEYS[_digen_key_index % len(DIGEN_KEYS)]
+        _digen_key_index += 1
     return {
         "accept": "application/json, text/plain, */*",
         "content-type": "application/json",
@@ -1519,15 +1523,7 @@ async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DE
     await q.answer()
     # flow o'zgaruvchisini o'rnatamiz
     context.user_data["flow"] = "image_pending_prompt"
-    # To'g'ridan-to'g'ri 1 ta rasm generatsiya qilamiz
-    # Eski usul (xato beradi): fake_update.callback_query = q
-    # Yangi, to'g'ri usul: generate_cb ni to'g'ridan-to'g'ri chaqiramiz
-    # generate_cb ga callback_query ni o'zini uzatamiz
-    # generate_cb funksiyasi faqat callback_query dan foydalanadi, shuning uchun update obyektini butunlay yaratish shart emas
-    # generate_cb ni chaqirishda, update o'rniga yangi Update obyektini yaratib, callback_query ni unga beramiz
-    # 1. generate_cb ga uzatish uchun yangi Update obyektini yaratamiz
     fake_update = Update(update.update_id, callback_query=q)
-    # 2. generate_cb ga chaqiruv
     await generate_cb(fake_update, context)
 # ---------------- Tanlov tugmachasi orqali AI chat ----------------
 # Yangilangan: context.user_data["flow"] o'rnatiladi
@@ -1545,7 +1541,30 @@ async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFA
     # Faqat bitta marta, tarjima qilingan xabarni yuborish
     await q.message.reply_text(lang["ai_prompt_text"])
 
-# GENERATE (robust) - Yangilangan versiya (Prompt - Gemini - Digen)
+# ---------------- Digen headers (thread-safe) ----------------
+import threading
+_digen_key_index = 0
+_digen_lock = threading.Lock()
+
+def get_digen_headers():
+    global _digen_key_index
+    if not DIGEN_KEYS:
+        return {}
+    with _digen_lock:
+        key = DIGEN_KEYS[_digen_key_index % len(DIGEN_KEYS)]
+        _digen_key_index += 1
+    return {
+        "accept": "application/json, text/plain, */*",
+        "content-type": "application/json",
+        "digen-language": "en-US",
+        "digen-platform": "web",
+        "digen-token": key.get("token", ""),
+        "digen-sessionid": key.get("session", ""),
+        "origin": "https://rm.digen.ai",
+        "referer": "https://rm.digen.ai/",
+    }
+
+# ---------------- Asosiy handler: generate_cb ----------------
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -1560,39 +1579,34 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         count = int(q.data.split("_")[1])
     except Exception:
-        try:
-            await q.edit_message_text(lang["error"])
-        except Exception:
-            pass
+        await q.edit_message_text(lang["error"])
         return
 
     user = q.from_user
     prompt = context.user_data.get("prompt", "")
-    # --- Yangi: Tarjima qilingan promptni olish ---
-    # Agar private_text_handler da tarjima qilinmagan bo'lsa, bu yerda ham tarjima qilish mumkin edi,
-    # lekin endi u private_text_handler da qilingani uchun bu yerda faqat olinadi.
-    translated = context.user_data.get("translated", prompt) # Digen uchun tayyor prompt
-    # --- Yangi tugadi ---
+    translated = context.user_data.get("translated", prompt)
 
-    start_time = time.time() # Vaqtni boshlash
+    # ✅ Foydalanuvchiga darhol javob — "🔄 Rasm yaratilmoqda..."
+    await q.edit_message_text(lang["generating"].format(count=count))
 
-    # Yangi: Oddiy progress bar (soxta)
-    async def update_progress(percent):
-        bar_length = 10
-        filled_length = int(bar_length * percent // 100)
-        bar = '█' * filled_length + '░' * (bar_length - filled_length)
-        try:
-            # Eski xabarni yangilash uchun Markdown ishlatmaymiz
-            await q.edit_message_text(lang["generating_progress"].format(bar=bar, percent=percent))
-        except Exception:
-            pass # Xatolikni e'tiborsiz qoldirish mumkin
+    # ✅ Orqa fonda generatsiya — parallel ishlash uchun
+    asyncio.create_task(
+        _background_generate(
+            context=context,
+            user=user,
+            prompt=prompt,
+            translated=translated,
+            count=count,
+            chat_id=q.message.chat_id,
+            lang=lang
+        )
+    )
 
-    # Dastlabki progress
-    await update_progress(10)
-
-    # --- Yangi: payload da tarjima qilingan promptdan foydalanamiz ---
+# ---------------- Orqa fonda generatsiya: _background_generate ----------------
+async def _background_generate(context, user, prompt, translated, count, chat_id, lang):
+    start_time = time.time()
     payload = {
-        "prompt": translated, # Yangilangan qator
+        "prompt": translated,
         "image_size": "1024",
         "width": 1024,
         "height": 1024,
@@ -1601,117 +1615,89 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "reference_images": [],
         "strength": ""
     }
-    # --- Yangi tugadi ---
-
     headers = get_digen_headers()
-    sess_timeout = aiohttp.ClientTimeout(total=300)
+    timeout = aiohttp.ClientTimeout(total=300)
+
     try:
-        # Progressni yangilash (soxta)
-        await asyncio.sleep(0.5)
-        await update_progress(30)
-
-        async with aiohttp.ClientSession(timeout=sess_timeout) as session:
-            # Progressni yangilash (soxta)
-            await asyncio.sleep(0.5)
-            await update_progress(50)
-
+        # 🔸 1. Digen API ga so'rov yuborish
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
-                # Progressni yangilash (soxta)
-                await asyncio.sleep(0.5)
-                await update_progress(70)
-
                 text_resp = await resp.text()
                 logger.info(f"[DIGEN] status={resp.status}")
                 try:
                     data = await resp.json()
                 except Exception:
                     logger.error(f"[DIGEN PARSE ERROR] status={resp.status} text={text_resp}")
-                    await q.message.reply_text(lang["error"])
+                    await context.bot.send_message(chat_id, lang["error"])
                     return
 
-            logger.debug(f"[DIGEN DATA] {json.dumps(data)[:2000]}")
+        image_id = None
+        if isinstance(data, dict):
+            image_id = (data.get("data") or {}).get("id") or data.get("id")
+        if not image_id:
+            logger.error("[DIGEN] image_id olinmadi")
+            await context.bot.send_message(chat_id, lang["error"])
+            return
 
-            image_id = None
-            if isinstance(data, dict):
-                image_id = (data.get("data") or {}).get("id") or data.get("id")
-            if not image_id:
-                logger.error("[DIGEN] image_id olinmadi")
-                await q.message.reply_text(lang["error"])
-                return
+        urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
+        logger.info(f"[GENERATE] urls: {urls}")
 
-            urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
-            logger.info(f"[GENERATE] urls: {urls}")
-
-        
-            available = False
-            max_wait = 300
-            waited = 0
-            interval = 1.5
-            while waited < max_wait:
-                # Progressni yangilash (soxta)
-                progress_percent = min(90, 70 + int((waited / max_wait) * 20))
-                await update_progress(progress_percent)
-
-                try:
-                    async with session.get(urls[0]) as chk:
+        # 🔸 2. Rasm tayyorligini tekshirish (har safar yangi session)
+        available = False
+        max_wait = 300
+        waited = 0
+        interval = 1.5
+        while waited < max_wait:
+            try:
+                async with aiohttp.ClientSession() as check_session:
+                    async with check_session.get(urls[0]) as chk:
                         if chk.status == 200:
                             available = True
                             break
-                except Exception:
-                    pass
-                await asyncio.sleep(interval)
-                waited += interval
-
-            if not available:
-                logger.warning("[GENERATE] URL not ready after wait")
-                try:
-                    await q.edit_message_text(lang["image_delayed"])
-                except Exception:
-                    pass
-                return
-
-                       # 100% progress
-            await update_progress(100)
-            end_time = time.time()
-            elapsed_time = end_time - start_time
-
-            escaped_prompt = escape_md(prompt)
-            stats_text = (
-                f"{lang['image_ready_header']}\n"
-                f"{lang['image_prompt_label']} {escaped_prompt}\n"
-                f"{lang['image_count_label']} {count}\n"
-                f"{lang['image_time_label']} {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                f"{lang['image_elapsed_label']} {elapsed_time:.1f}s"
-            )
-
-            try:
-                media = [InputMediaPhoto(u, caption=stats_text if i == 0 else None) for i, u in enumerate(urls)]
-                await q.message.reply_media_group(media)
-            except TelegramError as e:
-                logger.exception(f"[MEDIA_GROUP ERROR] {e}; fallback to single photos")
-                try:
-                    await q.message.reply_photo(urls[0], caption=stats_text)
-                    for u in urls[1:]:
-                        await q.message.reply_photo(u)
-                except Exception as e2:
-                    logger.exception(f"[FALLBACK PHOTO ERROR] {e2}")
-                    await q.message.reply_text(lang["success"])
-
-            if ADMIN_ID and urls:
-                await notify_admin_generation(context, user, prompt, urls, count, image_id)
-            await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
-
-            try:
-                await q.edit_message_text(lang["done"])
-            except BadRequest:
+            except Exception:
                 pass
+            await asyncio.sleep(interval)
+            waited += interval
+
+        if not available:
+            await context.bot.send_message(chat_id, lang["image_delayed"])
+            return
+
+        # 🔸 3. Natijani yuborish
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        escaped_prompt = escape_md(prompt)
+        stats_text = (
+            f"{lang['image_ready_header']}\n"
+            f"{lang['image_prompt_label']} {escaped_prompt}\n"
+            f"{lang['image_count_label']} {count}\n"
+            f"{lang['image_time_label']} {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"{lang['image_elapsed_label']} {elapsed_time:.1f}s"
+        )
+
+        try:
+            media = [InputMediaPhoto(u, caption=stats_text if i == 0 else None) for i, u in enumerate(urls)]
+            await context.bot.send_media_group(chat_id, media)
+        except TelegramError:
+            try:
+                await context.bot.send_photo(chat_id, urls[0], caption=stats_text)
+                for u in urls[1:]:
+                    await context.bot.send_photo(chat_id, u)
+            except Exception as e2:
+                logger.exception(f"[FALLBACK PHOTO ERROR] {e2}")
+                await context.bot.send_message(chat_id, lang["success"])
+
+        # 🔸 4. Admin notify va log
+        if ADMIN_ID and urls:
+            await notify_admin_generation(context, user, prompt, urls, count, image_id)
+        await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
 
     except Exception as e:
+        logger.exception(f"[BACKGROUND GENERATE ERROR] {e}")
         try:
-            await q.edit_message_text(lang["error"])
-        except Exception:
+            await context.bot.send_message(chat_id, lang["error"])
+        except:
             pass
-    logger.info(f"[DEBUG LOG] User {user.id} generatsiya qildi: {count} ta rasm")
 # ---------------- Donate (Stars) flow ----------------
 # Yangilangan: context.user_data["current_operation"] o'rnatiladi
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
