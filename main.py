@@ -1241,7 +1241,7 @@ async def select_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if i + 1 < len(models):
             row.append(InlineKeyboardButton(models[i+1]["title"], callback_data=f"confirm_model_{models[i+1]['id']}"))
         kb.append(row)
-    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="open_settings")])
+    [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
 
     # Rasmli matn
     caption = "🖼 **Image Modelni tanlang**\nHar bir model boshqa uslubda rasm yaratadi."
