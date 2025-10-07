@@ -1145,10 +1145,6 @@ async def log_generation(pool, tg_user, prompt, translated, image_id, count):
 
 # ---------------- Tilni o'zgartirish handleri ----------------
 async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prompt, image_urls, count, image_id):
-    """
-    Foydalanuvchi rasm generatsiya qilganda, barcha rasmlarni admin foydalanuvchisiga yuboradi.
-    HTML formatda, xatolarga chidamli.
-    """
     if not ADMIN_ID:
         return  # Agar ADMIN_ID o'rnatilmagan bo'lsa, hech narsa yuborilmaydi
 
@@ -1163,7 +1159,7 @@ async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prom
 
         tashkent_dt = tashkent_time()
 
-        # Admin xabari uchun matn (HTML formatda)
+        # Admin uchun xabar matni
         caption_text = (
             f"🎨 <b>Yangi generatsiya!</b>\n\n"
             f"👤 <b>Foydalanuvchi:</b> @{user.username if user.username else 'N/A'} "
@@ -1174,27 +1170,21 @@ async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prom
             f"⏰ <b>Vaqt (UTC+5):</b> {tashkent_dt.strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
-        # 1️⃣ Birinchi rasmni statistika bilan yuboramiz
+        # Agar rasm mavjud bo‘lsa — bitta media group sifatida yuboramiz
         if image_urls:
-            first_image_url = image_urls[0]
-            await context.bot.send_photo(
-                chat_id=ADMIN_ID,
-                photo=first_image_url,
-                caption=caption_text,
-                parse_mode="HTML"
-            )
-            logger.info(f"[ADMIN NOTIFY] Foydalanuvchi {user.id} uchun 1-rasm admin ga yuborildi (statistika bilan).")
+            media = []
+            for i, url in enumerate(image_urls):
+                if i == 0:
+                    # Faqat birinchi rasm caption bilan bo‘ladi
+                    media.append(InputMediaPhoto(media=url, caption=caption_text, parse_mode="HTML"))
+                else:
+                    media.append(InputMediaPhoto(media=url))
 
-            # 2️⃣ Qolgan rasmlarni alohida yuborish
-            for i, url in enumerate(image_urls[1:], start=2):
-                try:
-                    await context.bot.send_photo(chat_id=ADMIN_ID, photo=url)
-                    logger.info(f"[ADMIN NOTIFY] Foydalanuvchi {user.id} uchun {i}-rasm admin ga yuborildi.")
-                except Exception as e:
-                    logger.error(f"[ADMIN NOTIFY ERROR] {i}-rasm yuborishda xato: {e}")
+            await context.bot.send_media_group(chat_id=ADMIN_ID, media=media)
+            logger.info(f"[ADMIN NOTIFY] Foydalanuvchi {user.id} uchun {len(image_urls)} ta rasm media group sifatida yuborildi.")
 
         else:
-            # Rasm yo'q bo‘lsa, faqat matn yuboriladi
+            # Rasm yo'q — faqat matn yuboriladi
             await context.bot.send_message(
                 chat_id=ADMIN_ID,
                 text=caption_text,
