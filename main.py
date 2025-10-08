@@ -1109,12 +1109,13 @@ async def fake_lab_new_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             "🤖 U sun'iy intellekt (AI) tomonidan yaratilgan.\n\n"
             "🔄 **Yangilash** tugmasi orqali yangi rasm olishingiz mumkin."
         )
-        
-       kb = [
-    [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
-    [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
-]
-        
+
+        # ✅ Shu yerda indentation to‘g‘rilandi (8ta space)
+        kb = [
+            [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
+            [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
+        ]
+
         with open(temp_path, "rb") as photo:
             await context.bot.send_photo(
                 chat_id=q.message.chat_id,
