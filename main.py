@@ -2087,6 +2087,7 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
             f"{lang['image_ready_header']}\n"
             f"{lang['image_prompt_label']} {escaped_prompt}\n"
             f"{lang['image_model_label']} {current_model_title}\n"
+            f"{lang['image_model_label']} {current_model_title}\n"
             f"{lang['image_count_label']} {count}\n"
             f"{lang['image_time_label']} {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
             f"{lang['image_elapsed_label']} {elapsed_time:.1f}s"
