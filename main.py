@@ -1208,15 +1208,37 @@ async def confirm_model_selection(update: Update, context: ContextTypes.DEFAULT_
     model = next((m for m in DIGEN_MODELS if m["id"] == model_id), None)
     if not model:
         return
+
     kb = [
         [InlineKeyboardButton("✅ Tanlash", callback_data=f"set_model_{model_id}")],
         [InlineKeyboardButton("⬅️ Orqaga", callback_data="select_image_model")]
     ]
-    await q.edit_message_text(
-        f"🖼 **{model['title']}**\n\n{model['description']}\n\nTanlaysizmi?",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(kb)
+
+    caption = (
+        f"🖼 **{model['title']}**\n"
+        f"{model['description']}\n"
+        "Tanlaysizmi?"
     )
+
+    try:
+        # Agar xabar media bo'lsa, captionni tahrirlash kerak
+        await q.edit_message_caption(
+            caption=caption,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
+    except BadRequest as e:
+        if "message is not modified" in str(e):
+            pass
+        elif "message can't be edited" in str(e) or "There is no text in the message to edit" in str(e):
+            # Agar xabar aslida matn bo'lib ketgan bo'lsa (masalan, rasm yuklanmagan bo'lsa)
+            await q.edit_message_text(
+                text=caption,
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(kb)
+            )
+        else:
+            raise
 
 async def set_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -1255,14 +1277,22 @@ async def select_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE)
             reply_markup=InlineKeyboardMarkup(kb)
         )
     except BadRequest as e:
-        if "message to edit not found" in str(e) or "message is not modified" in str(e):
+        if "message is not modified" in str(e):
             pass
         else:
-            # Agar media edit qilinmasa, oddiy matn sifatida yuborish
-            await q.message.edit_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+            # Media tahrirlanmasa, oddiy matn sifatida yuborish
+            await q.edit_message_text(
+                text=caption,
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(kb)
+            )
     except Exception as e:
         logger.error(f"[SELECT_MODEL_ERROR] {e}")
-        await q.message.edit_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+        await q.edit_message_text(
+            text=caption,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
 # ---------------- Tilni o'zgartirish handleri ----------------
 async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prompt, image_urls, count, image_id):
     if not ADMIN_ID:
