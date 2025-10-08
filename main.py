@@ -929,75 +929,134 @@ DIGEN_MODELS = [
         "id": "",
         "title": "🖼 Oddiy uslub",
         "description": "Hech qanday maxsus effektlarsiz, tabiiy va sof tasvir yaratadi.",
+        "background_prompts": [
+            "high quality, 8k, sharp focus, natural lighting",
+            "photorealistic, detailed, vibrant colors, professional photography",
+            "clean background, studio lighting, ultra-detailed"
+        ]
     },
     {
         "id": "86",
         "title": "🧸 Kawaii Figuralar",
         "description": "Juda yoqimli va o‘yinchoq uslubidagi shirin rasm turlari.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/kawaii.webp"
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/kawaii.webp",
+        "background_prompts": [
+            "kawaii style, soft pastel colors, chibi character, cute toy aesthetic",
+            "adorable expressions, bright background, playful composition",
+            "round shapes, big eyes, cozy and cheerful mood"
+        ]
     },
     {
         "id": "89",
         "title": "🎨 Fluxlisimo Chizmasi",
         "description": "Yaponcha manga uslubida yaratilgan detalli, badiiy portretlar va illyustratsiyalar.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/fluxlisimo.webp"
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/fluxlisimo.webp",
+        "background_prompts": [
+            "manga illustration, detailed lines, artistic shading, elegant composition",
+            "Japanese art style, high contrast, expressive pose, brush texture",
+            "sketch aesthetic, delicate ink work, moody atmosphere"
+        ]
     },
     {
         "id": "88",
         "title": "🏛 Klassik San’at (Gustave)",
         "description": "Klassik va nafis san’at uslubida yaratilgan rasmlar.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/gustave.webp"
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/gustave.webp",
+        "background_prompts": [
+            "classical painting, oil texture, Renaissance style, realistic anatomy",
+            "fine art portrait, baroque lighting, golden tones, museum quality",
+            "dramatic composition, chiaroscuro, detailed brushwork"
+        ]
     },
     {
         "id": "87",
         "title": "🧱 LEGO Dunyo",
         "description": "LEGO bloklari uslubidagi qiziqarli va rangli tasvirlar.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/lego.webp"
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/lego.webp",
+        "background_prompts": [
+            "LEGO bricks, toy aesthetic, colorful blocks, plastic texture",
+            "miniature city, bright lighting, 3D render style",
+            "creative lego build, playful environment, high detail"
+        ]
     },
     {
         "id": "82",
         "title": "🌌 Galaktik Qo‘riqchi",
         "description": "Koinot va mexanika uyg‘unligidagi kuchli, sirli uslub.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/40k.webp"
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/40k.webp",
+        "background_prompts": [
+            "sci-fi, galactic armor, cosmic background, glowing effects",
+            "space battle, futuristic lighting, metallic reflections",
+            "astral energy, nebula sky, cinematic atmosphere"
+        ]
     },
     {
         "id": "81",
         "title": "🌑 Qorong‘u Sehr (Dark Allure)",
         "description": "Sirli, jozibali va qorong‘u estetika bilan bezatilgan tasvirlar.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/evil.webp"
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/evil.webp",
+        "background_prompts": [
+            "dark fantasy, gothic atmosphere, shadow play, mystical lighting",
+            "eerie mood, glowing eyes, moody color palette",
+            "smoky environment, dramatic shadows, ethereal presence"
+        ]
     },
     {
         "id": "83",
         "title": "👁 Lahzani His Et (In the Moment)",
         "description": "Haqiqiy his-tuyg‘ularni jonli tasvirlar orqali ifodalaydi.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/fp.webp"
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/fp.webp",
+        "background_prompts": [
+            "emotional realism, cinematic lighting, soft focus",
+            "authentic expressions, natural pose, human warmth",
+            "intimate moment, detailed eyes, storytelling portrait"
+        ]
     },
     {
         "id": "84",
         "title": "🎭 Anime Fantom",
         "description": "Rang-barang, jonli va ifodali anime uslubidagi tasvirlar.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/niji.webp"
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/niji.webp",
+        "background_prompts": [
+            "anime style, vibrant colors, cel shading, detailed eyes, fantasy background",
+            "Japanese anime, dynamic pose, soft lighting, dreamy atmosphere",
+            "manga illustration, expressive character, pastel colors, whimsical"
+        ]
     },
     {
         "id": "85",
         "title": "✨ Ghibli Sehrli Olami",
         "description": "Ghibli filmlariga xos mo‘jizaviy, iliq va sehrli muhit yaratadi.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/ghibli.webp"
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/ghibli.webp",
+        "background_prompts": [
+            "Studio Ghibli style, soft watercolor, magical forest, warm sunlight",
+            "whimsical landscape, floating islands, gentle breeze, hand-painted",
+            "enchanted meadow, golden hour, fluffy clouds, nostalgic mood"
+        ]
     },
     {
         "id": "79",
         "title": "🧙 Sehrgarlar Olami (Sorcerers)",
         "description": "Sehrgarlar va afsonaviy mavjudotlar bilan to‘la fantaziya dunyosi.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/w1.webp"
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/w1.webp",
+        "background_prompts": [
+            "fantasy world, magic spells, glowing runes, epic wizard",
+            "enchanted castle, ancient symbols, mysterious energy",
+            "arcane magic, mystical forest, cinematic fantasy lighting"
+        ]
     },
     {
         "id": "80",
         "title": "🧚 Afsonaviy Dunyolar (Mythos)",
         "description": "Afsonalar va fantaziya uyg‘unligidagi go‘zal, nafis tasvirlar.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/mythic.webp"
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/mythic.webp",
+        "background_prompts": [
+            "mythical creatures, ethereal light, elegant composition",
+            "ancient legend, divine aura, soft colors, fantasy setting",
+            "dreamlike world, shimmering atmosphere, celestial tones"
+        ]
     }
 ]
-
 # ---------------- helpers ----------------
 def escape_md(text: str) -> str:
     """
@@ -1369,17 +1428,70 @@ async def select_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "Har bir model o‘ziga xos uslubda rasm yaratadi. "
         "O‘zingizga yoqqanini tanlang 👇"
     )
-    # Umumiy rasm o'rniga, har doim birinchi modelning rasmini ko'rsatamiz
-    # Yoki foydalanuvchi tanlagan modelga qarab dinamik ravishda o'zgartirish ham mumkin
-    photo_url = models[0].get("preview_image", "https://via.placeholder.com/600x600.png?text=Model+Preview")
+    # Har doim ishlaydigan placeholder rasm
+    photo_url = "https://via.placeholder.com/600x600.png?text=Model+Preview"
+    
+    # Xavfsiz edit_media + fallback
     try:
         await q.message.edit_media(
             media=InputMediaPhoto(media=photo_url, caption=caption, parse_mode="Markdown"),
             reply_markup=InlineKeyboardMarkup(kb)
         )
+    except BadRequest as e:
+        error_msg = str(e).lower()
+        if "wrong type" in error_msg or "message to edit is not a media message" in error_msg:
+            # Yangi xabar yuborish
+            await q.message.reply_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+            try:
+                await q.message.delete()
+            except:
+                pass
+        else:
+            logger.error(f"[SELECT_MODEL] Boshqa xato: {e}")
+            await q.message.reply_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
     except Exception as e:
-        logger.error(f"[SELECT_MODEL_MEDIA_ERROR] {e}")
-        await q.edit_message_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+        logger.exception(f"[SELECT_MODEL] Kutilmagan xato: {e}")
+        await q.message.reply_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+
+
+async def confirm_model_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    model_id = q.data.split("_", 2)[2]
+    model = next((m for m in DIGEN_MODELS if m["id"] == model_id), None)
+    if not model:
+        return
+
+    kb = [
+        [InlineKeyboardButton("✅ Tanlash", callback_data=f"set_model_{model_id}")],
+        [InlineKeyboardButton("⬅️ Orqaga", callback_data="select_image_model")]
+    ]
+    caption = (
+        f"🖼 **{model['title']}**\n"
+        f"{model['description']}\n"
+        "Tanlaysizmi?"
+    )
+    photo_url = model.get("preview_image") or "https://via.placeholder.com/600x600.png?text=Preview"
+
+    try:
+        await q.message.edit_media(
+            media=InputMediaPhoto(media=photo_url, caption=caption, parse_mode="Markdown"),
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
+    except BadRequest as e:
+        error_msg = str(e).lower()
+        if "wrong type" in error_msg or "message to edit is not a media message" in error_msg:
+            await q.message.reply_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+            try:
+                await q.message.delete()
+            except:
+                pass
+        else:
+            logger.error(f"[CONFIRM_MODEL] Boshqa xato: {e}")
+            await q.message.reply_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+    except Exception as e:
+        logger.exception(f"[CONFIRM_MODEL] Kutilmagan xato: {e}")
+        await q.message.reply_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 # ---------------- Tilni o'zgartirish handleri ----------------
 async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prompt, image_urls, count, image_id):
     if not ADMIN_ID:
@@ -1694,7 +1806,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     # --- Promptni Gemini orqali tarjima qilish ---
     original_prompt = prompt
-    gemini_instruction = "Automatically detect the user’s language and translate it into English. Convert the text into a professional, detailed image-generation prompt with realistic, cinematic, and descriptive style. Focus on atmosphere, lighting, color, and composition. Return only the final English prompt. Do not include any explanations or extra text :"
+    gemini_instruction = "Automatically detect the user’s language and translate it into English. Return only the final English prompt. Do not include any explanations or extra text :"
     gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
 
     try:
@@ -1844,16 +1956,34 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def _background_generate(context, user, prompt, translated, count, chat_id, message_id, lang):
     start_time = time.time()
-
-    # ✅ Foydalanuvchining tanlagan modelini DB dan olish
+    
+    # Foydalanuvchining tanlagan modelini olish
     lora_id = ""
+    background_prompt = ""  # ✅ Yangi o'zgaruvchi
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT image_model_id FROM users WHERE id = $1", user.id)
         if row and row["image_model_id"]:
             lora_id = row["image_model_id"]
-
+            
+            # Modelni topish
+            selected_model = next((m for m in DIGEN_MODELS if m["id"] == lora_id), None)
+            if selected_model and "background_prompts" in selected_model:
+                # Tasodifiy background prompt tanlash
+                background_prompt = random.choice(selected_model["background_prompts"])
+            else:
+                # Default background promptlar
+                default_prompts = [
+                    "high quality, 8k, sharp focus",
+                    "ultra-detailed, professional photography",
+                    "cinematic lighting, vibrant colors"
+                ]
+                background_prompt = random.choice(default_prompts)
+    
+    # Asosiy promptga background promptni qo'shish
+    final_prompt = f"{translated}, {background_prompt}".strip()
+    
     payload = {
-        "prompt": translated,
+        "prompt": final_prompt,
         "image_size": "1024",
         "width": 1024,
         "height": 1024,
