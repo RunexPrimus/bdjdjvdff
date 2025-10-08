@@ -1732,6 +1732,9 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("📈 Statistika", callback_data="show_stats"),
             InlineKeyboardButton("⚙️ Sozlamalar", callback_data="open_settings")
         ]
+        [
+            InlineKeyboardButton("🧪 FakeLab", callback_data="fake_lab_new")
+        ],
     ]
     if user_id == ADMIN_ID:
         kb.insert(-1, [InlineKeyboardButton("🔐 Admin Panel", callback_data="admin_panel")])
