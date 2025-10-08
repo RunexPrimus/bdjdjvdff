@@ -1759,7 +1759,6 @@ async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFA
     # Faqat bitta marta, tarjima qilingan xabarni yuborish
     await q.message.reply_text(lang["ai_prompt_text"])
 # ---------------- Digen headers (thread-safe) ----------------
-import threading
 _digen_key_index = 0
 _digen_lock = threading.Lock()
 
@@ -1778,21 +1777,8 @@ def get_digen_headers():
         "digen-token": key.get("token", ""),
         "digen-sessionid": key.get("session", ""),
         "origin": "https://rm.digen.ai",
-        "referer": "https://rm.dasync def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-    # AI chat flow boshlanadi
-    context.user_data["flow"] = "ai"
-    lang_code = DEFAULT_LANGUAGE
-    async with context.application.bot_data["db_pool"].acquire() as conn:
-        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
-        if row:
-            lang_code = row["language_code"]
-    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
-    # Faqat bitta marta, tarjima qilingan xabarni yuborish
-    await q.message.reply_text(lang["ai_prompt_text"])igen.ai/",
+        "referer": "https://rm.digen.ai/",
     }
-
 # ---------------- Asosiy handler: generate_cb ----------------
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
