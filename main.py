@@ -1745,26 +1745,7 @@ async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DE
         reply_markup=InlineKeyboardMarkup(kb)
     )
 # Yangilangan: context.user_data["flow"] o'rnatiladi
-async def ai_chat_from_prompt_handler(update: Update, context: Contexoriginal_prompt = prompt
-    gemini_instruction = "Automatically detect the user's language and translate it into English. Turn the text into a professional, detailed image-generation prompt with realistic and bright cinematic style. Focus on creating a well-lit, vivid atmosphere with balanced lighting, natural colors, and clear composition. Enhance the mood according to the meaning of the sentence. Return only the final English prompt. No explanations or extra text:"
-    gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
-
-    try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        gemini_response = await model.generate_content_async(
-            gemini_full_prompt,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=100,
-                temperature=0.5
-            )
-        )
-        digen_ready_prompt = gemini_response.text.strip()
-        if not digen_ready_prompt:
-            digen_ready_prompt = original_prompt
-        context.user_data["translated"] = digen_ready_prompt
-    except Exception as gemini_err:
-        logger.error(f"[GEMINI PROMPT ERROR] {gemini_err}")
-        context.user_data["translated"] = original_prompttTypes.DEFAULT_TYPE):
+async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     # AI chat flow boshlanadi
@@ -1777,7 +1758,6 @@ async def ai_chat_from_prompt_handler(update: Update, context: Contexoriginal_pr
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
     # Faqat bitta marta, tarjima qilingan xabarni yuborish
     await q.message.reply_text(lang["ai_prompt_text"])
-
 # ---------------- Digen headers (thread-safe) ----------------
 import threading
 _digen_key_index = 0
@@ -1798,7 +1778,19 @@ def get_digen_headers():
         "digen-token": key.get("token", ""),
         "digen-sessionid": key.get("session", ""),
         "origin": "https://rm.digen.ai",
-        "referer": "https://rm.digen.ai/",
+        "referer": "https://rm.dasync def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    # AI chat flow boshlanadi
+    context.user_data["flow"] = "ai"
+    lang_code = DEFAULT_LANGUAGE
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
+        if row:
+            lang_code = row["language_code"]
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+    # Faqat bitta marta, tarjima qilingan xabarni yuborish
+    await q.message.reply_text(lang["ai_prompt_text"])igen.ai/",
     }
 
 # ---------------- Asosiy handler: generate_cb ----------------
