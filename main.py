@@ -1109,9 +1109,12 @@ async def fake_lab_new_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             "🤖 U sun'iy intellekt (AI) tomonidan yaratilgan.\n\n"
             "🔄 **Yangilash** tugmasi orqali yangi rasm olishingiz mumkin."
         )
-
-        kb = [[InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")]]
-
+        
+        kb = [
+        [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
+        [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
+           ]
+        
         with open(temp_path, "rb") as photo:
             await context.bot.send_photo(
                 chat_id=q.message.chat_id,
@@ -2441,7 +2444,10 @@ async def cmd_public_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, e
         f"👤 **Siz yaratdingiz:** `{user_images}`"
     )
 
-    kb = [[InlineKeyboardButton("🔄 Yangilash", callback_data="show_stats")]]
+         kb = [
+        [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
+        [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
+           ]
 
     if edit_mode and update.callback_query:
         try:
