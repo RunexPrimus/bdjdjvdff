@@ -929,73 +929,72 @@ DIGEN_MODELS = [
         "id": "",
         "title": "🖼 Oddiy uslub",
         "description": "Hech qanday maxsus effektlarsiz, tabiiy va sof tasvir yaratadi.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/default.jpg"
     },
     {
         "id": "86",
         "title": "🧸 Kawaii Figuralar",
         "description": "Juda yoqimli va o‘yinchoq uslubidagi shirin rasm turlari.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/kawaii.jpg"
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/kawaii.webp"
     },
     {
         "id": "89",
-        "title": "🎨 Manga Chizmasi",
-        "description": "Yaponcha manga uslubida, chiroyli va detalli portretlar.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/manga.jpg"
+        "title": "🎨 Fluxlisimo Chizmasi",
+        "description": "Yaponcha manga uslubida yaratilgan detalli, badiiy portretlar va illyustratsiyalar.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/fluxlisimo.webp"
     },
     {
         "id": "88",
         "title": "🏛 Klassik San’at (Gustave)",
-        "description": "Renessans va klassik uslubdagi nafis rasmlar.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/classic.jpg"
+        "description": "Klassik va nafis san’at uslubida yaratilgan rasmlar.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/gustave.webp"
     },
     {
         "id": "87",
         "title": "🧱 LEGO Dunyo",
-        "description": "LEGO bloklaridan yasalgan ko‘rinishdagi qiziqarli tasvirlar.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/lego.jpg"
+        "description": "LEGO bloklari uslubidagi qiziqarli va rangli tasvirlar.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/lego.webp"
     },
     {
         "id": "82",
         "title": "🌌 Galaktik Qo‘riqchi",
-        "description": "Koinot va texnologiya uyg‘unligidagi kuchli fantaziya uslubi.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/galaxy.jpg"
+        "description": "Koinot va mexanika uyg‘unligidagi kuchli, sirli uslub.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/40k.webp"
     },
     {
         "id": "81",
         "title": "🌑 Qorong‘u Sehr (Dark Allure)",
-        "description": "Sirli, jozibali va sal qorong‘u estetika bilan bezatilgan.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/dark.jpg"
+        "description": "Sirli, jozibali va qorong‘u estetika bilan bezatilgan tasvirlar.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/evil.webp"
     },
     {
         "id": "83",
         "title": "👁 Lahzani His Et (In the Moment)",
-        "description": "Haqiqiy his-tuyg‘ularni jonli tasvir bilan ifodalaydi.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/moment.jpg"
+        "description": "Haqiqiy his-tuyg‘ularni jonli tasvirlar orqali ifodalaydi.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/fp.webp"
     },
     {
         "id": "84",
         "title": "🎭 Anime Fantom",
         "description": "Rang-barang, jonli va ifodali anime uslubidagi tasvirlar.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/anime.jpg"
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/niji.webp"
     },
     {
         "id": "85",
         "title": "✨ Ghibli Sehrli Olami",
-        "description": "Ghibli filmlaridagi kabi mo‘jizaviy va iliq muhit yaratadi.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/ghibli.jpg"
+        "description": "Ghibli filmlariga xos mo‘jizaviy, iliq va sehrli muhit yaratadi.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/ghibli.webp"
     },
     {
         "id": "79",
-        "title": "🧙 Sehrgarlar Olami",
-        "description": "Sehr, afsonalar va sirli kuchlarga boy fantastik uslub.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/magic.jpg"
+        "title": "🧙 Sehrgarlar Olami (Sorcerers)",
+        "description": "Sehrgarlar va afsonaviy mavjudotlar bilan to‘la fantaziya dunyosi.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/w1.webp"
     },
     {
         "id": "80",
         "title": "🧚 Afsonaviy Dunyolar (Mythos)",
-        "description": "Afsonalar va fantaziya uyg‘unligida yaratilgan go‘zal tasvirlar.",
-        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/myth.jpg"
+        "description": "Afsonalar va fantaziya uyg‘unligidagi go‘zal, nafis tasvirlar.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/mythic.webp"
     }
 ]
 
