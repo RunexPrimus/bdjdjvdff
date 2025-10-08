@@ -1690,34 +1690,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     context.user_data["prompt"] = prompt
 
     # --- Promptni Gemini orqali tarjima qilish ---
-    original_prompt = prompt
-gemini_instruction = (
-    "Automatically detect the user’s language and translate it into English. "
-    "Convert the text into a professional, detailed image-generation prompt with realistic, cinematic, and descriptive style. "
-    "Focus on atmosphere, lighting, color, and composition. "
-    "Return only the final English prompt. Do not include any explanations or extra text."
-)
-gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
-
-try:
-    model = genai.GenerativeModel("gemini-2.0-flash")
-    gemini_response = await model.generate_content_async(
-        gemini_full_prompt,
-        generation_config=genai.types.GenerationConfig(
-            max_output_tokens=100,
-            temperature=0.5,
-        )
-    )
-
-    digen_ready_prompt = gemini_response.text.strip()
-    if not digen_ready_prompt:
-        digen_ready_prompt = original_prompt
-
-    context.user_data["translated"] = digen_ready_prompt
-
-except Exception as gemini_err:
-    logger.error(f"[GEMINI PROMPT ERROR] {gemini_err}")
-    context.user_data["translated"] = original_prompt
+    
 # --- Yangi tugadi ---
 
     # ❗ Mana shu qism funksiya ichida bo‘lishi shart
@@ -1756,7 +1729,49 @@ async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DE
     context.user_data["flow"] = "image_pending_prompt"
     fake_update = Update(update.update_id, callback_query=q)
     await generate_cb(fake_update, context)
-# ---------------- Tanlov tugmachasi orqali AI chat ----------------
+    
+    original_prompt = prompt
+    gemini_instruction = (
+        "Automatically detect the user’s language and translate it into English. "
+        "Convert the text into a professional, detailed image-generation prompt with realistic, cinematic, and descriptive style. "
+        "Focus on atmosphere, lighting, color, and composition. "
+        "Return only the final English prompt. Do not include any explanations or extra text."
+    )
+    gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
+
+    try:
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        gemini_response = await model.generate_content_async(
+            gemini_full_prompt,
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=100,
+                temperature=0.5,
+            )
+        )
+
+        digen_ready_prompt = gemini_response.text.strip()
+        if not digen_ready_prompt:
+            digen_ready_prompt = original_prompt
+
+        context.user_data["translated"] = digen_ready_prompt
+
+    except Exception as gemini_err:
+        logger.error(f"[GEMINI PROMPT ERROR] {gemini_err}")
+        context.user_data["translated"] = original_prompt
+
+    # --- Shu yerda tugadi, endi davomida flow tanlash yoki generatsiya qilinadi ---
+    # Masalan:
+    kb = [
+        [
+            InlineKeyboardButton("🖼 Rasm yaratish", callback_data="gen_image_from_prompt"),
+            InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat_from_prompt")
+        ]
+    ]
+    await update.message.reply_text(
+        f"Quyidagi matndan nima qilamiz?\n*{prompt}*",
+        parse_mode="MarkdownV2",
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
 # Yangilangan: context.user_data["flow"] o'rnatiladi
 async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
