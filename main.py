@@ -1828,9 +1828,30 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             )
         )
         digen_ready_prompt = gemini_response.text.strip()
-        if not digen_ready_prompt:
-            digen_ready_prompt = original_prompt
-        context.user_data["translated"] = digen_ready_prompt
+
+        # ✅ Mantiqiy rad etishlarni tekshirish
+        if digen_ready_prompt and not any(phrase in digen_ready_prompt.lower() for phrase in [
+            "i cannot",
+            "sorry",
+            "i'm sorry",
+            "i am sorry",
+            "i am programmed",
+            "harmless ai",
+            "not allowed",
+            "unable to",
+            "can't assist",
+            "not appropriate",
+            "refuse to",
+            "against my guidelines",
+            "i don't",
+            "i won't",
+            "i do not"
+        ]):
+            context.user_data["translated"] = digen_ready_prompt
+        else:
+            logger.warning(f"[GEMINI FILTERED] Prompt rad etildi: '{original_prompt}' → '{digen_ready_prompt}'. Asl matn saqlanadi.")
+            context.user_data["translated"] = original_prompt
+
     except Exception as gemini_err:
         logger.error(f"[GEMINI PROMPT ERROR] {gemini_err}")
         context.user_data["translated"] = original_prompt
