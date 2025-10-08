@@ -1231,7 +1231,6 @@ async def set_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def select_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-
     kb = []
     models = DIGEN_MODELS
     for i in range(0, len(models), 2):
@@ -1244,22 +1243,26 @@ async def select_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE)
             )
         kb.append(row)
     kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_settings")])
-
     caption = (
         "🖼 **Image Modelni tanlang**\n"
         "Har bir model o‘ziga xos uslubda rasm yaratadi. "
         "O‘zingizga yoqqanini tanlang 👇"
     )
     photo_url = "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/fluxlisimo.webp"
-
     try:
-        # Eski xabarni yangilaymiz (edit_message_media)
         await q.message.edit_media(
             media=InputMediaPhoto(media=photo_url, caption=caption, parse_mode="Markdown"),
             reply_markup=InlineKeyboardMarkup(kb)
         )
+    except BadRequest as e:
+        if "message to edit not found" in str(e) or "message is not modified" in str(e):
+            pass
+        else:
+            # Agar media edit qilinmasa, oddiy matn sifatida yuborish
+            await q.message.edit_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
     except Exception as e:
-        print("edit_media xatosi:", e)
+        logger.error(f"[SELECT_MODEL_ERROR] {e}")
+        await q.message.edit_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 # ---------------- Tilni o'zgartirish handleri ----------------
 async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prompt, image_urls, count, image_id):
     if not ADMIN_ID:
@@ -1389,10 +1392,6 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user_id)
         if row:
             lang_code = row["language_code"]
-    if lang_code is None:
-        await cmd_language(update, context)
-        return
-
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
     kb = [
         [
@@ -1411,12 +1410,20 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id == ADMIN_ID:
         kb.insert(-1, [InlineKeyboardButton("🔐 Admin Panel", callback_data="admin_panel")])
 
-    # ✅ Xavfsiz javob: callback yoki message
+    text = lang["welcome"]
+    reply_markup = InlineKeyboardMarkup(kb)
+
     if update.callback_query:
         await update.callback_query.answer()
-        await update.callback_query.message.reply_text(lang["welcome"], reply_markup=InlineKeyboardMarkup(kb))
+        try:
+            await update.callback_query.edit_message_text(text=text, reply_markup=reply_markup)
+        except BadRequest as e:
+            if "message is not modified" in str(e):
+                pass
+            else:
+                await update.callback_query.message.reply_text(text=text, reply_markup=reply_markup)
     else:
-        await update.message.reply_text(lang["welcome"], reply_markup=InlineKeyboardMarkup(kb))
+        await update.message.reply_text(text=text, reply_markup=reply_markup)
 # ---------------- Bosh menyudan AI chat ----------------
 async def start_ai_flow_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -2227,6 +2234,8 @@ def build_app():
     
     # --- Handlers ---
     app.add_handler(CommandHandler("stats", cmd_public_stats))
+    app.add_handler(CallbackQueryHandler(settings_menu, pattern="^back_to_settings$"))
+    app.add_handler(CallbackQueryHandler(start_handler, pattern="^back_to_main$"))
     app.add_handler(CallbackQueryHandler(show_stats_handler, pattern="^show_stats$"))
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("language", cmd_language))
@@ -2237,7 +2246,6 @@ def build_app():
     app.add_handler(CallbackQueryHandler(select_image_model, pattern="^select_image_model$"))
     app.add_handler(CallbackQueryHandler(confirm_model_selection, pattern=r"^confirm_model_.*$"))
     app.add_handler(CallbackQueryHandler(set_image_model, pattern=r"^set_model_.*$"))
-    app.add_handler(CallbackQueryHandler(start_handler, pattern="^back_to_main$"))
 
     # Donate
     donate_conv = ConversationHandler(
