@@ -1696,7 +1696,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     try:
         model = genai.GenerativeModel("gemini-2.0-flash")
-        gemini_response = await model.generate_content_async(
+        gemini_response = await model.generate_content_async()
             gemini_full_prompt,
             generation_config=genai.types.GenerationConfig()
                 max_output_tokens=100,
