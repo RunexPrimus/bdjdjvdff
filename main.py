@@ -2448,10 +2448,12 @@ async def cmd_public_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, e
         f"👤 **Siz yaratdingiz:** `{user_images}`"
     )
 
-        kb = [
-        [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
+    # ✅ Tugmalar (to‘g‘ri joylashuv)
+    kb = [
+        [InlineKeyboardButton("🔄 Yangilash", callback_data="stats_refresh")],
         [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
     ]
+
     if edit_mode and update.callback_query:
         try:
             await update.callback_query.edit_message_text(
