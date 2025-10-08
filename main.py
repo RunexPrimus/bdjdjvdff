@@ -1243,9 +1243,8 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if row:
             lang_code = row["language_code"] or DEFAULT_LANGUAGE
             image_model_id = row["image_model_id"] or ""
-    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
 
-    # Joriy model nomini topish
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
     current_model_title = "Default Mode"
     for m in DIGEN_MODELS:
         if m["id"] == image_model_id:
@@ -1257,8 +1256,23 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")],
         [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
     ]
-    await q.edit_message_text("⚙️ **Sozlamalar**", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+    text = "⚙️ **Sozlamalar**"
 
+    # Xabarni tahrirlashda xatolikka chidamli bo'lish
+    try:
+        await q.edit_message_text(text=text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+    except BadRequest as e:
+        if "message is not modified" in str(e):
+            pass
+        elif "There is no text in the message to edit" in str(e):
+            # Media xabar bo'lsa, yangi xabar yuborish
+            await q.message.reply_text(text=text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+            try:
+                await q.message.delete()
+            except:
+                pass
+        else:
+            raise
 #--------------------------------------------------
 async def confirm_model_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -2341,7 +2355,6 @@ def build_app():
     app.add_handler(CommandHandler("language", cmd_language))
     app.add_handler(CallbackQueryHandler(cmd_language, pattern="^change_language$"))
     app.add_handler(CallbackQueryHandler(language_select_handler, pattern=all_lang_pattern))
-    app.add_handler(CallbackQueryHandler(settings_menu, pattern="^open_settings$"))
     app.add_handler(CallbackQueryHandler(settings_menu, pattern="^open_settings$"))
     app.add_handler(CallbackQueryHandler(select_image_model, pattern="^select_image_model$"))
     app.add_handler(CallbackQueryHandler(confirm_model_selection, pattern=r"^confirm_model_.*$"))
