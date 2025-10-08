@@ -7,6 +7,7 @@ import re
 import os
 import json
 import random
+import uuid
 import time
 import threading
 from datetime import datetime, timezone, timedelta
@@ -1066,6 +1067,90 @@ DIGEN_MODELS = [
         ]
     }
 ]
+
+#--------------------------------------------
+async def fake_lab_new_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+
+    user_id = q.from_user.id
+    lang_code = DEFAULT_LANGUAGE
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user_id)
+        if row:
+            lang_code = row["language_code"]
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+
+    # Progress xabar
+    await q.message.reply_text("🔄 Yangi sun'iy odam yaratilmoqda...")
+
+    try:
+        # https://thispersondoesnotexist.com/ dan rasm olish
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://thispersondoesnotexist.com/", headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }) as resp:
+                if resp.status != 200:
+                    raise Exception(f"Status {resp.status}")
+                image_data = await resp.read()
+
+        # Rasmni faylga saqlash
+        temp_path = f"/tmp/fake_lab_{uuid.uuid4().hex}.jpg"
+        with open(temp_path, "wb") as f:
+            f.write(image_data)
+
+        # Yangilash tugmasi
+        kb = [[InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")]]
+
+        # Rasmni yuborish
+        with open(temp_path, "rb") as photo:
+            await context.bot.send_photo(
+                chat_id=q.message.chat_id,
+                photo=photo,
+                caption="👤 Bu odam **haqiqiy emas** — sun'iy intellekt tomonidan yaratilgan!\n\n🔄 Yangilash tugmasi orqali yangi rasm olishingiz mumkin.",
+                reply_markup=InlineKeyboardMarkup(kb)
+            )
+
+        # Foydalanuvchi uchun malumot saqlash (keyingi "Yangilash" uchun)
+        context.user_data["fake_lab_last_photo"] = temp_path
+
+    except Exception as e:
+        logger.exception(f"[FAKE LAB ERROR] {e}")
+        await q.message.reply_text(lang["error"])
+
+#------------------------------------------------
+async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+
+    # Progress
+    await q.edit_message_caption(caption="🔄 Yangi rasm yuklanmoqda...")
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://thispersondoesnotexist.com/", headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            }) as resp:
+                if resp.status != 200:
+                    raise Exception(f"Status {resp.status}")
+                image_data = await resp.read()
+
+        temp_path = f"/tmp/fake_lab_{uuid.uuid4().hex}.jpg"
+        with open(temp_path, "wb") as f:
+            f.write(image_data)
+
+        kb = [[InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")]]
+        with open(temp_path, "rb") as photo:
+            await q.edit_message_media(
+                media=InputMediaPhoto(media=photo, caption="👤 Bu odam **haqiqiy emas** — sun'iy intellekt tomonidan yaratilgan!\n\n🔄 Yangilash tugmasi orqali yangi rasm olishingiz mumkin."),
+                reply_markup=InlineKeyboardMarkup(kb)
+            )
+
+        context.user_data["fake_lab_last_photo"] = temp_path
+
+    except Exception as e:
+        logger.exception(f"[FAKE LAB REFRESH ERROR] {e}")
+        await q.edit_message_caption(caption="⚠️ Xatolik yuz berdi. Qayta urinib ko'ring.")
 # ---------------- helpers ----------------
 def escape_md(text: str) -> str:
     """
@@ -1610,7 +1695,10 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
         [
             InlineKeyboardButton("📈 Statistika", callback_data="show_stats"),
             InlineKeyboardButton("⚙️ Sozlamalar", callback_data="open_settings")
-        ]
+        ],
+        [
+            InlineKeyboardButton("🧪 FakeLab", callback_data="fake_lab_new")
+        ],
     ]
 
     # Faqat admin uchun tugma qo‘shamiz
@@ -2514,6 +2602,8 @@ def build_app():
     app.add_handler(CommandHandler("stats", cmd_public_stats))
     app.add_handler(CallbackQueryHandler(settings_menu, pattern="^back_to_settings$"))
     app.add_handler(CallbackQueryHandler(start_handler, pattern="^back_to_main$"))
+    app.add_handler(CallbackQueryHandler(fake_lab_new_handler, pattern="^fake_lab_new$"))
+    app.add_handler(CallbackQueryHandler(fake_lab_refresh_handler, pattern="^fake_lab_refresh$"))
     app.add_handler(CallbackQueryHandler(show_stats_handler, pattern="^show_stats$"))
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("language", cmd_language))
