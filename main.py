@@ -1111,9 +1111,9 @@ async def fake_lab_new_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         
        kb = [
-        [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
-        [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
-    ]
+    [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
+    [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
+]
         
         with open(temp_path, "rb") as photo:
             await context.bot.send_photo(
@@ -1161,7 +1161,10 @@ async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT
             "🔄 **Yangilash** tugmasi orqali yangi rasm olishingiz mumkin."
         )
 
-        kb = [[InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")]]
+        kb = [
+    [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
+    [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
+]
         with open(temp_path, "rb") as photo:
             await q.edit_message_media(
                 media=InputMediaPhoto(media=photo, caption=caption, parse_mode="Markdown"),
@@ -1267,9 +1270,9 @@ async def init_db(pool):
         except Exception as e:
             logger.info(f"ℹ️ Column 'image_model_id' already exists or error: {e}")
         try:
-            await conn.execute("ALTER TABLE donations ADD COLUMN IF NOT EXISTS charge_id TEXT")
-            await conn.execute("ALTER TABLE donations ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ")
-            logger.info("✅ Added columns 'charge_id', 'refunded_at' to table 'donations'")
+            await conn.execute("ALTER TABLE ions ADD COLUMN IF NOT EXISTS charge_id TEXT")
+            await conn.execute("ALTER TABLE ions ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ")
+            logger.info("✅ Added columns 'charge_id', 'refunded_at' to table 'ions'")
         except Exception as e:
             logger.info(f"ℹ️ Columns already exist or error: {e}")
 
