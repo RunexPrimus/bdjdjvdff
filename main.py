@@ -1863,9 +1863,9 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
 
     payload = {
         "prompt": translated,
-        "image_size": "2048",
-        "width": 2048,
-        "height": 2048,
+        "image_size": "1024",
+        "width": 1024,
+        "height": 1024,
         "lora_id": lora_id,
         "batch_size": count,
         "reference_images": [],
@@ -1939,7 +1939,7 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
 
         # 2️⃣ Rasm tayyorligini kutish
         available = False
-        max_wait = 1000
+        max_wait = 300
         waited = 0
         interval = 2.0
 
