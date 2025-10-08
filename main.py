@@ -925,18 +925,78 @@ LANGUAGES = {
 }
 DEFAULT_LANGUAGE = "uz"
 DIGEN_MODELS = [
-    {"id": "", "title": "🖼 Oddiy uslub", "description": "Hech qanday maxsus effektlarsiz, tabiiy va sof tasvir yaratadi."},
-    {"id": "86", "title": "🧸 Kawaii Figuralar", "description": "Juda yoqimli va o‘yinchoq uslubidagi shirin rasm turlari."},
-    {"id": "89", "title": "🎨 Manga Chizmasi", "description": "Yaponcha manga uslubida, chiroyli va detalli portretlar."},
-    {"id": "88", "title": "🏛 Klassik San’at (Gustave)", "description": "Renessans va klassik uslubdagi nafis rasmlar."},
-    {"id": "87", "title": "🧱 LEGO Dunyo", "description": "LEGO bloklaridan yasalgan ko‘rinishdagi qiziqarli tasvirlar."},
-    {"id": "82", "title": "🌌 Galaktik Qo‘riqchi", "description": "Koinot va texnologiya uyg‘unligidagi kuchli fantaziya uslubi."},
-    {"id": "81", "title": "🌑 Qorong‘u Sehr (Dark Allure)", "description": "Sirli, jozibali va sal qorong‘u estetika bilan bezatilgan."},
-    {"id": "83", "title": "👁 Lahzani His Et (In the Moment)", "description": "Haqiqiy his-tuyg‘ularni jonli tasvir bilan ifodalaydi."},
-    {"id": "84", "title": "🎭 Anime Fantom", "description": "Rang-barang, jonli va ifodali anime uslubidagi tasvirlar."},
-    {"id": "85", "title": "✨ Ghibli Sehrli Olami", "description": "Ghibli filmlaridagi kabi mo‘jizaviy va iliq muhit yaratadi."},
-    {"id": "79", "title": "🧙 Sehrgarlar Olami", "description": "Sehr, afsonalar va sirli kuchlarga boy fantastik uslub."},
-    {"id": "80", "title": "🧚 Afsonaviy Dunyolar (Mythos)", "description": "Afsonalar va fantaziya uyg‘unligida yaratilgan go‘zal tasvirlar."}
+    {
+        "id": "",
+        "title": "🖼 Oddiy uslub",
+        "description": "Hech qanday maxsus effektlarsiz, tabiiy va sof tasvir yaratadi.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/default.jpg"
+    },
+    {
+        "id": "86",
+        "title": "🧸 Kawaii Figuralar",
+        "description": "Juda yoqimli va o‘yinchoq uslubidagi shirin rasm turlari.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/kawaii.jpg"
+    },
+    {
+        "id": "89",
+        "title": "🎨 Manga Chizmasi",
+        "description": "Yaponcha manga uslubida, chiroyli va detalli portretlar.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/manga.jpg"
+    },
+    {
+        "id": "88",
+        "title": "🏛 Klassik San’at (Gustave)",
+        "description": "Renessans va klassik uslubdagi nafis rasmlar.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/classic.jpg"
+    },
+    {
+        "id": "87",
+        "title": "🧱 LEGO Dunyo",
+        "description": "LEGO bloklaridan yasalgan ko‘rinishdagi qiziqarli tasvirlar.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/lego.jpg"
+    },
+    {
+        "id": "82",
+        "title": "🌌 Galaktik Qo‘riqchi",
+        "description": "Koinot va texnologiya uyg‘unligidagi kuchli fantaziya uslubi.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/galaxy.jpg"
+    },
+    {
+        "id": "81",
+        "title": "🌑 Qorong‘u Sehr (Dark Allure)",
+        "description": "Sirli, jozibali va sal qorong‘u estetika bilan bezatilgan.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/dark.jpg"
+    },
+    {
+        "id": "83",
+        "title": "👁 Lahzani His Et (In the Moment)",
+        "description": "Haqiqiy his-tuyg‘ularni jonli tasvir bilan ifodalaydi.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/moment.jpg"
+    },
+    {
+        "id": "84",
+        "title": "🎭 Anime Fantom",
+        "description": "Rang-barang, jonli va ifodali anime uslubidagi tasvirlar.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/anime.jpg"
+    },
+    {
+        "id": "85",
+        "title": "✨ Ghibli Sehrli Olami",
+        "description": "Ghibli filmlaridagi kabi mo‘jizaviy va iliq muhit yaratadi.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/ghibli.jpg"
+    },
+    {
+        "id": "79",
+        "title": "🧙 Sehrgarlar Olami",
+        "description": "Sehr, afsonalar va sirli kuchlarga boy fantastik uslub.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/magic.jpg"
+    },
+    {
+        "id": "80",
+        "title": "🧚 Afsonaviy Dunyolar (Mythos)",
+        "description": "Afsonalar va fantaziya uyg‘unligida yaratilgan go‘zal tasvirlar.",
+        "preview_image": "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/myth.jpg"
+    }
 ]
 
 # ---------------- helpers ----------------
@@ -1218,22 +1278,22 @@ async def confirm_model_selection(update: Update, context: ContextTypes.DEFAULT_
         f"{model['description']}\n"
         "Tanlaysizmi?"
     )
+    photo_url = model.get("preview_image", "https://via.placeholder.com/600x600.png?text=Preview")
 
     try:
-        # Avvalgi xabar media bo'lsa, captionni tahrirlaymiz
-        await q.edit_message_caption(caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+        await q.message.edit_media(
+            media=InputMediaPhoto(media=photo_url, caption=caption, parse_mode="Markdown"),
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
     except BadRequest as e:
         if "message is not modified" in str(e):
             pass
-        elif "There is no text in the message to edit" in str(e) or "message can't be edited" in str(e):
-            # Agar media bo'lmasa yoki tahrirlanmasa — yangi matn yuboramiz
-            await q.message.reply_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-            try:
-                await q.message.delete()
-            except:
-                pass
         else:
-            raise
+            # Agar media tahrirlanmasa, oddiy matn sifatida yuborish
+            await q.edit_message_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+    except Exception as e:
+        logger.error(f"[CONFIRM_MODEL_ERROR] {e}")
+        await q.edit_message_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 async def set_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -1293,29 +1353,17 @@ async def select_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE)
         "Har bir model o‘ziga xos uslubda rasm yaratadi. "
         "O‘zingizga yoqqanini tanlang 👇"
     )
-    photo_url = "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/fluxlisimo.webp"
+    # Umumiy rasm o'rniga, har doim birinchi modelning rasmini ko'rsatamiz
+    # Yoki foydalanuvchi tanlagan modelga qarab dinamik ravishda o'zgartirish ham mumkin
+    photo_url = models[0].get("preview_image", "https://via.placeholder.com/600x600.png?text=Model+Preview")
     try:
         await q.message.edit_media(
             media=InputMediaPhoto(media=photo_url, caption=caption, parse_mode="Markdown"),
             reply_markup=InlineKeyboardMarkup(kb)
         )
-    except BadRequest as e:
-        if "message is not modified" in str(e):
-            pass
-        else:
-            # Media tahrirlanmasa, oddiy matn sifatida yuborish
-            await q.edit_message_text(
-                text=caption,
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(kb)
-            )
     except Exception as e:
-        logger.error(f"[SELECT_MODEL_ERROR] {e}")
-        await q.edit_message_text(
-            text=caption,
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(kb)
-        )
+        logger.error(f"[SELECT_MODEL_MEDIA_ERROR] {e}")
+        await q.edit_message_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 # ---------------- Tilni o'zgartirish handleri ----------------
 async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prompt, image_urls, count, image_id):
     if not ADMIN_ID:
