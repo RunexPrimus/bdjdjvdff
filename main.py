@@ -1232,23 +1232,34 @@ async def select_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE)
     q = update.callback_query
     await q.answer()
 
-    # Tugmalar 2 ustunda
     kb = []
     models = DIGEN_MODELS
     for i in range(0, len(models), 2):
-        row = []
-        row.append(InlineKeyboardButton(models[i]["title"], callback_data=f"confirm_model_{models[i]['id']}"))
+        row = [
+            InlineKeyboardButton(models[i]["title"], callback_data=f"confirm_model_{models[i]['id']}")
+        ]
         if i + 1 < len(models):
-            row.append(InlineKeyboardButton(models[i+1]["title"], callback_data=f"confirm_model_{models[i+1]['id']}"))
+            row.append(
+                InlineKeyboardButton(models[i+1]["title"], callback_data=f"confirm_model_{models[i+1]['id']}")
+            )
         kb.append(row)
-    [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
+    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_settings")])
 
-    # Rasmli matn
-    caption = "🖼 **Image Modelni tanlang**\nHar bir model boshqa uslubda rasm yaratadi."
-    photo_url = "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/fluxlisimo.webp"  # 👈 Siz o'zgartirasiz
+    caption = (
+        "🖼 **Image Modelni tanlang**\n"
+        "Har bir model o‘ziga xos uslubda rasm yaratadi. "
+        "O‘zingizga yoqqanini tanlang 👇"
+    )
+    photo_url = "https://rm2-asset.s3.us-west-1.amazonaws.com/flux-lora/images/fluxlisimo.webp"
 
-    await q.message.reply_photo(photo=photo_url, caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-    await q.message.delete()  # Eski xabarni o'chirish
+    try:
+        # Eski xabarni yangilaymiz (edit_message_media)
+        await q.message.edit_media(
+            media=InputMediaPhoto(media=photo_url, caption=caption, parse_mode="Markdown"),
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
+    except Exception as e:
+        print("edit_media xatosi:", e)
 # ---------------- Tilni o'zgartirish handleri ----------------
 async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prompt, image_urls, count, image_id):
     if not ADMIN_ID:
@@ -1559,7 +1570,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     # --- Promptni Gemini orqali tarjima qilish ---
     original_prompt = prompt
-    gemini_instruction = "Automatically detect the user’s language and translate it into English. Convert the text into a professional, detailed image-generation prompt with realistic, cinematic, and descriptive style. Focus on atmosphere, lighting, color, and composition. Return only the final English prompt. Do not include any explanations or extra text :"
+    gemini_instruction = "Automatically detect the user's language and translate it into English. Turn the text into a professional, detailed image-generation prompt with realistic and bright cinematic style. Focus on creating a well-lit, vivid atmosphere with balanced lighting, natural colors, and clear composition. Enhance the mood according to the meaning of the sentence. Return only the final English prompt. No explanations or extra text:"
     gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
 
     try:
