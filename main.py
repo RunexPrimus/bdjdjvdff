@@ -1806,7 +1806,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     # --- Promptni Gemini orqali tarjima qilish ---
     original_prompt = prompt
-    gemini_instruction = "Automatically detect the user’s language and translate it into English. Return only the final English prompt. Do not include any explanations or extra text :"
+    gemini_instruction = "Automatically detect the language of the user input and translate it into English. Based on the translated text, generate a unique, creative, and visually stunning background prompt.Make sure each result is different and not repetitive. Focus on composition, lighting, color harmony, mood, and artistic storytelling. Use expressive, cinematic, and high-quality descriptive language suitable for AI image generation. The output should feel fresh, imaginative, and visually captivating — never generic or plain. Return only the final English prompt. Do not include any explanations or extra text:"
     gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
 
     try:
