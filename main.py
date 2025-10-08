@@ -1957,9 +1957,9 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def _background_generate(context, user, prompt, translated, count, chat_id, message_id, lang):
     start_time = time.time()
     
-    # Foydalanuvchining tanlagan modelini olish
+    # Foydalanuvchining tanlagan modelini DB dan olish
     lora_id = ""
-    background_prompt = ""  # ✅ Yangi o'zgaruvchi
+    background_prompt = ""
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT image_model_id FROM users WHERE id = $1", user.id)
         if row and row["image_model_id"]:
@@ -1968,7 +1968,6 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
             # Modelni topish
             selected_model = next((m for m in DIGEN_MODELS if m["id"] == lora_id), None)
             if selected_model and "background_prompts" in selected_model:
-                # Tasodifiy background prompt tanlash
                 background_prompt = random.choice(selected_model["background_prompts"])
             else:
                 # Default background promptlar
@@ -1992,10 +1991,10 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
         "reference_images": [],
         "strength": ""
     }
+    
     headers = get_digen_headers()
     timeout = aiohttp.ClientTimeout(total=1000)
 
-    # ✅ Progress bar yordamchi funksiya
     async def _update_progress():
         steps = [
             (10, "🧠 Prompt tahlil qilinmoqda..."),
@@ -2005,7 +2004,6 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
             (80, "🧩 Detallar yakunlanmoqda..."),
             (100, "✅ Tayyorlanmoqda...")
         ]
-
         bar_length = 10
         for percent, text in steps:
             filled = int(bar_length * percent // 100)
@@ -2018,22 +2016,11 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
                 )
             except:
                 pass
-
-            # 🕐 Realistik kutish: boshlanishda sekin, o‘rtada tez, oxirida yana sekin
-            if percent < 30:
-                delay = random.uniform(1.8, 2.4)
-            elif percent < 70:
-                delay = random.uniform(1.0, 1.6)
-            else:
-                delay = random.uniform(1.3, 2.0)
-
+            delay = random.uniform(1.0, 2.5)
             await asyncio.sleep(delay)
 
     try:
-        # Progress barni parallel ravishda ishga tushirish
         progress_task = asyncio.create_task(_update_progress())
-
-        # 1️⃣ Digen API ga so‘rov yuborish
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
                 text_resp = await resp.text()
@@ -2058,12 +2045,10 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
         urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
         logger.info(f"[GENERATE] urls: {urls}")
 
-        # 2️⃣ Rasm tayyorligini kutish
         available = False
         max_wait = 300
         waited = 0
         interval = 2.0
-
         while waited < max_wait:
             try:
                 async with aiohttp.ClientSession() as check_session:
@@ -2073,7 +2058,6 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
                             break
             except Exception:
                 pass
-
             await asyncio.sleep(interval)
             waited += interval
 
@@ -2082,17 +2066,24 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
             progress_task.cancel()
             return
 
-        # Kutish tugagach progressni 100% da yakunlash
         await progress_task
         await asyncio.sleep(0.3)
 
-        # 3️⃣ Natijani yuborish
         end_time = time.time()
         elapsed_time = end_time - start_time
         escaped_prompt = escape_md(prompt)
+
+        # Model nomini olish
+        current_model_title = lang.get("default_mode", "Default Mode")
+        if lora_id:
+            selected_model = next((m for m in DIGEN_MODELS if m["id"] == lora_id), None)
+            if selected_model:
+                current_model_title = selected_model["title"]
+
         stats_text = (
             f"{lang['image_ready_header']}\n"
             f"{lang['image_prompt_label']} {escaped_prompt}\n"
+            f"{lang['image_model_label']} {current_model_title}\n"
             f"{lang['image_count_label']} {count}\n"
             f"{lang['image_time_label']} {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
             f"{lang['image_elapsed_label']} {elapsed_time:.1f}s"
@@ -2110,10 +2101,9 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
                 logger.exception(f"[FALLBACK PHOTO ERROR] {e2}")
                 await context.bot.send_message(chat_id, lang["success"])
 
-        # 4️⃣ Admin va log
         if ADMIN_ID and urls:
             await notify_admin_generation(context, user, prompt, urls, count, image_id)
-        await log_generation(context.application.bot_data["db_pool"], user, prompt, translated, image_id, count)
+        await log_generation(context.application.bot_data["db_pool"], user, prompt, final_prompt, image_id, count)
 
     except Exception as e:
         logger.exception(f"[BACKGROUND GENERATE ERROR] {e}")
