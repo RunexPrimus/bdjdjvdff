@@ -1691,7 +1691,7 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     # --- Promptni Gemini orqali tarjima qilish ---
     original_prompt = prompt
-    gemini_instruction = "Automatically detect the user's language and translate it into English. Return only the final English prompt. No explanations or extra text:"
+    gemini_instruction = "Automatically detect the user’s language and translate it into English.Convert the text into a professional, detailed image-generation prompt with realistic, cinematic, and descriptive style. Focus on atmosphere, lighting, color, and composition. Return only the final English prompt. Do not include any explanations or extra text.:"
     gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
 
     try:
@@ -1701,9 +1701,9 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             generation_config=genai.types.GenerationConfig(
                 max_output_tokens=100,
                 temperature=0.5
-            )
-        )
-        digen_ready_prompt = gemini_response.text.strip()
+            
+    
+        digen_ready_prompt = gein_response.text.strip()
         if not digen_ready_prompt:
             digen_ready_prompt = original_prompt
         context.user_data["translated"] = digen_ready_prompt
