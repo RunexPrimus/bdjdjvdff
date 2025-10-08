@@ -1730,35 +1730,7 @@ async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DE
     fake_update = Update(update.update_id, callback_query=q)
     await generate_cb(fake_update, context)
     
-    original_prompt = prompt
-    gemini_instruction = (
-        "Automatically detect the user’s language and translate it into English. "
-        "Convert the text into a professional, detailed image-generation prompt with realistic, cinematic, and descriptive style. "
-        "Focus on atmosphere, lighting, color, and composition. "
-        "Return only the final English prompt. Do not include any explanations or extra text."
-    )
-    gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
-
-    try:
-        model = genai.GenerativeModel("gemini-2.0-flash")
-        gemini_response = await model.generate_content_async(
-            gemini_full_prompt,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=100,
-                temperature=0.5,
-            )
-        )
-
-        digen_ready_prompt = gemini_response.text.strip()
-        if not digen_ready_prompt:
-            digen_ready_prompt = original_prompt
-
-        context.user_data["translated"] = digen_ready_prompt
-
-    except Exception as gemini_err:
-        logger.error(f"[GEMINI PROMPT ERROR] {gemini_err}")
-        context.user_data["translated"] = original_prompt
-
+    
     # --- Shu yerda tugadi, endi davomida flow tanlash yoki generatsiya qilinadi ---
     # Masalan:
     kb = [
@@ -1773,7 +1745,26 @@ async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DE
         reply_markup=InlineKeyboardMarkup(kb)
     )
 # Yangilangan: context.user_data["flow"] o'rnatiladi
-async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def ai_chat_from_prompt_handler(update: Update, context: Contexoriginal_prompt = prompt
+    gemini_instruction = "Automatically detect the user's language and translate it into English. Turn the text into a professional, detailed image-generation prompt with realistic and bright cinematic style. Focus on creating a well-lit, vivid atmosphere with balanced lighting, natural colors, and clear composition. Enhance the mood according to the meaning of the sentence. Return only the final English prompt. No explanations or extra text:"
+    gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
+
+    try:
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        gemini_response = await model.generate_content_async(
+            gemini_full_prompt,
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=100,
+                temperature=0.5
+            )
+        )
+        digen_ready_prompt = gemini_response.text.strip()
+        if not digen_ready_prompt:
+            digen_ready_prompt = original_prompt
+        context.user_data["translated"] = digen_ready_prompt
+    except Exception as gemini_err:
+        logger.error(f"[GEMINI PROMPT ERROR] {gemini_err}")
+        context.user_data["translated"] = original_prompttTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     # AI chat flow boshlanadi
