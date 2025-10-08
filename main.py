@@ -1213,7 +1213,6 @@ async def confirm_model_selection(update: Update, context: ContextTypes.DEFAULT_
         [InlineKeyboardButton("✅ Tanlash", callback_data=f"set_model_{model_id}")],
         [InlineKeyboardButton("⬅️ Orqaga", callback_data="select_image_model")]
     ]
-
     caption = (
         f"🖼 **{model['title']}**\n"
         f"{model['description']}\n"
@@ -1221,25 +1220,20 @@ async def confirm_model_selection(update: Update, context: ContextTypes.DEFAULT_
     )
 
     try:
-        # Agar xabar media bo'lsa, captionni tahrirlash kerak
-        await q.edit_message_caption(
-            caption=caption,
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(kb)
-        )
+        # Avvalgi xabar media bo'lsa, captionni tahrirlaymiz
+        await q.edit_message_caption(caption=caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
     except BadRequest as e:
         if "message is not modified" in str(e):
             pass
-        elif "message can't be edited" in str(e) or "There is no text in the message to edit" in str(e):
-            # Agar xabar aslida matn bo'lib ketgan bo'lsa (masalan, rasm yuklanmagan bo'lsa)
-            await q.edit_message_text(
-                text=caption,
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(kb)
-            )
+        elif "There is no text in the message to edit" in str(e) or "message can't be edited" in str(e):
+            # Agar media bo'lmasa yoki tahrirlanmasa — yangi matn yuboramiz
+            await q.message.reply_text(caption, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+            try:
+                await q.message.delete()
+            except:
+                pass
         else:
             raise
-
 async def set_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -1247,8 +1241,37 @@ async def set_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = q.from_user
     # DB ga saqlash
     await add_user_db(context.application.bot_data["db_pool"], user, image_model_id=model_id)
-    # Sozlamalarga qaytish
-    await settings_menu(update, context)
+
+    # Eski xabarni tahrirlash o'rniga, yangi xabar yuborish
+    user_id = user.id
+    lang_code = DEFAULT_LANGUAGE
+    image_model_id = ""
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code, image_model_id FROM users WHERE id = $1", user_id)
+        if row:
+            lang_code = row["language_code"] or DEFAULT_LANGUAGE
+            image_model_id = row["image_model_id"] or ""
+
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+    current_model_title = "Default Mode"
+    for m in DIGEN_MODELS:
+        if m["id"] == image_model_id:
+            current_model_title = m["title"]
+            break
+
+    kb = [
+        [InlineKeyboardButton(f"🖼 Image Model: {current_model_title}", callback_data="select_image_model")],
+        [InlineKeyboardButton(lang["lang_button"], callback_data="change_language")],
+        [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
+    ]
+
+    # Yangi xabar yuborish (eski xabarni tahrirlamaymiz)
+    await q.message.reply_text("⚙️ **Sozlamalar**", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+    # Eski xabarni o'chirish (ixtiyoriy, lekin toza interfeys uchun yaxshi)
+    try:
+        await q.message.delete()
+    except:
+        pass
 #------------------------------------------------
 async def select_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
