@@ -1081,56 +1081,68 @@ async def fake_lab_new_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             lang_code = row["language_code"]
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
 
-    # Progress xabar
-    await q.message.reply_text("🔄 Yangi sun'iy odam yaratilmoqda...")
+    # Chiroyli progress xabar
+    await q.message.reply_text(
+        "🔄 **Sun'iy odam yaratilmoqda...**\n\n"
+        "👤 Bu odam **haqiqiy emas** — AI tomonidan generatsiya qilingan!\n"
+        "⏳ Iltimos, biroz kuting...",
+        parse_mode="Markdown"
+    )
 
     try:
-        # https://thispersondoesnotexist.com/ dan rasm olish
         async with aiohttp.ClientSession() as session:
-            async with session.get("https://thispersondoesnotexist.com/", headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }) as resp:
+            async with session.get(
+                "https://thispersondoesnotexist.com/",
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            ) as resp:
                 if resp.status != 200:
                     raise Exception(f"Status {resp.status}")
                 image_data = await resp.read()
 
-        # Rasmni faylga saqlash
         temp_path = f"/tmp/fake_lab_{uuid.uuid4().hex}.jpg"
         with open(temp_path, "wb") as f:
             f.write(image_data)
 
-        # Yangilash tugmasi
+        # Chiroyli caption
+        caption = (
+            "👤 **Bu odam HAQIQIY EMAS!**\n"
+            "🤖 U sun'iy intellekt (AI) tomonidan yaratilgan.\n\n"
+            "🔄 **Yangilash** tugmasi orqali yangi rasm olishingiz mumkin."
+        )
+
         kb = [[InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")]]
 
-        # Rasmni yuborish
         with open(temp_path, "rb") as photo:
             await context.bot.send_photo(
                 chat_id=q.message.chat_id,
                 photo=photo,
-                caption="👤 Bu odam **haqiqiy emas** — sun'iy intellekt tomonidan yaratilgan!\n\n🔄 Yangilash tugmasi orqali yangi rasm olishingiz mumkin.",
+                caption=caption,
+                parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup(kb)
             )
 
-        # Foydalanuvchi uchun malumot saqlash (keyingi "Yangilash" uchun)
         context.user_data["fake_lab_last_photo"] = temp_path
 
     except Exception as e:
         logger.exception(f"[FAKE LAB ERROR] {e}")
         await q.message.reply_text(lang["error"])
-
 #------------------------------------------------
 async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
 
     # Progress
-    await q.edit_message_caption(caption="🔄 Yangi rasm yuklanmoqda...")
+    await q.edit_message_caption(
+        caption="🔄 **Yangi rasm yuklanmoqda...**\n⏳ Iltimos, kuting...",
+        parse_mode="Markdown"
+    )
 
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get("https://thispersondoesnotexist.com/", headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            }) as resp:
+            async with session.get(
+                "https://thispersondoesnotexist.com/",
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            ) as resp:
                 if resp.status != 200:
                     raise Exception(f"Status {resp.status}")
                 image_data = await resp.read()
@@ -1139,10 +1151,17 @@ async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT
         with open(temp_path, "wb") as f:
             f.write(image_data)
 
+        # Xuddi shu chiroyli caption
+        caption = (
+            "👤 **Bu odam HAQIQIY EMAS!**\n"
+            "🤖 U sun'iy intellekt (AI) tomonidan yaratilgan.\n\n"
+            "🔄 **Yangilash** tugmasi orqali yangi rasm olishingiz mumkin."
+        )
+
         kb = [[InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")]]
         with open(temp_path, "rb") as photo:
             await q.edit_message_media(
-                media=InputMediaPhoto(media=photo, caption="👤 Bu odam **haqiqiy emas** — sun'iy intellekt tomonidan yaratilgan!\n\n🔄 Yangilash tugmasi orqali yangi rasm olishingiz mumkin."),
+                media=InputMediaPhoto(media=photo, caption=caption, parse_mode="Markdown"),
                 reply_markup=InlineKeyboardMarkup(kb)
             )
 
@@ -1150,7 +1169,10 @@ async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT
 
     except Exception as e:
         logger.exception(f"[FAKE LAB REFRESH ERROR] {e}")
-        await q.edit_message_caption(caption="⚠️ Xatolik yuz berdi. Qayta urinib ko'ring.")
+        await q.edit_message_caption(
+            caption="⚠️ **Xatolik yuz berdi.**\nQayta urinib ko'ring.",
+            parse_mode="Markdown"
+        )
 # ---------------- helpers ----------------
 def escape_md(text: str) -> str:
     """
