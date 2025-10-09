@@ -1189,9 +1189,6 @@ async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT
     [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
     [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
 ]
-            [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
-            [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
-        ]
 
         with open(temp_path, "rb") as photo:
             await q.edit_message_media(
