@@ -1092,7 +1092,7 @@ async def fake_lab_new_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                "https://thispersondoesnotexist.com/  ",
+                "https://thispersondoesnotexist.com/",
                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
             ) as resp:
                 if resp.status != 200:
@@ -1109,6 +1109,12 @@ async def fake_lab_new_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             "🤖 U sun'iy intellekt (AI) tomonidan yaratilgan.\n\n"
             "🔄 **Yangilash** tugmasi orqali yangi rasm olishingiz mumkin."
         )
+        
+       kb = [
+    [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
+    [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
+]
+        
 
         # ✅ Shu yerda indentation to‘g‘rilandi (8ta space)
         kb = [
@@ -1130,36 +1136,12 @@ async def fake_lab_new_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     except Exception as e:
         logger.exception(f"[FAKE LAB ERROR] {e}")
         await q.message.reply_text(lang["error"])
-
-
 #------------------------------------------------
 async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    data = q.data
     await q.answer()
 
-    # 🏠 Agar foydalanuvchi "Orqaga" tugmasini bossin:
-    if data == "back_to_main":
-        try:
-            await q.message.delete()
-        except Exception:
-            pass
-
-        kb = [
-            [InlineKeyboardButton("🧠 AI Rasm Yaratish", callback_data="generate_image")],
-            [InlineKeyboardButton("👤 Fake Person (AI yuz)", callback_data="fake_lab_new")],
-            [InlineKeyboardButton("📊 Statistikalar", callback_data="public_stats")],
-        ]
-
-        await context.bot.send_message(
-            chat_id=q.message.chat_id,
-            text="🏠 *Bosh menyu* — quyidagilardan birini tanlang:",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(kb)
-        )
-        return  # qaytamiz, pastdagi refresh qismi ishlamasin
-
-    # 🔄 Agar foydalanuvchi "Yangilash"ni bossin:
+    # Progress
     await q.edit_message_caption(
         caption="🔄 **Yangi rasm yuklanmoqda...**\n⏳ Iltimos, kuting...",
         parse_mode="Markdown"
@@ -1168,7 +1150,7 @@ async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                "https://thispersondoesnotexist.com/  ",
+                "https://thispersondoesnotexist.com/",
                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
             ) as resp:
                 if resp.status != 200:
@@ -1179,6 +1161,7 @@ async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT
         with open(temp_path, "wb") as f:
             f.write(image_data)
 
+        # Xuddi shu chiroyli caption
         caption = (
             "👤 **Bu odam HAQIQIY EMAS!**\n"
             "🤖 U sun'iy intellekt (AI) tomonidan yaratilgan.\n\n"
@@ -1186,10 +1169,9 @@ async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT
         )
 
         kb = [
-            [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
-            [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
-        ]
-
+    [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
+    [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
+]
         with open(temp_path, "rb") as photo:
             await q.edit_message_media(
                 media=InputMediaPhoto(media=photo, caption=caption, parse_mode="Markdown"),
@@ -1204,7 +1186,6 @@ async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT
             caption="⚠️ **Xatolik yuz berdi.**\nQayta urinib ko'ring.",
             parse_mode="Markdown"
         )
-
 
 # ---------------- helpers ----------------
 def escape_md(text: str) -> str:
