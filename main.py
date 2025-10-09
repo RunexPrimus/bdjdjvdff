@@ -1109,14 +1109,7 @@ async def fake_lab_new_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             "🤖 U sun'iy intellekt (AI) tomonidan yaratilgan.\n\n"
             "🔄 **Yangilash** tugmasi orqali yangi rasm olishingiz mumkin."
         )
-        
-       kb = [
-    [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
-    [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
-]
-        
 
-        # ✅ Shu yerda indentation to‘g‘rilandi (8ta space)
         kb = [
             [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
             [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
@@ -1136,7 +1129,8 @@ async def fake_lab_new_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     except Exception as e:
         logger.exception(f"[FAKE LAB ERROR] {e}")
         await q.message.reply_text(lang["error"])
-#------------------------------------------------
+
+
 async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -1169,9 +1163,10 @@ async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT
         )
 
         kb = [
-    [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
-    [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
-]
+            [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
+            [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
+        ]
+
         with open(temp_path, "rb") as photo:
             await q.edit_message_media(
                 media=InputMediaPhoto(media=photo, caption=caption, parse_mode="Markdown"),
