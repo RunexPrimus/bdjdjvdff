@@ -1668,6 +1668,51 @@ async def notify_admin_generation(context: ContextTypes.DEFAULT_TYPE, user, prom
 
     except Exception as e:
         logger.exception(f"[ADMIN NOTIFY ERROR] Umumiy xato: {e}")
+
+#---------------------------------------------------------------
+
+async def notify_admin_on_error(
+    context: ContextTypes.DEFAULT_TYPE,
+    user,
+    prompt: str,
+    digen_headers: dict,
+    error: Exception,
+    image_count: int = 1
+):
+    if not ADMIN_ID:
+        return
+
+    try:
+        lang_code = DEFAULT_LANGUAGE
+        async with context.application.bot_data["db_pool"].acquire() as conn:
+            row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", ADMIN_ID)
+            if row:
+                lang_code = row["language_code"]
+        lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+
+        tashkent_dt = tashkent_time()
+        token = digen_headers.get("digen-token", "N/A")
+        session_id = digen_headers.get("digen-sessionid", "N/A")
+
+        error_text = (
+            f"🚨 **Xatolik: Rasm generatsiyasi muvaffaqiyatsiz tugadi!**\n\n"
+            f"👤 **Foydalanuvchi:** @{user.username or 'N/A'} (ID: `{user.id}`)\n"
+            f"📝 **Prompt:** `{prompt}`\n"
+            f"🔢 **Soni:** {image_count}\n"
+            f"🔑 **Token:** `{token}`\n"
+            f"🆔 **Session ID:** `{session_id}`\n"
+            f"⏰ **Vaqt (UTC+5):** {tashkent_dt.strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"❌ **Xatolik:** `{str(error)}`"
+        )
+
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=error_text,
+            parse_mode="Markdown"
+        )
+        logger.info(f"[ADMIN ERROR NOTIFY] Foydalanuvchi {user.id} uchun xatolik haqida xabar yuborildi.")
+    except Exception as e:
+        logger.exception(f"[ADMIN ERROR NOTIFY FAILED] {e}")
 # ---------------- Tilni o'zgartirish handleri ----------------
 async def cmd_language(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Tugmalarni 2 ustunda, oxirgi tugma alohida qatorga joylashtiramiz
@@ -2108,7 +2153,6 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def _background_generate(context, user, prompt, translated, count, chat_id, message_id, lang):
     start_time = time.time()
-    
     # Foydalanuvchining tanlagan modelini DB dan olish
     lora_id = ""
     background_prompt = ""
@@ -2116,23 +2160,18 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
         row = await conn.fetchrow("SELECT image_model_id FROM users WHERE id = $1", user.id)
         if row and row["image_model_id"]:
             lora_id = row["image_model_id"]
-            
-            # Modelni topish
             selected_model = next((m for m in DIGEN_MODELS if m["id"] == lora_id), None)
             if selected_model and "background_prompts" in selected_model:
                 background_prompt = random.choice(selected_model["background_prompts"])
             else:
-                # Default background promptlar
                 default_prompts = [
                     "high quality, 8k, sharp focus",
                     "ultra-detailed, professional photography",
                     "cinematic lighting, vibrant colors"
                 ]
                 background_prompt = random.choice(default_prompts)
-    
-    # Asosiy promptga background promptni qo'shish
+
     final_prompt = f"{translated}, {background_prompt}".strip()
-    
     payload = {
         "prompt": final_prompt,
         "image_size": "1024",
@@ -2143,7 +2182,8 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
         "reference_images": [],
         "strength": ""
     }
-    
+
+    # ✅ Digen headers ni saqlab qolish — xatolikda admin uchun kerak bo'ladi
     headers = get_digen_headers()
     timeout = aiohttp.ClientTimeout(total=1000)
 
@@ -2220,12 +2260,10 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
 
         await progress_task
         await asyncio.sleep(0.3)
-
         end_time = time.time()
         elapsed_time = end_time - start_time
-        escaped_prompt = escape_md(prompt)
 
-        # Model nomini olish
+        escaped_prompt = escape_md(prompt)
         current_model_title = lang.get("default_mode", "Default Mode")
         if lora_id:
             selected_model = next((m for m in DIGEN_MODELS if m["id"] == lora_id), None)
@@ -2255,6 +2293,7 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
 
         if ADMIN_ID and urls:
             await notify_admin_generation(context, user, prompt, urls, count, image_id)
+
         await log_generation(context.application.bot_data["db_pool"], user, prompt, final_prompt, image_id, count)
 
     except Exception as e:
@@ -2263,6 +2302,19 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
             await context.bot.send_message(chat_id, lang["error"])
         except:
             pass
+
+        # ✅ Xatolik sodir bo'lganda admin uchun xabar yuborish
+        try:
+            await notify_admin_on_error(
+                context=context,
+                user=user,
+                prompt=prompt,
+                digen_headers=headers,
+                error=e,
+                image_count=count
+            )
+        except Exception as notify_err:
+            logger.exception(f"[ADMIN ERROR NOTIFY FAILED] {notify_err}")
 # ---------------- Donate (Stars) flow ----------------
 # Yangilangan: context.user_data["current_operation"] o'rnatiladi
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
