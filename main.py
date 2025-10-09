@@ -1081,8 +1081,8 @@ async def fake_lab_new_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             lang_code = row["language_code"]
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
 
-    # "Yaratilmoqda..." xabarini yuboramiz — keyin o'chiramiz
-    thinking_msg = await q.message.reply_text(
+    # Chiroyli progress xabar
+    await q.message.reply_text(
         "🔄 **Sun'iy odam yaratilmoqda...**\n\n"
         "👤 Bu odam **haqiqiy emas** — AI tomonidan generatsiya qilingan!\n"
         "⏳ Iltimos, biroz kuting...",
@@ -1090,38 +1090,55 @@ async def fake_lab_new_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     )
 
     try:
-        image_data = await fetch_fake_person_image()
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://thispersondoesnotexist.com/  ",
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            ) as resp:
+                if resp.status != 200:
+                    raise Exception(f"Status {resp.status}")
+                image_data = await resp.read()
+
+        temp_path = f"/tmp/fake_lab_{uuid.uuid4().hex}.jpg"
+        with open(temp_path, "wb") as f:
+            f.write(image_data)
+
+        # Chiroyli caption
         caption = (
             "👤 **Bu odam HAQIQIY EMAS!**\n"
             "🤖 U sun'iy intellekt (AI) tomonidan yaratilgan.\n\n"
             "🔄 **Yangilash** tugmasi orqali yangi rasm olishingiz mumkin."
         )
+
+        # ✅ Shu yerda indentation to‘g‘rilandi (8ta space)
         kb = [
             [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
             [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
         ]
 
-        await context.bot.send_photo(
-            chat_id=q.message.chat_id,
-            photo=image_data,
-            caption=caption,
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(kb)
-        )
+        with open(temp_path, "rb") as photo:
+            await context.bot.send_photo(
+                chat_id=q.message.chat_id,
+                photo=photo,
+                caption=caption,
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(kb)
+            )
 
-        # ✅ "Yaratilmoqda" xabarini o'chiramiz
-        await thinking_msg.delete()
+        context.user_data["fake_lab_last_photo"] = temp_path
 
     except Exception as e:
         logger.exception(f"[FAKE LAB ERROR] {e}")
-        await thinking_msg.edit_text(lang["error"])
+        await q.message.reply_text(lang["error"])
+
+
 #------------------------------------------------
 async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     data = q.data
     await q.answer()
 
-    # 🏠 "Orqaga" tugmasi bosilsa
+    # 🏠 Agar foydalanuvchi "Orqaga" tugmasini bossin:
     if data == "back_to_main":
         try:
             await q.message.delete()
@@ -1140,30 +1157,46 @@ async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(kb)
         )
-        return
+        return  # qaytamiz, pastdagi refresh qismi ishlamasin
 
-    # 🔄 "Yangilash" tugmasi bosilsa
+    # 🔄 Agar foydalanuvchi "Yangilash"ni bossin:
     await q.edit_message_caption(
         caption="🔄 **Yangi rasm yuklanmoqda...**\n⏳ Iltimos, kuting...",
         parse_mode="Markdown"
     )
 
     try:
-        image_data = await fetch_fake_person_image()
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://thispersondoesnotexist.com/  ",
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            ) as resp:
+                if resp.status != 200:
+                    raise Exception(f"Status {resp.status}")
+                image_data = await resp.read()
+
+        temp_path = f"/tmp/fake_lab_{uuid.uuid4().hex}.jpg"
+        with open(temp_path, "wb") as f:
+            f.write(image_data)
+
         caption = (
             "👤 **Bu odam HAQIQIY EMAS!**\n"
             "🤖 U sun'iy intellekt (AI) tomonidan yaratilgan.\n\n"
             "🔄 **Yangilash** tugmasi orqali yangi rasm olishingiz mumkin."
         )
+
         kb = [
             [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
             [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
         ]
 
-        await q.edit_message_media(
-            media=InputMediaPhoto(media=image_data, caption=caption, parse_mode="Markdown"),
-            reply_markup=InlineKeyboardMarkup(kb)
-        )
+        with open(temp_path, "rb") as photo:
+            await q.edit_message_media(
+                media=InputMediaPhoto(media=photo, caption=caption, parse_mode="Markdown"),
+                reply_markup=InlineKeyboardMarkup(kb)
+            )
+
+        context.user_data["fake_lab_last_photo"] = temp_path
 
     except Exception as e:
         logger.exception(f"[FAKE LAB REFRESH ERROR] {e}")
@@ -1171,6 +1204,8 @@ async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT
             caption="⚠️ **Xatolik yuz berdi.**\nQayta urinib ko'ring.",
             parse_mode="Markdown"
         )
+
+
 # ---------------- helpers ----------------
 def escape_md(text: str) -> str:
     """
