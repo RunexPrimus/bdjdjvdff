@@ -2795,6 +2795,14 @@ async def cmd_public_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, e
     else:
         user = update.effective_user
 
+    # Tilni olish
+    lang_code = DEFAULT_LANGUAGE
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user.id)
+        if row:
+            lang_code = row["language_code"]
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+
     pool = context.application.bot_data["db_pool"]
     now = utc_now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -2809,21 +2817,21 @@ async def cmd_public_stats(update: Update, context: ContextTypes.DEFAULT_TYPE, e
 
     fake_ping = random.randint(30, 80)
 
-stats_text = (
-    f"{lang['stats_title']}\n"
-    f"{lang['stats_ping']}: `{fake_ping}ms`\n"
-    f"{lang['stats_total_images']}: `{total_images}`\n"
-    f"{lang['stats_today']}: `{today_images}`\n"
-    f"{lang['stats_users']}: `{total_users}`\n"
-    f"{lang['stats_new_30d']}: `{new_users_30d}`\n"
-    f"{lang['stats_your_images']}: `{user_images}`"
-)
+    # ✅ Bu qatorlar async with dan TASHQARIDA bo'lishi kerak
+    stats_text = (
+        f"{lang['stats_title']}\n"
+        f"{lang['stats_ping']}: `{fake_ping}ms`\n"
+        f"{lang['stats_total_images']}: `{total_images}`\n"
+        f"{lang['stats_today']}: `{today_images}`\n"
+        f"{lang['stats_users']}: `{total_users}`\n"
+        f"{lang['stats_new_30d']}: `{new_users_30d}`\n"
+        f"{lang['stats_your_images']}: `{user_images}`"
+    )
 
-kb = [
-    [InlineKeyboardButton(lang["stats_refresh_button"], callback_data="stats_refresh")],
-    [InlineKeyboardButton(lang["back_to_main_button"], callback_data="back_to_main")]
-]
-
+    kb = [
+        [InlineKeyboardButton(lang["stats_refresh_button"], callback_data="stats_refresh")],
+        [InlineKeyboardButton(lang["back_to_main_button"], callback_data="back_to_main")]
+    ]
 
     if edit_mode and update.callback_query:
         try:
