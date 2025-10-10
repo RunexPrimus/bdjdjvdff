@@ -1431,7 +1431,7 @@ async def fake_lab_new_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             "🔄 **Yangilash** tugmasi orqali yangi rasm olishingiz mumkin."
         )
 
-       kb = [
+        kb = [
             [InlineKeyboardButton(lang["fake_lab_refresh_button"], callback_data="fake_lab_refresh")],
             [InlineKeyboardButton(lang["fake_lab_back_button"], callback_data="back_to_main")]
         ]
@@ -1450,7 +1450,6 @@ async def fake_lab_new_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     except Exception as e:
         logger.exception(f"[FAKE LAB ERROR] {e}")
         await q.message.reply_text(lang["error"])
-
 
 async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
