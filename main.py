@@ -1196,10 +1196,6 @@ async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT
 
 # ---------------- helpers ----------------
 def escape_md(text: str) -> str:
-    """
-    Telegram MarkdownV2 uchun maxsus belgilarni escape qiladi.
-    ! belgisini ham qo'shdik.
-    """
     if not text:
         return ""
     # MarkdownV2 uchun escape qilinishi kerak bo'lgan belgilar, ! ham qo'shildi
@@ -2653,41 +2649,6 @@ async def show_stats_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await cmd_public_stats(update, context, edit_mode=True)
 
 #-------------------------------------------------------
-async def upscale_with_realesrgan(input_path: str) -> str:
-    """
-    Real-ESRGAN 4x+ orqali rasmni CPU da 4x kattalashtiradi.
-    input_path: kiruvchi rasm yo'li
-    qaytish: yangi rasm yo'li (upscale qilingan)
-    """
-    output_path = f"/tmp/upscaled_{uuid.uuid4().hex}.png"
-    cmd = [
-        "python3", "/app/Real-ESRGAN/inference_realesrgan.py",
-        "-n", "RealESRGAN_x4plus",
-        "-i", input_path,
-        "-o", output_path,
-        "--outscale", "4",
-        "--tile", "256",  # Xotira cheklovi uchun
-        "--face_enhance"  # Ixtiyoriy: yuzlarni yaxshilash
-    ]
-    try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=120  # 2 daqiqa
-        )
-        if result.returncode == 0:
-            logger.info(f"[ESRGAN] Upscale muvaffaqiyatli: {output_path}")
-            return output_path
-        else:
-            logger.error(f"[ESRGAN ERROR] stderr: {result.stderr}")
-            return input_path
-    except subprocess.TimeoutExpired:
-        logger.error("[ESRGAN] Timeout — rasm juda katta")
-        return input_path
-    except Exception as e:
-        logger.exception(f"[ESRGAN EXCEPTION] {e}")
-        return input_path
 # ---------------- Startup ----------------
 async def on_startup(app: Application):
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
