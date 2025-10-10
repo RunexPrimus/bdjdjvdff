@@ -1195,28 +1195,21 @@ async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT
         )
 
 # ---------------- helpers ----------------
-# Escape funksiyasini optimallashtiramiz
-_ESCAPE_TRANS = str.maketrans({c: '\\' + c for c in r'_*[]()~`>#+-=|{}.!'})
-
 def escape_md(text: str) -> str:
-    return text.translate(_ESCAPE_TRANS) if text else ""
+    if not text:
+        return ""
+    # MarkdownV2 uchun escape qilinishi kerak bo'lgan belgilar, ! ham qo'shildi
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    # Har bir belgini oldidan \ qo'yamiz
+    escaped = ''.join('\\' + char if char in escape_chars else char for char in text)
+    return escaped
 
-# Foydalanuvchi ma'lumotlarini keshlash uchun middleware emas, lekin user_data orqali
-async def ensure_user_loaded(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if "user_lang" not in context.user_data:
-        async with context.application.bot_data["db_pool"].acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT language_code, is_banned FROM users WHERE id = $1", user_id
-            )
-            if row:
-                context.user_data.update({
-                    "user_lang": row["language_code"],
-                    "is_banned": row["is_banned"]
-                })
-            else:
-                context.user_data["user_lang"] = DEFAULT_LANGUAGE
-                context.user_data["is_banned"] = False
+def utc_now():
+    return datetime.now(timezone.utc)
+
+def tashkent_time():
+    return datetime.now(timezone.utc) + timedelta(hours=5)
+
 # ---------------- DB schema ----------------
 CREATE_TABLES_SQL = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -1921,43 +1914,65 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(kb)
     )
 
+# Private plain text -> prompt + inline buttons yoki AI chat
+# Yangilangan: Tanlov tugmachasi bosilganda flow o'rnatiladi
+# Private plain text -> prompt + inline buttons yoki AI chat
+# Yangilangan: Tanlov tugmachasi bosilganda flow o'rnatiladi
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return
 
-    await ensure_user_loaded(update, context)
-
-    if context.user_data.get("is_banned"):
-        lang = LANGUAGES.get(context.user_data["user_lang"], LANGUAGES[DEFAULT_LANGUAGE])
-        await update.message.reply_text(lang["error"])
-        return
-
-    lang_code = context.user_data["user_lang"]
+    lang_code = DEFAULT_LANGUAGE
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", update.effective_user.id)
+        if row:
+            lang_code = row["language_code"]
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
 
-    if not await force_sub_if_private(update, context, lang_code):
-        return
-
+    # Agar foydalanuvchi oldin "AI chat" tugmasini bosgan bo'lsa
     flow = context.user_data.get("flow")
-    text = update.message.text.strip()
-
-    # AI chat rejimi
     if flow == "ai":
-        now = datetime.now(timezone.utc)
         last_active = context.user_data.get("last_active")
-        if last_active and (now - last_active).total_seconds() > 900:
-            context.user_data["flow"] = None
+        now = datetime.now(timezone.utc)
+        if last_active:
+            if (now - last_active).total_seconds() > 900:
+                context.user_data["flow"] = None
+                context.user_data["last_active"] = None
+            else:
+                prompt = update.message.text
+                await update.message.reply_text("🧠 AI javob bermoqda...")
+                try:
+                    model = genai.GenerativeModel("gemini-2.0-flash")
+                    response = await model.generate_content_async(
+                        prompt,
+                        generation_config=genai.types.GenerationConfig(
+                            max_output_tokens=1000,
+                            temperature=0.7
+                        )
+                    )
+                    answer = response.text.strip()
+                    if not answer:
+                        answer = "⚠️ Javob topilmadi."
+                except Exception:
+                    logger.exception("[GEMINI ERROR]")
+                    answer = lang["error"]
+                await update.message.reply_text(f"{lang['ai_response_header']}\n{answer}")
+                context.user_data["last_active"] = datetime.now(timezone.utc)
+                return
         else:
-            await update.message.reply_text("🧠 AI javob bermoqda...")
+            prompt = update.message.text
             try:
                 model = genai.GenerativeModel("gemini-2.0-flash")
                 response = await model.generate_content_async(
-                    text,
+                    prompt,
                     generation_config=genai.types.GenerationConfig(
-                        max_output_tokens=1000, temperature=0.7
+                        max_output_tokens=1000,
+                        temperature=0.7
                     )
                 )
-                answer = (response.text or "").strip() or "⚠️ Javob topilmadi."
+                answer = response.text.strip()
+                if not answer:
+                    answer = "⚠️ Javob topilmadi."
             except Exception:
                 logger.exception("[GEMINI ERROR]")
                 answer = lang["error"]
@@ -1965,85 +1980,122 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             context.user_data["last_active"] = datetime.now(timezone.utc)
             return
 
-    # Rasm generatsiya rejimi — faqat shu yerda tarjima qilamiz
-    context.user_data["prompt"] = text
-    translated = text
+    # Agar hech qanday maxsus flow bo'lmasa, oddiy rasm generatsiya jarayoni ketaveradi
+    if not await force_sub_if_private(update, context, lang_code):
+        return
 
-    if GEMINI_API_KEY:
-        try:
-            model = genai.GenerativeModel("gemini-2.0-flash")
-            resp = await model.generate_content_async(
-                "Translate to English and convert into a detailed, cinematic image prompt. Return ONLY the English prompt, no explanations.",
-                generation_config=genai.types.GenerationConfig(max_output_tokens=100, temperature=0.5)
+    await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
+    prompt = update.message.text
+    context.user_data["prompt"] = prompt
+
+    # --- Promptni Gemini orqali tarjima qilish ---
+    original_prompt = prompt
+    gemini_instruction = "Automatically detect the user’s language and translate it into English. Convert the text into a professional, detailed image-generation prompt with realistic, cinematic, and descriptive style. Focus on atmosphere, lighting, color, and composition. Return only the final English prompt. Do not include any explanations or extra text :"
+    gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
+
+    try:
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        gemini_response = await model.generate_content_async(
+            gemini_full_prompt,
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=100,
+                temperature=0.5
             )
-            candidate = (resp.text or "").strip()
-            if candidate and not any(p in candidate.lower() for p in ["sorry", "cannot", "not allowed", "i can't", "refuse"]):
-                translated = candidate
-        except Exception as e:
-            logger.warning(f"[GEMINI PROMPT TRANSLATE FAILED] {e}")
+        )
+        digen_ready_prompt = gemini_response.text.strip()
 
-    context.user_data["translated"] = translated
+        # ✅ Mantiqiy rad etishlarni tekshirish
+        if digen_ready_prompt and not any(phrase in digen_ready_prompt.lower() for phrase in [
+            "i cannot",
+            "sorry",
+            "i'm sorry",
+            "i am sorry",
+            "i am programmed",
+            "harmless ai",
+            "not allowed",
+            "unable to",
+            "can't assist",
+            "not appropriate",
+            "refuse to",
+            "against my guidelines",
+            "i don't",
+            "i won't",
+            "i do not"
+        ]):
+            context.user_data["translated"] = digen_ready_prompt
+        else:
+            logger.warning(f"[GEMINI FILTERED] Prompt rad etildi: '{original_prompt}' → '{digen_ready_prompt}'. Asl matn saqlanadi.")
+            context.user_data["translated"] = original_prompt
 
-    # Birinchi marta — tanlov beramiz
+    except Exception as gemini_err:
+        logger.error(f"[GEMINI PROMPT ERROR] {gemini_err}")
+        context.user_data["translated"] = original_prompt
+    # --- Yangi tugadi ---
+
+    # ❗ Mana shu qism funksiya ichida bo‘lishi shart
     if flow is None:
         context.user_data["flow"] = "image_pending_prompt"
         kb = [
-            [InlineKeyboardButton("🖼 Rasm yaratish", callback_data="gen_image_from_prompt"),
-             InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat_from_prompt")]
+            [
+                InlineKeyboardButton("🖼 Rasm yaratish", callback_data="gen_image_from_prompt"),
+                InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat_from_prompt")
+            ]
         ]
         await update.message.reply_text(
-            f"{lang['choose_action']}\n*{lang['your_message']}* {escape_md(text)}",
+            f"{lang['choose_action']}\n*{lang['your_message']}* {escape_md(prompt)}",
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup(kb)
         )
+        return
     else:
-        # `flow` allaqachon "image_pending_prompt" — son tanlash
         kb = [
-            [InlineKeyboardButton("1️⃣", callback_data="count_1"),
-             InlineKeyboardButton("2️⃣", callback_data="count_2"),
-             InlineKeyboardButton("4️⃣", callback_data="count_4"),
-             InlineKeyboardButton("8️⃣", callback_data="count_8")]
+            [
+                InlineKeyboardButton("1️⃣", callback_data="count_1"),
+                InlineKeyboardButton("2️⃣", callback_data="count_2"),
+                InlineKeyboardButton("4️⃣", callback_data="count_4"),
+                InlineKeyboardButton("8️⃣", callback_data="count_8")
+            ]
         ]
         await update.message.reply_text(
-            f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(text)}",
+            f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup(kb)
         )
 async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-
-    # Flow o'rnatish
+    # flow o'zgaruvchisini o'rnatamiz
     context.user_data["flow"] = "image_pending_prompt"
-
-    # Prompt mavjudligini tekshirish
-    if "prompt" not in context.user_data:
-        lang = LANGUAGES.get(context.user_data.get("user_lang", DEFAULT_LANGUAGE), LANGUAGES[DEFAULT_LANGUAGE])
-        await q.message.reply_text(lang["error"])
-        return
-
-    # Son tanlash tugmalarini ko'rsatish
-    lang = LANGUAGES.get(context.user_data.get("user_lang", DEFAULT_LANGUAGE), LANGUAGES[DEFAULT_LANGUAGE])
-    prompt = context.user_data["prompt"]
+    fake_update = Update(update.update_id, callback_query=q)
+    await generate_cb(fake_update, context)
+    
+    
+    # --- Shu yerda tugadi, endi davomida flow tanlash yoki generatsiya qilinadi ---
+    # Masalan:
     kb = [
-        [InlineKeyboardButton("1️⃣", callback_data="count_1"),
-         InlineKeyboardButton("2️⃣", callback_data="count_2"),
-         InlineKeyboardButton("4️⃣", callback_data="count_4"),
-         InlineKeyboardButton("8️⃣", callback_data="count_8")]
+        [
+            InlineKeyboardButton("🖼 Rasm yaratish", callback_data="gen_image_from_prompt"),
+            InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat_from_prompt")
+        ]
     ]
-    await q.message.reply_text(
-        f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
+    await update.message.reply_text(
+        f"Quyidagi matndan nima qilamiz?\n*{prompt}*",
         parse_mode="MarkdownV2",
         reply_markup=InlineKeyboardMarkup(kb)
     )
-    
+# Yangilangan: context.user_data["flow"] o'rnatiladi
 async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
+    # AI chat flow boshlanadi
     context.user_data["flow"] = "ai"
-    context.user_data["last_active"] = datetime.now(timezone.utc)
-
-    lang = LANGUAGES.get(context.user_data.get("user_lang", DEFAULT_LANGUAGE), LANGUAGES[DEFAULT_LANGUAGE])
+    lang_code = DEFAULT_LANGUAGE
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", q.from_user.id)
+        if row:
+            lang_code = row["language_code"]
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+    # Faqat bitta marta, tarjima qilingan xabarni yuborish
     await q.message.reply_text(lang["ai_prompt_text"])
 # ---------------- Digen headers (thread-safe) ----------------
 _digen_key_index = 0
@@ -2067,24 +2119,6 @@ def get_digen_headers():
         "referer": "https://rm.digen.ai/",
     }
 # ---------------- Asosiy handler: generate_cb ----------------
-async def ensure_user_loaded(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if "user_lang" not in context.user_data:
-        async with context.application.bot_data["db_pool"].acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT language_code, is_banned FROM users WHERE id = $1", user_id
-            )
-            if row:
-                context.user_data.update({
-                    "user_lang": row["language_code"],
-                    "is_banned": row["is_banned"]
-                })
-            else:
-                context.user_data["user_lang"] = DEFAULT_LANGUAGE
-                context.user_data["is_banned"] = False
-                # Yangi foydalanuvchi — darhol qo'shamiz
-                await add_user_db(context.application.bot_data["db_pool"], update.effective_user)
-#-------------------------------------------------------------
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
