@@ -1440,8 +1440,8 @@ async def fake_lab_new_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         )
 
         kb = [
-            [InlineKeyboardButton(lang["fake_lab_refresh_button"], callback_data="fake_lab_refresh")],
-            [InlineKeyboardButton(lang["fake_lab_back_button"], callback_data="back_to_main")]
+            [InlineKeyboardButton("Yangilash", callback_data="fake_lab_refresh")],
+            [InlineKeyboardButton("Orqaga", callback_data="back_to_main")]
         ]
 
         with open(temp_path, "rb") as photo:
