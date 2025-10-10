@@ -2819,11 +2819,11 @@ stats_text = (
     f"{lang['stats_your_images']}: `{user_images}`"
 )
 
-    # ✅ Tugmalar (to‘g‘ri joylashuv)
-    kb = [
+kb = [
     [InlineKeyboardButton(lang["stats_refresh_button"], callback_data="stats_refresh")],
     [InlineKeyboardButton(lang["back_to_main_button"], callback_data="back_to_main")]
 ]
+
 
     if edit_mode and update.callback_query:
         try:
