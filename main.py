@@ -1735,8 +1735,11 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = q.from_user.id
     lang_code = DEFAULT_LANGUAGE
     image_model_id = ""
+    
     async with context.application.bot_data["db_pool"].acquire() as conn:
-        row = await conn.fetchrow("SELECT language_code, image_model_id FROM users WHERE id = $1", user_id)
+        row = await conn.fetchrow(
+            "SELECT language_code, image_model_id FROM users WHERE id = $1", user_id
+        )
         if row:
             lang_code = row["language_code"] or DEFAULT_LANGUAGE
             image_model_id = row["image_model_id"] or ""
@@ -1748,12 +1751,11 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             current_model_title = m["title"]
             break
 
-    text = lang["settings_menu_title"]
-kb = [
-    [InlineKeyboardButton(f"🖼 Image Model: {current_model_title}", callback_data="select_image_model")],
-    [InlineKeyboardButton(lang["back_to_main_button"], callback_data="back_to_main")]
-]
-    text = "⚙️ **Sozlamalar**"
+    text = "⚙️ **Sozlamalar**"  # caption
+    kb = [
+        [InlineKeyboardButton(f"🖼 Image Model: {current_model_title}", callback_data="select_image_model")],
+        [InlineKeyboardButton(lang["back_to_main_button"], callback_data="back_to_main")]
+    ]
 
     # Xabarni tahrirlashda xatolikka chidamli bo'lish
     try:
@@ -1762,7 +1764,6 @@ kb = [
         if "message is not modified" in str(e):
             pass
         elif "There is no text in the message to edit" in str(e):
-            # Media xabar bo'lsa, yangi xabar yuborish
             await q.message.reply_text(text=text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
             try:
                 await q.message.delete()
