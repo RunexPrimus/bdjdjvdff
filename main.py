@@ -152,6 +152,7 @@ LANGUAGES = {
         "admin_count": "🔢 *Soni:*",
         "admin_image_id": "🆔 *Image ID:*",
         "admin_time": "⏰ *Vaqt \\(UTC\\+5\\):*",
+        "back_to_main_button": "⬅️ Orqaga",
     },
     # --- Inglizcha (🇺🇸) ---
     "en": {
@@ -190,7 +191,7 @@ LANGUAGES = {
 "progress_step_60": "💡 Balancing lighting and shadows...",
 "progress_step_80": "🧩 Finalizing details...",
 "progress_step_100": "✅ Preparing for delivery...",
-
+"back_to_main_button": "⬅️ Back",
 "stats_title": "🤖 Digen AI Statistics",
 "stats_ping": "⚡ Ping",
 "stats_total_images": "🖼 Total images",
@@ -257,6 +258,7 @@ LANGUAGES = {
 "generating_progress": "🔄 Создаю изображение... {bar} {percent}%",
 "image_delayed": "⚠️ Подготовка изображения занимает больше времени. Попробуйте позже.",
 "donate_title": "💖 Поддержать бота",
+        "back_to_main_button": "⬅️ Back",
 "donate_description": "Отправьте Stars, чтобы поддержать бота.",
 "done": "✅ Готово!",
 "error_occurred": "⚠️ Произошла ошибка. Попробуйте снова.",
@@ -340,6 +342,7 @@ LANGUAGES = {
 "fake_lab_error": "⚠️ **Terjadi kesalahan.**\nSilakan coba lagi.",
 "progress_step_10": "🧠 Menganalisis prompt...",
 "progress_step_25": "🎨 Memilih model...",
+        "back_to_main_button": "⬅️ Back",
 "progress_step_40": "🌈 Membangun warna & komposisi...",
 "progress_step_60": "💡 Menyeimbangkan cahaya & bayangan...",
 "progress_step_80": "🧩 Menyelesaikan detail...",
@@ -409,7 +412,7 @@ LANGUAGES = {
         "settings_menu_title": "⚙️ Nustatymai",
 "select_image_model_button": "🖼 Pasirinkti vaizdo modelį",
 "back_to_main_button": "🔙 Atgal",
-
+"back_to_main_button": "⬅️ Back",
 "fake_lab_generating": "🔄 Generuojamas netikras asmuo...\n\n👤 Šis asmuo **nėra tikras** — sukurtas dirbtinio intelekto!\n\n⏳ Prašome palaukti...",
 "fake_lab_ready_caption": "👤 **Šis asmuo NĖRA TIKRAS!**\n🤖 Sukurtas dirbtinio intelekto.\n\n🔄 Naudokite **Atnaujinti**, kad gautumėte naują vaizdą.",
 "fake_lab_refreshing": "🔄 **Įkeliamas naujas vaizdas...**\n⏳ Prašome palaukti...",
@@ -494,6 +497,7 @@ LANGUAGES = {
         "settings_menu_title": "⚙️ Configuración",
 "select_image_model_button": "🖼 Seleccionar modelo de imagen",
 "back_to_main_button": "🔙 Volver",
+        "back_to_main_button": "⬅️ Back",
 "fake_lab_generating": "🔄 Generando persona falsa...\n\n👤 Esta persona **NO ES real** — creada por IA!\n\n⏳ Por favor, espera...",
 "fake_lab_ready_caption": "👤 **¡Esta persona NO ES REAL!**\n🤖 Generada por inteligencia artificial.\n\n🔄 Usa **Actualizar** para obtener una nueva imagen.",
 "fake_lab_refreshing": "🔄 **Cargando nueva imagen...**\n⏳ Por favor espera...",
@@ -592,6 +596,7 @@ LANGUAGES = {
 "stats_total_images": "🖼 Total de imágenes",
 "stats_today": "📆 Hoy",
 "stats_users": "👥 Usuarios",
+        "back_to_main_button": "⬅️ Back",
 "stats_new_30d": "🆕 Últimos 30 días",
 "stats_your_images": "👤 Tú generaste",
 "stats_refresh_button": "🔄 Actualizar",
@@ -657,7 +662,6 @@ LANGUAGES = {
         "settings_menu_title": "⚙️ Impostazioni",
 "select_image_model_button": "🖼 Seleziona modello immagine",
 "back_to_main_button": "🔙 Indietro",
-
 "fake_lab_generating": "🔄 Generazione di una persona falsa...\n\n👤 Questa persona **non è reale** — creata dall'intelligenza artificiale!\n\n⏳ Attendere prego...",
 "fake_lab_ready_caption": "👤 **Questa persona NON È REALE!**\n🤖 Generata dall'intelligenza artificiale.\n\n🔄 Usa **Aggiorna** per ottenere una nuova immagine.",
 "fake_lab_refreshing": "🔄 **Caricamento di una nuova immagine...**\n⏳ Attendere prego...",
@@ -720,6 +724,7 @@ LANGUAGES = {
         "admin_count": "🔢 *Quantità:*",
         "admin_image_id": "🆔 *ID Immagine:*",
         "admin_time": "⏰ *Ora \\(UTC\\+5\\):*",
+        "back_to_main_button": "⬅️ Back",
     },
     # --- Xitoycha (Soddalashtirilgan) (🇨🇳) ---
     "zhcn": {
@@ -799,6 +804,7 @@ LANGUAGES = {
         "admin_count": "🔢 *数量：*",
         "admin_image_id": "🆔 *图像ID：*",
         "admin_time": "⏰ *时间 \\(UTC\\+5\\)：*",
+        "back_to_main_button": "⬅️ Back",
     },
     # --- Bengalcha (🇧🇩) ---
     "bn": {
@@ -822,7 +828,7 @@ LANGUAGES = {
 "fake_lab_ready_caption": "👤 **এই ব্যক্তি বাস্তব নয়!**\n🤖 কৃত্রিম বুদ্ধিমত্তা দ্বারা তৈরি।\n\n🔄 নতুন ছবি পেতে **রিফ্রেশ** করুন।",
 "fake_lab_refreshing": "🔄 **নতুন ছবি লোড হচ্ছে...**\n⏳ অনুগ্রহ করে অপেক্ষা করুন...",
 "fake_lab_error": "⚠️ **একটি ত্রুটি ঘটেছে।**\nঅনুগ্রহ করে আবার চেষ্টা করুন।",
-
+"back_to_main_button": "⬅️ Back",
 "progress_step_10": "🧠 প্রম্পট বিশ্লেষণ করা হচ্ছে...",
 "progress_step_25": "🎨 মডেল নির্বাচন করা হচ্ছে...",
 "progress_step_40": "🌈 রং এবং কম্পোজিশন তৈরি করা হচ্ছে...",
@@ -896,6 +902,7 @@ LANGUAGES = {
         "select_count": "🔢 कितनी छवियाँ उत्पन्न करें?",
         "generating": "🔄 छवि उत्पन्न हो रही है ({count})... ⏳",
         "success": "✅ छवि तैयार है! 📸",
+        "back_to_main_button": "⬅️ Back",
         "image_model_label": "🖼 Model:",
         "get_no_args_group": "❌ समूह में, /get के बाद एक प्रॉम्प्ट लिखें। उदाहरण: /get भविष्य का शहर",
 "get_no_args_private": "✍️ कृपया छवि के लिए एक पाठ दर्ज करें।",
@@ -1021,6 +1028,7 @@ LANGUAGES = {
         "admin_count": "🔢 *Quantidade:*",
         "admin_image_id": "🆔 *ID da Imagem:*",
         "admin_time": "⏰ *Hora \\(UTC\\+5\\):*",
+        "back_to_main_button": "⬅️ Back",
     },
     # --- Arabcha (🇸🇦) ---
     "ar": {
