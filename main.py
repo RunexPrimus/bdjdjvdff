@@ -1821,7 +1821,9 @@ async def set_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lang_code = DEFAULT_LANGUAGE
     image_model_id = ""
     async with context.application.bot_data["db_pool"].acquire() as conn:
-        row = await conn.fetchrow("SELECT language_code, image_model_id FROM users WHERE id = $1", user_id)
+        row = await conn.fetchrow(
+            "SELECT language_code, image_model_id FROM users WHERE id = $1", user_id
+        )
         if row:
             lang_code = row["language_code"] or DEFAULT_LANGUAGE
             image_model_id = row["image_model_id"] or ""
@@ -1833,15 +1835,16 @@ async def set_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
             current_model_title = m["title"]
             break
 
-    text = lang["settings_menu_title"]
-kb = [
-    [InlineKeyboardButton(f"🖼 Image Model: {current_model_title}", callback_data="select_image_model")],
-    [InlineKeyboardButton(lang["back_to_main_button"], callback_data="back_to_main")]
-]
+    text = "⚙️ **Sozlamalar**"
+    kb = [
+        [InlineKeyboardButton(f"🖼 Image Model: {current_model_title}", callback_data="select_image_model")],
+        [InlineKeyboardButton(lang["back_to_main_button"], callback_data="back_to_main")]
+    ]
 
     # Yangi xabar yuborish (eski xabarni tahrirlamaymiz)
-    await q.message.reply_text("⚙️ **Sozlamalar**", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-    # Eski xabarni o'chirish (ixtiyoriy, lekin toza interfeys uchun yaxshi)
+    await q.message.reply_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+    
+    # Eski xabarni o'chirish (ixtiyoriy)
     try:
         await q.message.delete()
     except:
