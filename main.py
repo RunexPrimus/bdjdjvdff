@@ -1485,25 +1485,23 @@ async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT
         with open(temp_path, "wb") as f:
             f.write(image_data)
 
-caption = (
+        # ✅ To‘g‘ri indentation — bu kod try ichida
+        caption = (
             "👤 **Bu odam HAQIQIY EMAS!**\n"
             "🤖 U sun'iy intellekt (AI) tomonidan yaratilgan.\n\n"
             "🔄 **Yangilash** tugmasi orqali yangi rasm olishingiz mumkin."
         )
 
-        # ✅ Shu yerda indentation to‘g‘rilandi (8ta space)
         kb = [
             [InlineKeyboardButton("🔄 Yangilash", callback_data="fake_lab_refresh")],
             [InlineKeyboardButton("⬅️ Orqaga", callback_data="back_to_main")]
         ]
 
-
-with open(temp_path, "rb") as photo:
-    await q.edit_message_media(
-        media=InputMediaPhoto(media=photo, caption=caption, parse_mode="Markdown"),
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
-
+        with open(temp_path, "rb") as photo:
+            await q.edit_message_media(
+                media=InputMediaPhoto(media=photo, caption=caption, parse_mode="Markdown"),
+                reply_markup=InlineKeyboardMarkup(kb)
+            )
 
         context.user_data["fake_lab_last_photo"] = temp_path
 
