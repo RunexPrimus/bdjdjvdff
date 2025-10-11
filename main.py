@@ -1485,23 +1485,24 @@ async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT
         with open(temp_path, "wb") as f:
             f.write(image_data)
 
-        # Xuddi shu chiroyli caption
-        caption = (
-            "👤 **Bu odam HAQIQIY EMAS!**\n"
-            "🤖 U sun'iy intellekt (AI) tomonidan yaratilgan.\n\n"
-            "🔄 **Yangilash** tugmasi orqali yangi rasm olishingiz mumkin."
-        )
+caption = (
+    "👤 **Bu odam HAQIQIY EMAS!**\n"
+    "🤖 U sun'iy intellekt (AI) tomonidan yaratilgan.\n\n"
+    "🔄 **Yangilash** tugmasi orqali yangi rasm olishingiz mumkin."
+)
 
-        kb = [
-            [InlineKeyboardButton(lang["fake_lab_refresh_button"], callback_data="fake_lab_refresh")],
-            [InlineKeyboardButton(lang["fake_lab_back_button"], callback_data="back_to_main")]
-        ]
+# Inline tugmalar (lug‘atsiz)
+kb = [
+    [InlineKeyboardButton("♻️ Yangilash", callback_data="fake_lab_refresh")],
+    [InlineKeyboardButton("⬅️ Ortga", callback_data="back_to_main")]
+]
 
-        with open(temp_path, "rb") as photo:
-            await q.edit_message_media(
-                media=InputMediaPhoto(media=photo, caption=caption, parse_mode="Markdown"),
-                reply_markup=InlineKeyboardMarkup(kb)
-            )
+with open(temp_path, "rb") as photo:
+    await q.edit_message_media(
+        media=InputMediaPhoto(media=photo, caption=caption, parse_mode="Markdown"),
+        reply_markup=InlineKeyboardMarkup(kb)
+    )
+
 
         context.user_data["fake_lab_last_photo"] = temp_path
 
