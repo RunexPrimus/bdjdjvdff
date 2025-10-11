@@ -1463,6 +1463,11 @@ async def fake_lab_refresh_handler(update: Update, context: ContextTypes.DEFAULT
     q = update.callback_query
     await q.answer()
 
+    # Til sozlamasini olish
+    lang = context.user_data.get("lang", {
+        "fake_lab_refreshing": "🔄 Qayta ishlanmoqda... Iltimos kuting."
+    })
+
     # Progress
     await q.edit_message_caption(caption=lang["fake_lab_refreshing"], parse_mode="Markdown")
 
