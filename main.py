@@ -43,7 +43,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "7440949683"))
 MANDATORY_CHANNELS = json.loads(os.getenv("MANDATORY_CHANNELS", "[]"))
 if not MANDATORY_CHANNELS:
-    MANDATORY_CHANNELS = [{"username": "@Digen_Ai", "id": -1002618178138}]
+    MANDATORY_CHANNELS = [{"username": "@Digen_AI_News", "id": -1003170509666}]
 DIGEN_KEYS = json.loads(os.getenv("DIGEN_KEYS", "[]"))
 DIGEN_URL = os.getenv("DIGEN_URL", "https://api.digen.ai/v2/tools/text_to_image")
 DATABASE_URL = os.getenv("DATABASE_URL")
