@@ -1402,7 +1402,91 @@ DIGEN_MODELS = [
         ]
     }
 ]
+#-------------------------------------------
+async def random_anime_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    if q:
+        await q.answer()
+        chat_id = q.message.chat_id
+    else:
+        chat_id = update.effective_chat.id
 
+    lang_code = DEFAULT_LANGUAGE
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", update.effective_user.id)
+        if row:
+            lang_code = row["language_code"]
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+
+    # Progress xabar
+    progress_msg = await context.bot.send_message(chat_id, "🔄AI anime rasmlar yuklanmoqda...")
+
+    temp_files = []
+    image_urls = []
+    try:
+        # 10 ta tasodifiy seed
+        seeds = [random.randint(10000, 99999) for _ in range(10)]
+        base_url = "https://thisanimedoesnotexist.ai/results/psi-2.0/seed{}.png"
+
+        async with aiohttp.ClientSession() as session:
+            for seed in seeds:
+                url = base_url.format(seed)
+                try:
+                    async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                        if resp.status == 200:
+                            image_data = await resp.read()
+                            temp_path = f"/tmp/anime_{uuid.uuid4().hex}.png"
+                            with open(temp_path, "wb") as f:
+                                f.write(image_data)
+                            temp_files.append(temp_path)
+                            image_urls.append(url)
+                        # Agar rasm bo'lmasa ham davom etamiz
+                except Exception as e:
+                    logger.warning(f"[ANIME] Rasm yuklanmadi (seed={seed}): {e}")
+                    continue
+
+        if not image_urls:
+            await progress_msg.edit_text("⚠️ Hech qanday rasm topilmadi. Qayta urinib ko'ring.")
+            return
+
+        # Media group tayyorlash
+        media = []
+        caption = "👤 **Bu rasmlar HAQIQIY EMAS!**\n🤖 Hammasi sun'iy intellekt (AI) tomonidan yaratilgan."
+        for i, path in enumerate(temp_files):
+            with open(path, "rb") as f:
+                if i == 0:
+                    media.append(InputMediaPhoto(media=f, caption=caption, parse_mode="Markdown"))
+                else:
+                    media.append(InputMediaPhoto(media=f))
+
+        # Yuborish
+        await context.bot.send_media_group(chat_id=chat_id, media=media)
+        await progress_msg.delete()
+
+        # Tugmalar
+        kb = [
+            [InlineKeyboardButton("🔄 Yangilash", callback_data="random_anime_refresh")],
+            [InlineKeyboardButton(lang["back_to_main_button"], callback_data="back_to_main")]
+        ]
+        await context.bot.send_message(chat_id, "✅ Tayyor!", reply_markup=InlineKeyboardMarkup(kb))
+
+    except Exception as e:
+        logger.exception(f"[RANDOM ANIME ERROR] {e}")
+        await progress_msg.edit_text(lang["error"])
+    finally:
+        # Keshni tozalash
+        for f in temp_files:
+            try:
+                os.remove(f)
+            except Exception as e:
+                logger.warning(f"[CLEANUP] Faylni o'chirib bo'lmadi: {f} — {e}")
+
+async def random_anime_refresh_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    # Xuddi yuqoridagi funksiyani qayta chaqiramiz
+    fake_update = Update(update.update_id, callback_query=q)
+    await random_anime_handler(fake_update, context)
 #--------------------------------------------
 async def fake_lab_new_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -2103,7 +2187,8 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
             InlineKeyboardButton("⚙️ Sozlamalar", callback_data="open_settings")
         ],
         [
-            InlineKeyboardButton("🧪 FakeLab", callback_data="fake_lab_new")
+            InlineKeyboardButton("🧪 FakeLab", callback_data="fake_lab_new"),
+            InlineKeyboardButton("🎨 Random AI Anime", callback_data="random_anime")
         ],
     ]
 
@@ -2139,7 +2224,8 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("⚙️ Sozlamalar", callback_data="open_settings")
         ],
         [
-            InlineKeyboardButton("🧪 FakeLab", callback_data="fake_lab_new")
+            InlineKeyboardButton("🧪 FakeLab", callback_data="fake_lab_new"),
+            InlineKeyboardButton("🎨 Random AI Anime", callback_data="random_anime")
         ],
     ]
     if user_id == ADMIN_ID:
@@ -3005,6 +3091,8 @@ def build_app():
     app.add_handler(CallbackQueryHandler(select_image_model, pattern="^select_image_model$"))
     app.add_handler(CallbackQueryHandler(confirm_model_selection, pattern=r"^confirm_model_.*$"))
     app.add_handler(CallbackQueryHandler(set_image_model, pattern=r"^set_model_.*$"))
+    app.add_handler(CallbackQueryHandler(random_anime_handler, pattern="^random_anime$"))
+    app.add_handler(CallbackQueryHandler(random_anime_refresh_handler, pattern="^random_anime_refresh$"))
 
     # Donate
     donate_conv = ConversationHandler(
