@@ -1427,7 +1427,7 @@ async def random_anime_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     temp_files = []
     image_urls = []
     try:
-        seeds = [random.randint(10000, 99999) for _ in range(10)]
+        seeds = [random.randint(1, 100000) for _ in range(10)]
         base_url = "https://www.thiswaifudoesnotexist.net/example-{}.jpg"
 
         async with aiohttp.ClientSession() as session:
