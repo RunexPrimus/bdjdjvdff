@@ -2371,6 +2371,127 @@ async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DE
         parse_mode="MarkdownV2",
         reply_markup=InlineKeyboardMarkup(kb)
     )
+
+async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_chat.type != "private":
+        return
+
+    user = update.effective_user
+    lang_code = DEFAULT_LANGUAGE
+    async with context.application.bot_data["db_pool"].acquire() as conn:
+        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user.id)
+        if row:
+            lang_code = row["language_code"]
+    lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
+
+    # Obuna tekshirish
+    if not await force_sub_if_private(update, context, lang_code):
+        return
+
+    await add_user_db(context.application.bot_data["db_pool"], user)
+
+    # AI chat rejimi
+    flow = context.user_data.get("flow")
+    if flow == "ai":
+        # Tarixni olish yoki yangi boshlash
+        history = context.user_data.get("ai_history", [])
+        prompt_parts = []
+
+        # Matn yoki rasmni aniqlash
+        if update.message.text:
+            prompt_parts.append(update.message.text)
+        elif update.message.photo:
+            photo = update.message.photo[-1]
+            photo_file = await photo.get_file()
+            photo_bytes = await photo_file.download_as_bytearray()
+            prompt_parts.append({"mime_type": "image/jpeg", "data": photo_bytes})
+            if update.message.caption:
+                prompt_parts.insert(0, update.message.caption)  # Caption birinchi bo'ladi
+        else:
+            await update.message.reply_text(lang["error"])
+            return
+
+        # Tarixga qo'shish
+        history.append({"role": "user", "parts": prompt_parts})
+        if len(history) > 10:
+            history = history[-10:]
+        context.user_data["ai_history"] = history
+
+        await update.message.reply_text("🧠 AI javob bermoqda...")
+
+        try:
+            model = genai.GenerativeModel("gemini-2.0-flash")
+            # Tarixni to'g'ridan-to'g'ri kontekst sifatida yuborish
+            contents = []
+            for entry in history:
+                contents.append({"role": entry["role"], "parts": entry["parts"]})
+
+            response = await model.generate_content_async(
+                contents,
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=1000,
+                    temperature=0.7
+                )
+            )
+            answer = response.text.strip() or "⚠️ Javob topilmadi."
+        except Exception as e:
+            logger.exception("[GEMINI ERROR]")
+            answer = lang["error"]
+
+        # Javobni tarixga qo'shish
+        history.append({"role": "model", "parts": [answer]})
+        if len(history) > 10:
+            history = history[-10:]
+        context.user_data["ai_history"] = history
+
+        await update.message.reply_text(f"{lang['ai_response_header']}\n{answer}")
+        return
+
+    # Oddiy rasm generatsiya rejimi (AI emas)
+    if update.message.text:
+        prompt = update.message.text
+        context.user_data["prompt"] = prompt
+
+        # Promptni tarjima qilish (sizning mavjud logikangiz)
+        original_prompt = prompt
+        gemini_instruction = "Automatically detect the user’s language and translate it into English. Convert the text into a professional, detailed image-generation prompt with realistic, cinematic, and descriptive style. Focus on atmosphere, lighting, color, and composition. Return only the final English prompt. Do not include any explanations or extra text :"
+        gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
+        try:
+            model = genai.GenerativeModel("gemini-2.0-flash")
+            gemini_response = await model.generate_content_async(
+                gemini_full_prompt,
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=100,
+                    temperature=0.5
+                )
+            )
+            digen_ready_prompt = gemini_response.text.strip()
+            if digen_ready_prompt and not any(phrase in digen_ready_prompt.lower() for phrase in [
+                "i cannot", "sorry", "i'm sorry", "unable to", "not allowed", "refuse to"
+            ]):
+                context.user_data["translated"] = digen_ready_prompt
+            else:
+                context.user_data["translated"] = original_prompt
+        except Exception as gemini_err:
+            logger.error(f"[GEMINI PROMPT ERROR] {gemini_err}")
+            context.user_data["translated"] = original_prompt
+
+        # Tanlov tugmalarini yuborish
+        kb = [
+            [
+                InlineKeyboardButton("🖼 Rasm yaratish", callback_data="gen_image_from_prompt"),
+                InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat_from_prompt")
+            ]
+        ]
+        await update.message.reply_text(
+            f"{lang['choose_action']}\n*{lang['your_message']}* {escape_md(prompt)}",
+            parse_mode="MarkdownV2",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
+    else:
+        # Faqat rasm yuborilsa (AI emas rejimda) — ehtimoliy xatolik
+        await update.message.reply_text(lang["get_no_args_private"])
+        
 async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
