@@ -1795,23 +1795,32 @@ async def check_sub_button_handler(update: Update, context: ContextTypes.DEFAULT
 async def add_user_db(pool, tg_user, lang_code=None, image_model_id=None):
     now = utc_now()
     async with pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT id FROM users WHERE id = $1", tg_user.id)
+        row = await conn.fetchrow("SELECT * FROM users WHERE id = $1", tg_user.id)
         if row:
             updates = []
             params = []
             idx = 1
-            if lang_code is not None:
+
+            # Faqat o'zgargan ma'lumotlarni yangilash
+            if lang_code is not None and row["language_code"] != lang_code:
                 updates.append(f"language_code=${idx}")
                 params.append(lang_code)
                 idx += 1
-            if image_model_id is not None:
+
+            if image_model_id is not None and row["image_model_id"] != image_model_id:
                 updates.append(f"image_model_id=${idx}")
                 params.append(image_model_id)
                 idx += 1
-            updates.append(f"username=${idx}")
-            updates.append(f"last_seen=${idx+1}")
-            params.extend([tg_user.username if tg_user.username else None, now, tg_user.id])
+
+            if tg_user.username != row["username"]:
+                updates.append(f"username=${idx}")
+                params.append(tg_user.username if tg_user.username else None)
+                idx += 1
+
             if updates:
+                updates.append(f"last_seen=${idx}")
+                params.append(now)
+                params.append(tg_user.id)
                 query = f"UPDATE users SET {', '.join(updates)} WHERE id=${len(params)}"
                 await conn.execute(query, *params)
         else:
@@ -2377,27 +2386,29 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     user = update.effective_user
-    lang_code = DEFAULT_LANGUAGE
-    async with context.application.bot_data["db_pool"].acquire() as conn:
-        row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user.id)
-        if row:
-            lang_code = row["language_code"]
+
+    # Tilni keshdan olish yoki DBdan olib keshga saqlash
+    lang_code = context.user_data.get("lang_code")
+    if lang_code is None:
+        async with context.application.bot_data["db_pool"].acquire() as conn:
+            row = await conn.fetchrow("SELECT language_code FROM users WHERE id = $1", user.id)
+            lang_code = row["language_code"] if row else DEFAULT_LANGUAGE
+        context.user_data["lang_code"] = lang_code
+
     lang = LANGUAGES.get(lang_code, LANGUAGES[DEFAULT_LANGUAGE])
 
-    # Obuna tekshirish
     if not await force_sub_if_private(update, context, lang_code):
         return
 
     await add_user_db(context.application.bot_data["db_pool"], user)
 
-    # AI chat rejimi
     flow = context.user_data.get("flow")
+
+    # AI rejimi
     if flow == "ai":
-        # Tarixni olish yoki yangi boshlash
         history = context.user_data.get("ai_history", [])
         prompt_parts = []
 
-        # Matn yoki rasmni aniqlash
         if update.message.text:
             prompt_parts.append(update.message.text)
         elif update.message.photo:
@@ -2406,39 +2417,29 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             photo_bytes = await photo_file.download_as_bytearray()
             prompt_parts.append({"mime_type": "image/jpeg", "data": photo_bytes})
             if update.message.caption:
-                prompt_parts.insert(0, update.message.caption)  # Caption birinchi bo'ladi
+                prompt_parts.insert(0, update.message.caption)
         else:
             await update.message.reply_text(lang["error"])
             return
 
-        # Tarixga qo'shish
         history.append({"role": "user", "parts": prompt_parts})
         if len(history) > 10:
             history = history[-10:]
         context.user_data["ai_history"] = history
 
         await update.message.reply_text("🧠 AI javob bermoqda...")
-
         try:
             model = genai.GenerativeModel("gemini-2.0-flash")
-            # Tarixni to'g'ridan-to'g'ri kontekst sifatida yuborish
-            contents = []
-            for entry in history:
-                contents.append({"role": entry["role"], "parts": entry["parts"]})
-
+            contents = [{"role": entry["role"], "parts": entry["parts"]} for entry in history]
             response = await model.generate_content_async(
                 contents,
-                generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=1000,
-                    temperature=0.7
-                )
+                generation_config=genai.types.GenerationConfig(max_output_tokens=1000, temperature=0.7)
             )
             answer = response.text.strip() or "⚠️ Javob topilmadi."
         except Exception as e:
             logger.exception("[GEMINI ERROR]")
             answer = lang["error"]
 
-        # Javobni tarixga qo'shish
         history.append({"role": "model", "parts": [answer]})
         if len(history) > 10:
             history = history[-10:]
@@ -2447,49 +2448,74 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(f"{lang['ai_response_header']}\n{answer}")
         return
 
-    # Oddiy rasm generatsiya rejimi (AI emas)
+    # Rasm rejimi (tugma orqali kirilganda)
+    if flow == "image_pending_prompt":
+        if not update.message.text:
+            await update.message.reply_text(lang["get_no_args_private"])
+            return
+
+        prompt = update.message.text
+        context.user_data["prompt"] = prompt
+        context.user_data["translated"] = prompt
+
+        kb = [
+            [
+                InlineKeyboardButton("1️⃣", callback_data="count_1"),
+                InlineKeyboardButton("2️⃣", callback_data="count_2"),
+                InlineKeyboardButton("4️⃣", callback_data="count_4"),
+                InlineKeyboardButton("8️⃣", callback_data="count_8")
+            ]
+        ]
+        await update.message.reply_text(
+            f"{lang['select_count']}\n🖌 {lang['your_prompt_label']} {escape_md(prompt)}",
+            parse_mode="MarkdownV2",
+            reply_markup=InlineKeyboardMarkup(kb)
+        )
+        return
+
+    # Oddiy matn — tanlov menyusi
     if update.message.text:
         prompt = update.message.text
         context.user_data["prompt"] = prompt
 
-        # Promptni tarjima qilish (sizning mavjud logikangiz)
-        original_prompt = prompt
-        gemini_instruction = "Automatically detect the user’s language and translate it into English. Convert the text into a professional, detailed image-generation prompt with realistic, cinematic, and descriptive style. Focus on atmosphere, lighting, color, and composition. Return only the final English prompt. Do not include any explanations or extra text :"
-        gemini_full_prompt = f"{gemini_instruction}\n{original_prompt}"
-        try:
-            model = genai.GenerativeModel("gemini-2.0-flash")
-            gemini_response = await model.generate_content_async(
-                gemini_full_prompt,
-                generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=100,
-                    temperature=0.5
-                )
+        # Tarjima faqat GEMINI yoqilgan bo'lsa
+        translated_prompt = prompt
+        if GEMINI_API_KEY:
+            gemini_instruction = (
+                "Automatically detect the user’s language and translate it into English. "
+                "Convert the text into a professional, detailed image-generation prompt with "
+                "realistic, cinematic, and descriptive style. Focus on atmosphere, lighting, "
+                "color, and composition. Return only the final English prompt. Do not include "
+                "any explanations or extra text:"
             )
-            digen_ready_prompt = gemini_response.text.strip()
-            if digen_ready_prompt and not any(phrase in digen_ready_prompt.lower() for phrase in [
-                "i cannot", "sorry", "i'm sorry", "unable to", "not allowed", "refuse to"
-            ]):
-                context.user_data["translated"] = digen_ready_prompt
-            else:
-                context.user_data["translated"] = original_prompt
-        except Exception as gemini_err:
-            logger.error(f"[GEMINI PROMPT ERROR] {gemini_err}")
-            context.user_data["translated"] = original_prompt
+            try:
+                model = genai.GenerativeModel("gemini-2.0-flash")
+                gemini_response = await model.generate_content_async(
+                    f"{gemini_instruction}\n{prompt}",
+                    generation_config=genai.types.GenerationConfig(max_output_tokens=100, temperature=0.5)
+                )
+                candidate = gemini_response.text.strip()
+                if candidate and not any(phrase in candidate.lower() for phrase in [
+                    "i cannot", "sorry", "i'm sorry", "unable to", "not allowed", "refuse to"
+                ]):
+                    translated_prompt = candidate
+            except Exception as e:
+                logger.error(f"[GEMINI PROMPT ERROR] {e}")
 
-        # Tanlov tugmalarini yuborish
+        context.user_data["translated"] = translated_prompt
+
         kb = [
             [
-                InlineKeyboardButton("🖼 Rasm yaratish", callback_data="gen_image_from_prompt"),
-                InlineKeyboardButton("💬 AI bilan suhbat", callback_data="ai_chat_from_prompt")
+                InlineKeyboardButton(lang["gen_button_short"], callback_data="gen_image_from_prompt"),
+                InlineKeyboardButton(lang["ai_button_short"], callback_data="ai_chat_from_prompt")
             ]
         ]
         await update.message.reply_text(
-            f"{lang['choose_action']}\n*{lang['your_message']}* {escape_md(prompt)}",
+            f"{lang['choose_action_prompt']}\n{lang['your_message_label']} {escape_md(prompt)}",
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup(kb)
         )
     else:
-        # Faqat rasm yuborilsa (AI emas rejimda) — ehtimoliy xatolik
         await update.message.reply_text(lang["get_no_args_private"])
         
 async def ai_chat_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2568,7 +2594,8 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def _background_generate(context, user, prompt, translated, count, chat_id, message_id, lang):
     start_time = time.time()
-    # Foydalanuvchining tanlagan modelini DB dan olish
+
+    # Modelni olish
     lora_id = ""
     background_prompt = ""
     async with context.application.bot_data["db_pool"].acquire() as conn:
@@ -2579,12 +2606,11 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
             if selected_model and "background_prompts" in selected_model:
                 background_prompt = random.choice(selected_model["background_prompts"])
             else:
-                default_prompts = [
+                background_prompt = random.choice([
                     "high quality, 8k, sharp focus",
                     "ultra-detailed, professional photography",
                     "cinematic lighting, vibrant colors"
-                ]
-                background_prompt = random.choice(default_prompts)
+                ])
 
     final_prompt = f"{translated}, {background_prompt}".strip()
     payload = {
@@ -2598,10 +2624,96 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
         "strength": ""
     }
 
-    # ✅ Digen headers ni saqlab qolish — xatolikda admin uchun kerak bo'ladi
     headers = get_digen_headers()
-    timeout = aiohttp.ClientTimeout(total=1000)
 
+    # Faqat bitta progress xabar
+    try:
+        await context.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=message_id,
+            text=lang["generating"].format(count=count)
+        )
+    except:
+        pass
+
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=1000)) as session:
+            async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
+                try:
+                    data = await resp.json()
+                except Exception:
+                    logger.error(f"[DIGEN PARSE ERROR] status={resp.status} text={await resp.text()}")
+                    await context.bot.send_message(chat_id, lang["error"])
+                    return
+
+        image_id = (data.get("data") or {}).get("id") or data.get("id")
+        if not image_id:
+            logger.error("[DIGEN] image_id olinmadi")
+            await context.bot.send_message(chat_id, lang["error"])
+            return
+
+        urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
+
+        # Kutish (polling)
+        available = False
+        for _ in range(150):  # 300 sekund / 2 = 150
+            try:
+                async with aiohttp.ClientSession() as check_session:
+                    async with check_session.get(urls[0]) as chk:
+                        if chk.status == 200:
+                            available = True
+                            break
+            except:
+                pass
+            await asyncio.sleep(2)
+
+        if not available:
+            await context.bot.send_message(chat_id, lang["image_delayed"])
+            return
+
+        # Natijani yuborish
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+
+        current_model_title = lang.get("default_mode", "Default Mode")
+        if lora_id:
+            selected_model = next((m for m in DIGEN_MODELS if m["id"] == lora_id), None)
+            if selected_model:
+                current_model_title = selected_model["title"]
+
+        escaped_prompt = escape_md(prompt)
+        stats_text = (
+            f"{lang['image_ready_header']}\n"
+            f"{lang['image_prompt_label']} {escaped_prompt}\n"
+            f"{lang['image_model_label']} {current_model_title}\n"
+            f"{lang['image_count_label']} {count}\n"
+            f"{lang['image_time_label']} {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"{lang['image_elapsed_label']} {elapsed_time:.1f}s"
+        )
+
+        try:
+            media = [InputMediaPhoto(u, caption=stats_text if i == 0 else None) for i, u in enumerate(urls)]
+            await context.bot.send_media_group(chat_id, media)
+        except TelegramError:
+            await context.bot.send_photo(chat_id, urls[0], caption=stats_text)
+            for u in urls[1:]:
+                await context.bot.send_photo(chat_id, u)
+
+        if ADMIN_ID and urls:
+            await notify_admin_generation(context, user, prompt, urls, count, image_id)
+
+        await log_generation(context.application.bot_data["db_pool"], user, prompt, final_prompt, image_id, count)
+
+    except Exception as e:
+        logger.exception(f"[BACKGROUND GENERATE ERROR] {e}")
+        try:
+            await context.bot.send_message(chat_id, lang["error"])
+        except:
+            pass
+        try:
+            await notify_admin_on_error(context, user, prompt, headers, e, count)
+        except:
+            pass
     async def _update_progress():
         steps = [
     (10, lang["progress_step_10"]),
