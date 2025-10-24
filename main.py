@@ -2559,7 +2559,7 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     translated = context.user_data.get("translated", prompt)
 
     # 🔹 Foydalanuvchiga bitta xabar
-    await q.edit_message_text(lang["generating_now"])  # masalan: "🌀 Generatsiya qilinmoqda, biroz kuting..."
+    await q.edit_message_text("✨ Generating your content... Please hold on a moment.")
 
     # 🔹 Orqa fonda generatsiya — progress yo‘q
     asyncio.create_task(
