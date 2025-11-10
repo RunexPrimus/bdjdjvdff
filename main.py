@@ -1718,8 +1718,8 @@ def get_digen_headers():
         "digen-platform": "web",
         "digen-token": key.get("token", ""),
         "digen-sessionid": key.get("session", ""),
-        "origin": "https://rm.digen.ai",
-        "referer": "https://rm.digen.ai/",
+        "origin": "https://digen.ai",
+        "referer": "https://digen.ai/create",
     }
 
 
