@@ -2468,8 +2468,8 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             [
                 InlineKeyboardButton("1️⃣", callback_data="count_1"),
                 InlineKeyboardButton("2️⃣", callback_data="count_2"),
-                InlineKeyboardButton("4️⃣", callback_data="count_4"),
-                InlineKeyboardButton("8️⃣", callback_data="count_8")
+                InlineKeyboardButton("3️⃣", callback_data="count_3"),
+                InlineKeyboardButton("4️⃣", callback_data="count_4")
             ]
         ]
         await update.message.reply_text(
