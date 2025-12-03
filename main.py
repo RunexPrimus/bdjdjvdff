@@ -1668,34 +1668,64 @@ CREATE TABLE IF NOT EXISTS donations (
 
 async def init_db(pool):
     async with pool.acquire() as conn:
+
+        # ---- Create initial tables ----
         await conn.execute(CREATE_TABLES_SQL)
+
+        # ---- Insert meta start_time if missing ----
         row = await conn.fetchrow("SELECT value FROM meta WHERE key = 'start_time'")
         if not row:
-            await conn.execute("INSERT INTO meta(key, value) VALUES($1, $2)", "start_time", str(int(time.time())))
+            await conn.execute(
+                "INSERT INTO meta(key, value) VALUES($1, $2)",
+                "start_time",
+                str(int(time.time()))
+            )
+
+        # ---- Ensure PRIMARY KEY exists for users.id (required for FK) ----
+        try:
+            await conn.execute(
+                "ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY (id)"
+            )
+            logger.info("✅ Added PRIMARY KEY to users.id")
+        except Exception as e:
+            logger.info(f"ℹ️ PRIMARY KEY already exists or error: {e}")
+
+        # ---- Ensure missing columns in users ----
+        try:
+            await conn.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS language_code TEXT DEFAULT 'uz'"
+            )
+            logger.info("✅ Added column 'language_code' to users")
+        except Exception as e:
+            logger.info(f"ℹ️ language_code exists or error: {e}")
 
         try:
-            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS language_code TEXT DEFAULT 'uz'")
-            logger.info("✅ Added column 'language_code' to table 'users'")
+            await conn.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE"
+            )
+            logger.info("✅ Added column 'is_banned' to users")
         except Exception as e:
-            logger.info(f"ℹ️ Column 'language_code' already exists or error: {e}")
+            logger.info(f"ℹ️ is_banned exists or error: {e}")
 
         try:
-            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_banned BOOLEAN DEFAULT FALSE")
-            logger.info("✅ Added column 'is_banned' to table 'users'")
+            await conn.execute(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS image_model_id TEXT DEFAULT ''"
+            )
+            logger.info("✅ Added column 'image_model_id' to users")
         except Exception as e:
-            logger.info(f"ℹ️ Column 'is_banned' already exists or error: {e}")
+            logger.info(f"ℹ️ image_model_id exists or error: {e}")
 
+        # ---- Fix: ions → donations ----
         try:
-            await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS image_model_id TEXT DEFAULT ''")
-            logger.info("✅ Added column 'image_model_id' to table 'users'")
+            await conn.execute(
+                "ALTER TABLE donations ADD COLUMN IF NOT EXISTS charge_id TEXT"
+            )
+            await conn.execute(
+                "ALTER TABLE donations ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ"
+            )
+            logger.info("✅ Added columns 'charge_id', 'refunded_at' to donations")
         except Exception as e:
-            logger.info(f"ℹ️ Column 'image_model_id' already exists or error: {e}")
-        try:
-            await conn.execute("ALTER TABLE ions ADD COLUMN IF NOT EXISTS charge_id TEXT")
-            await conn.execute("ALTER TABLE ions ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ")
-            logger.info("✅ Added columns 'charge_id', 'refunded_at' to table 'ions'")
-        except Exception as e:
-            logger.info(f"ℹ️ Columns already exist or error: {e}")
+            logger.info(f"ℹ️ donations columns exist or error: {e}")
 
 # ---------------- Digen headers ----------------
 import threading
