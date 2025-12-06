@@ -3218,8 +3218,6 @@ def build_app():
     app.add_handler(CallbackQueryHandler(admin_ban_inline_handler, pattern=r"^admin_ban_\d+$"))
     app.add_handler(CallbackQueryHandler(admin_unban_inline_handler, pattern=r"^admin_unban_\d+$"))
     app.add_handler(CallbackQueryHandler(admin_settings_handler, pattern="^admin_settings$"))
-    app.add_handler(CallbackQueryHandler(admin_refund_menu_handler, pattern="^admin_refund_menu$"))
-    app.add_handler(CallbackQueryHandler(admin_refund_by_id_handler, pattern=r"^admin_refund_id_\d+$"))
     app.add_handler(MessageHandler(
         filters.TEXT & filters.ChatType.PRIVATE & filters.User(ADMIN_ID),
         admin_user_search_handler
