@@ -1400,6 +1400,63 @@ DIGEN_MODELS = [
         ]
     }
 ]
+
+#---------------------------------------------
+# Admin qidiruv uchun maxsus handler
+async def admin_user_search_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID or not context.user_data.get("admin_search_mode"):
+        return
+    context.user_data["admin_search_mode"] = False
+    query = update.message.text.strip()
+    user_id = None
+    username = None
+    try:
+        user_id = int(query)
+    except ValueError:
+        if query.startswith("@"):
+            username = query[1:]
+        else:
+            username = query
+
+    pool = context.application.bot_data["db_pool"]
+    async with pool.acquire() as conn:
+        if user_id:
+            user = await conn.fetchrow("SELECT * FROM users WHERE id = $1", user_id)
+        elif username:
+            user = await conn.fetchrow("SELECT * FROM users WHERE username = $1", username)
+        else:
+            user = None
+
+    if not user:
+        await update.message.reply_text("❌ Foydalanuvchi topilmadi.")
+        return
+
+    lang = LANGUAGES.get(user["language_code"], LANGUAGES["uz"])
+    model_title = "Default"
+    for m in DIGEN_MODELS:
+        if m["id"] == user["image_model_id"]:
+            model_title = m["title"]
+            break
+    last_seen = (utc_now() - user["last_seen"]).total_seconds() / 3600 if user["last_seen"] else 0
+    last_str = f"{int(last_seen)} soat oldin" if last_seen < 24 else f"{int(last_seen/24)} kun oldin"
+
+    text = (
+        f"🆔 *ID:* `{user['id']}`\n"
+        f"👤 *Username:* @{user['username'] or '—'}\n"
+        f"🌐 *Til:* {lang['flag']} {lang['name']}\n"
+        f"🎨 *Model:* {model_title}\n"
+        f"🖼 *Rasmlar:* {user['image_count'] if hasattr(user, 'image_count') else 'N/A'}\n"
+        f"🕒 *Oxirgi aktivlik:* {last_str}\n"
+        f"⛔ *Ban:* {'✅ Ha' if user['is_banned'] else '❌ Yo‘q'}"
+    )
+    kb = [
+        [InlineKeyboardButton("🚫 Ban", callback_data=f"admin_ban_{user['id']}"),
+         InlineKeyboardButton("🔓 Unban", callback_data=f"admin_unban_{user['id']}")],
+        [InlineKeyboardButton("📨 Xabar yuborish", callback_data=f"admin_sendmsg_{user['id']}")],
+        [InlineKeyboardButton("📈 Statistika", callback_data=f"admin_user_stats_{user['id']}")],
+        [InlineKeyboardButton("⬅️ Roʻyxatga qaytish", callback_data="admin_users_list_0")]
+    ]
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 #-------------------------------------------
 async def random_anime_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -2901,14 +2958,119 @@ async def admin_panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     q = update.callback_query
     await q.answer()
     kb = [
-        [InlineKeyboardButton("🚫 Foydalanuvchi Ban", callback_data="admin_ban")],
-        [InlineKeyboardButton("🔓 Unban", callback_data="admin_unban")],
-        [InlineKeyboardButton("📣 Broadcast", callback_data="admin_broadcast")],
-        [InlineKeyboardButton("🔗 Majburiy Obuna", callback_data="admin_channels")],
-        [InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_back")]
+        [InlineKeyboardButton("📊 Statistika", callback_data="admin_stats")],
+        [InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="admin_users_list_0")],
+        [InlineKeyboardButton("🚫 Ban / 🔓 Unban", callback_data="admin_ban_unban_menu")],
+        [InlineKeyboardButton("📣 Broadcast", callback_data="admin_broadcast_menu")],
+        [InlineKeyboardButton("⚙️ Sozlamalar", callback_data="admin_settings")],
+        [InlineKeyboardButton("💎 Refund", callback_data="admin_refund_menu")],
+        [InlineKeyboardButton("📤 DB Eksport", callback_data="admin_export_db")],
+        [InlineKeyboardButton("⬅️ Asosiy", callback_data="back_to_main")]
     ]
     await q.edit_message_text("🔐 **Admin Panel**", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+#------------------------------------------------------------------------------------------
+async def admin_stats_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    q = update.callback_query
+    await q.answer()
+    pool = context.application.bot_data["db_pool"]
+    now = utc_now()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_ago = now - timedelta(days=7)
 
+    async with pool.acquire() as conn:
+        total_users = await conn.fetchval("SELECT COUNT(*) FROM users")
+        new_24h = await conn.fetchval("SELECT COUNT(*) FROM users WHERE first_seen >= $1", now - timedelta(hours=24))
+        total_gens = await conn.fetchval("SELECT COALESCE(SUM(image_count), 0) FROM generations")
+        today_gens = await conn.fetchval("SELECT COALESCE(SUM(image_count), 0) FROM generations WHERE created_at >= $1", today_start)
+        stars_earned = await conn.fetchval("SELECT COALESCE(SUM(stars), 0) FROM donations WHERE refunded_at IS NULL")
+        errors_48h = await conn.fetchval(
+            "SELECT COUNT(*) FROM donations d JOIN generations g ON d.user_id = g.user_id "
+            "WHERE d.refunded_at IS NOT NULL AND d.created_at >= $1",
+            now - timedelta(hours=48)
+        )
+        active_7d = await conn.fetchval("SELECT COUNT(DISTINCT user_id) FROM generations WHERE created_at >= $1", week_ago)
+
+    text = (
+        "📊 *Admin Statistika*\n\n"
+        f"👥 *Jami foydalanuvchilar:* {total_users}\n"
+        f"🆕 *24h yangi:* +{new_24h}\n"
+        f"📆 *Bugun generatsiya:* {today_gens}\n"
+        f"🖼 *Jami rasmlar:* {total_gens}\n"
+        f"💬 *7 kunlik faol:* {active_7d}\n"
+        f"💎 *Stars daromad:* {stars_earned} XTR\n"
+        f"📉 *48h refund:* {errors_48h}"
+    )
+    kb = [
+        [InlineKeyboardButton("🔄 Yangilash", callback_data="admin_stats")],
+        [InlineKeyboardButton("👥 Foydalanuvchilar", callback_data="admin_users_list_0")],
+        [InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_panel")]
+    ]
+    await q.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+
+#------------------------------------------------------------------------------------------
+async def admin_users_list_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    q = update.callback_query
+    page = int(q.data.split("_")[-1])
+    offset = page * 5
+    pool = context.application.bot_data["db_pool"]
+    async with pool.acquire() as conn:
+        users = await conn.fetch("""
+            SELECT id, username, language_code, image_model_id,
+                   (SELECT COUNT(*) FROM generations WHERE user_id = u.id) AS gen_count,
+                   last_seen
+            FROM users u
+            ORDER BY last_seen DESC
+            LIMIT 5 OFFSET $1
+        """, offset)
+        total = await conn.fetchval("SELECT COUNT(*) FROM users")
+    pages = (total + 4) // 5  # 5 ta/ sahifa
+
+    lines = ["👥 *Foydalanuvchilar roʻyxati:*"]
+    for u in users:
+        uname = f"@{u['username']}" if u["username"] else "—"
+        lang = u["language_code"] or "uz"
+        flag = LANGUAGES.get(lang, {}).get("flag", "🌐")
+        model_title = "Default"
+        for m in DIGEN_MODELS:
+            if m["id"] == u["image_model_id"]:
+                model_title = m["title"][:15]
+                break
+        last_seen = (utc_now() - u["last_seen"]).total_seconds() / 3600 if u["last_seen"] else 999
+        last_str = f"{int(last_seen)}h" if last_seen < 48 else f"{int(last_seen/24)}d"
+        lines.append(
+            f"\n▫️ `{u['id']}` {flag} {uname}\n"
+            f"   📸 {u['gen_count']} | 🎨 {model_title} | 🕒 {last_str}"
+        )
+    text = "\n".join(lines) if lines else "❌ Hech kim yo‘q."
+
+    kb = []
+    row = []
+    if page > 0:
+        row.append(InlineKeyboardButton("⬅️", callback_data=f"admin_users_list_{page-1}"))
+    if (page + 1) * 5 < total:
+        row.append(InlineKeyboardButton("➡️", callback_data=f"admin_users_list_{page+1}"))
+    if row:
+        kb.append(row)
+    
+    kb.append([
+        InlineKeyboardButton("🔍 Qidiruv (ID/username)", callback_data="admin_user_search_prompt")
+    ])
+    kb.append([InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_panel")])
+
+    await q.edit_message_text(text[:4096], parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+
+#---------------------------------------------------------------------------------------
+async def admin_user_search_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    q = update.callback_query
+    await q.answer()
+    await q.message.reply_text("🔍 ID yoki @username yuboring:")
+    context.user_data["admin_search_mode"] = True
 #------------------------------------------------------------------------------------------
 async def admin_channels_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -2920,29 +3082,54 @@ async def admin_channels_handler(update: Update, context: ContextTypes.DEFAULT_T
     text = f"🔗 **Majburiy obuna kanallari:**\n\n{channels_list}\n\nℹ️ Kanallarni o'zgartirish uchun `.env` faylini tahrirlang."
     await q.message.reply_text(text, parse_mode="Markdown")
 #------------------------------------------------------------------------------------------------
-BAN_STATE = 100
+async def admin_ban_inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    q = update.callback_query
+    user_id = int(q.data.split("_")[2])
+    pool = context.application.bot_data["db_pool"]
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE users SET is_banned = TRUE WHERE id = $1", user_id)
+    await q.answer(f"Foydalanuvchi {user_id} ban qilindi ✅", show_alert=True)
+    # Sahifani yangilash
+    fake_update = Update(update.update_id, callback_query=CallbackQuery(
+        id=q.id,
+        from_user=q.from_user,
+        chat_instance=q.chat_instance,
+        data=f"admin_user_search_{user_id}"
+    ))
+    await admin_user_search_handler(fake_update, context)
 
-async def admin_ban_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def admin_unban_inline_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    q = update.callback_query
+    user_id = int(q.data.split("_")[2])
+    pool = context.application.bot_data["db_pool"]
+    async with pool.acquire() as conn:
+        await conn.execute("UPDATE users SET is_banned = FALSE WHERE id = $1", user_id)
+    await q.answer(f"Foydalanuvchi {user_id} bandan chiqarildi ✅", show_alert=True)
+    fake_update = Update(update.update_id, callback_query=CallbackQuery(
+        id=q.id,
+        from_user=q.from_user,
+        chat_instance=q.chat_instance,
+        data=f"admin_user_search_{user_id}"
+    ))
+    await admin_user_search_handler(fake_update, context)
+
+#-----------------------------------------------------------------------------------
+async def admin_settings_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
     q = update.callback_query
     await q.answer()
-    await q.message.reply_text("👤 Ban qilish uchun foydalanuvchi ID sini yuboring:")
-    return BAN_STATE
-
-async def admin_ban_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-    try:
-        user_id = int(update.message.text.strip())
-        # DB ga ban qo'shish (yoki Redis, yoki oddiy fayl)
-        # Hozircha oddiy log
-        logger.info(f"[BAN] Foydalanuvchi {user_id} ban qilindi")
-        await update.message.reply_text(f"✅ Foydalanuvchi {user_id} muvaffaqiyatli ban qilindi.")
-    except ValueError:
-        await update.message.reply_text("❌ Noto'g'ri ID. Faqat raqam yuboring.")
-    return ConversationHandler.END
-
+    kb = [
+        [InlineKeyboardButton("🔑 Digen Tokenlar", callback_data="admin_manage_tokens")],
+        [InlineKeyboardButton("🌐 Til sozlamalari", callback_data="admin_lang_editor")],
+        [InlineKeyboardButton("📥 DB yuklab olish", callback_data="admin_export_db")],
+        [InlineKeyboardButton("⬅️ Orqaga", callback_data="admin_panel")]
+    ]
+    await q.edit_message_text("⚙️ *Sozlamalar*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 #-------------------------------------------------------------------------------------
 BROADCAST_STATE = 101
 
@@ -3024,6 +3211,19 @@ def build_app():
     all_lang_pattern = r"lang_(uz|ru|en|id|lt|esmx|eses|it|zhcn|bn|hi|ptbr|ar|uk|vi)"
     
     # --- Handlers ---
+    app.add_handler(CallbackQueryHandler(admin_stats_handler, pattern="^admin_stats$"))
+    app.add_handler(CallbackQueryHandler(admin_panel_handler, pattern="^admin_panel$"))
+    app.add_handler(CallbackQueryHandler(admin_users_list_handler, pattern=r"^admin_users_list_\d+$"))
+    app.add_handler(CallbackQueryHandler(admin_user_search_prompt_handler, pattern="^admin_user_search_prompt$"))
+    app.add_handler(CallbackQueryHandler(admin_ban_inline_handler, pattern=r"^admin_ban_\d+$"))
+    app.add_handler(CallbackQueryHandler(admin_unban_inline_handler, pattern=r"^admin_unban_\d+$"))
+    app.add_handler(CallbackQueryHandler(admin_settings_handler, pattern="^admin_settings$"))
+    app.add_handler(CallbackQueryHandler(admin_refund_menu_handler, pattern="^admin_refund_menu$"))
+    app.add_handler(CallbackQueryHandler(admin_refund_by_id_handler, pattern=r"^admin_refund_id_\d+$"))
+    app.add_handler(MessageHandler(
+        filters.TEXT & filters.ChatType.PRIVATE & filters.User(ADMIN_ID),
+        admin_user_search_handler
+    ))
     app.add_handler(CommandHandler("stats", cmd_public_stats))
     app.add_handler(CallbackQueryHandler(settings_menu, pattern="^back_to_settings$"))
     app.add_handler(CallbackQueryHandler(start_handler, pattern="^back_to_main$"))
