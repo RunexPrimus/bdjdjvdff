@@ -3248,24 +3248,6 @@ def build_app():
     )
     app.add_handler(donate_conv)
 
-    # Ban
-    ban_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(admin_ban_start, pattern="^admin_ban$")],
-        states={BAN_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_ban_confirm)]},
-        fallbacks=[],
-        per_message=False
-    )
-    app.add_handler(ban_conv)
-
-    # Unban
-    unban_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(admin_unban_start, pattern="^admin_unban$")],
-        states={UNBAN_STATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_unban_confirm)]},
-        fallbacks=[],
-        per_message=False
-    )
-    app.add_handler(unban_conv)
-    
     # Admin panel
     app.add_handler(CallbackQueryHandler(admin_panel_handler, pattern="^admin_panel$"))
 
