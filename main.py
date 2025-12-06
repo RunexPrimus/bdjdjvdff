@@ -2317,7 +2317,10 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Tugmalarni yonma-yon qilish uchun bitta qatorga joylashtiramiz
     kb = [
         [
-            InlineKeyboardButton("1️⃣", callback_data="count_1")
+            InlineKeyboardButton("1️⃣", callback_data="count_1"),
+            InlineKeyboardButton("2️⃣", callback_data="count_2"),
+            InlineKeyboardButton("3️⃣", callback_data="count_3"),
+            InlineKeyboardButton("4️⃣", callback_data="count_8")
         ]
     ]
 
@@ -2463,7 +2466,10 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         kb = [
             [
-                InlineKeyboardButton("1️⃣", callback_data="count_1")
+                InlineKeyboardButton("1️⃣", callback_data="count_1"),
+                InlineKeyboardButton("2️⃣", callback_data="count_2"),
+                InlineKeyboardButton("3️⃣", callback_data="count_3"),
+                InlineKeyboardButton("4️⃣", callback_data="count_8")
             ]
         ]
         await update.message.reply_text(
