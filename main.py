@@ -2683,8 +2683,9 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
             await context.bot.send_message(chat_id, lang["error"])
             return
 
-        # ✅ URL’larni tozalash: .strip() qo’shildi
-        urls = [f"https://liveme-image.s3.amazonaws.com/{image_id.strip()}-{i}.jpeg".strip() for i in range(count)]
+       # ✅ To'g'ri versiya:
+        image_id_clean = str(image_id).strip()
+        urls = [f"https://liveme-image.s3.amazonaws.com/{image_id_clean}-{i}.jpeg".strip() for i in range(count)]
         logger.info(f"[GENERATE] Cleaned urls: {urls}")
 
         # --- Rasm tayyor bo‘lganligini sinab ko‘rish (30 soniya maks, 5 sek interval) ---
