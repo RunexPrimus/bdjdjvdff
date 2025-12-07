@@ -2636,7 +2636,7 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
     lora_id = ""
     background_prompt = ""
 
-    # 🔸 Modelni DB dan olish
+    # --- Modelni olish va background prompt tanlash ---
     async with context.application.bot_data["db_pool"].acquire() as conn:
         row = await conn.fetchrow("SELECT image_model_id FROM users WHERE id = $1", user.id)
         if row and row["image_model_id"]:
@@ -2666,32 +2666,59 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
     }
 
     headers = get_digen_headers()
-    timeout = aiohttp.ClientTimeout(total=10000)
 
     try:
-        async with aiohttp.ClientSession(timeout=timeout) as session:
+        # --- Digen API chaqiruvi ---
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=120)) as session:
             async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
+                if resp.status != 200:
+                    logger.error(f"[DIGEN ERROR] Status {resp.status}, Body: {await resp.text()}")
+                    await context.bot.send_message(chat_id, lang["error"])
+                    return
                 data = await resp.json()
 
         image_id = (data.get("data") or {}).get("id") or data.get("id")
         if not image_id:
+            logger.error(f"[DIGEN] Image ID topilmadi. Javob: {data}")
             await context.bot.send_message(chat_id, lang["error"])
             return
 
-        urls = [f"https://liveme-image.s3.amazonaws.com/{image_id}-{i}.jpeg" for i in range(count)]
-        logger.info(f"[GENERATE] urls: {urls}")
+        # ✅ URL’larni tozalash: .strip() qo’shildi
+        urls = [f"https://liveme-image.s3.amazonaws.com/{image_id.strip()}-{i}.jpeg".strip() for i in range(count)]
+        logger.info(f"[GENERATE] Cleaned urls: {urls}")
 
-        # 🔹 Kutish: tasvirlar tayyor bo‘lishini tekshirish
-        for _ in range(60):  # 2 daqiqa
+        # --- Rasm tayyor bo‘lganligini sinab ko‘rish (30 soniya maks, 5 sek interval) ---
+        image_ready = False
+        for attempt in range(30):
             try:
-                async with aiohttp.ClientSession() as check_session:
-                    async with check_session.get(urls[0]) as chk:
-                        if chk.status == 200:
+                # Birinchi rasmni tekshiramiz
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as check_session:
+                    async with check_session.head(urls[0], allow_redirects=True) as head_resp:
+                        if head_resp.status == 200:
+                            image_ready = True
                             break
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"[CHECK] Attempt {attempt+1}/30 failed for {urls[0]}: {e}")
             await asyncio.sleep(2)
 
+        if not image_ready:
+            # HEAD ishlamasa, GET sinab ko'rish (bir marta)
+            try:
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as check_session:
+                    async with check_session.get(urls[0], timeout=15) as get_resp:
+                        if get_resp.status == 200:
+                            image_ready = True
+                        else:
+                            logger.warning(f"[CHECK] GET status: {get_resp.status}")
+            except Exception as e:
+                logger.exception(f"[CHECK FINAL GET FAILED] {e}")
+
+        if not image_ready:
+            await context.bot.send_message(chat_id, lang["image_delayed"])
+            await notify_admin_on_error(context, user, prompt, headers, Exception("Image delay timeout"), count)
+            return
+
+        # --- Caption tayyorlash ---
         escaped_prompt = escape_md(prompt)
         model_title = "Default Mode"
         if lora_id:
@@ -2707,34 +2734,65 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
             f"{lang['image_time_label']} {tashkent_time().strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
-        # 🔸 Rasmlarni yuborish
-        media = [InputMediaPhoto(u, caption=stats if i == 0 else None) for i, u in enumerate(urls)]
-        await context.bot.send_media_group(chat_id, media)
+        # --- Media tayyorlash ---
+        media = []
+        for i, url in enumerate(urls):
+            try:
+                # 🔹 `url`ni tozalab foydalanamiz
+                clean_url = url.strip()
+                caption = stats if i == 0 else ""
+                media.append(InputMediaPhoto(media=clean_url, caption=caption))
+            except Exception as e:
+                logger.error(f"[MEDIA BUILD ERROR] index={i}, url={url}: {e}")
+                await context.bot.send_message(chat_id, lang["error"])
+                return
 
+        # --- Media group yuborishda timeoutni oshirish (va retry) ---
+        success = False
+        for attempt in range(3):
+            try:
+                await context.bot.send_media_group(
+                    chat_id=chat_id,
+                    media=media,
+                    write_timeout=60,  # Telegram API uchun yetarli
+                    read_timeout=60,
+                    connect_timeout=30
+                )
+                success = True
+                break
+            except (telegram.error.TimedOut, httpx.ReadTimeout, httpx.ConnectTimeout) as e:
+                logger.warning(f"[SEND MEDIA TIMEOUT] {attempt+1}/3: {e}")
+                if attempt < 2:
+                    await asyncio.sleep(3)
+                else:
+                    raise
+            except telegram.error.BadRequest as e:
+                if "MEDIA_CAPTION_TOO_LONG" in str(e):
+                    # captionni qisqartiramiz
+                    stats = f"✅ {count} ta rasm"
+                    media = [InputMediaPhoto(media=url.strip(), caption=(stats if i == 0 else "")) for i, url in enumerate(urls)]
+                    continue  # qayta urinish
+                else:
+                    raise
+
+        if not success:
+            raise telegram.error.TimedOut("All retries failed")
+
+        # --- Loglash va admin xabari ---
         await log_generation(context.application.bot_data["db_pool"], user, prompt, final_prompt, image_id, count)
         if ADMIN_ID and urls:
             await notify_admin_generation(context, user, prompt, urls, count, image_id)
 
     except Exception as e:
         logger.exception(f"[BACKGROUND GENERATE ERROR] {e}")
-        await context.bot.send_message(chat_id, lang["error"])
         try:
-            await notify_admin_on_error(context, user, prompt, headers, e, count)
+            await context.bot.send_message(chat_id, lang["error"])
         except:
             pass
-
-        # ✅ Xatolik sodir bo'lganda admin uchun xabar yuborish
         try:
-            await notify_admin_on_error(
-                context=context,
-                user=user,
-                prompt=prompt,
-                digen_headers=headers,
-                error=e,
-                image_count=count
-            )
-        except Exception as notify_err:
-            logger.exception(f"[ADMIN ERROR NOTIFY FAILED] {notify_err}")
+            await notify_admin_on_error(context, user, prompt, headers, e, count)
+        except Exception as ne:
+            logger.exception(f"[ADMIN NOTIFY FAILED] {ne}")
 # ---------------- Donate (Stars) flow ----------------
 # Yangilangan: context.user_data["current_operation"] o'rnatiladi
 async def donate_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
