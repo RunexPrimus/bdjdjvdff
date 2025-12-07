@@ -2588,8 +2588,8 @@ def get_digen_headers():
         "digen-platform": "web",
         "digen-token": key.get("token", ""),
         "digen-sessionid": key.get("session", ""),
-        "origin": "https://rm.digen.ai",
-        "referer": "https://rm.digen.ai/",
+        "origin": "https://digen.ai/image",
+        "referer": "https://digen.ai/image",
     }
 # ---------------- Asosiy handler: generate_cb ----------------
 async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2666,7 +2666,7 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
     }
 
     headers = get_digen_headers()
-    timeout = aiohttp.ClientTimeout(total=1000)
+    timeout = aiohttp.ClientTimeout(total=10000)
 
     try:
         async with aiohttp.ClientSession(timeout=timeout) as session:
