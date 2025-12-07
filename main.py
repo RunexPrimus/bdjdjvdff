@@ -2754,9 +2754,9 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
                 await context.bot.send_media_group(
                     chat_id=chat_id,
                     media=media,
-                    write_timeout=60,  # Telegram API uchun yetarli
-                    read_timeout=60,
-                    connect_timeout=30
+                    write_timeout=250,  # Telegram API uchun yetarli
+                    read_timeout=250,
+                    connect_timeout=250
                 )
                 success = True
                 break
