@@ -2656,9 +2656,9 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
     final_prompt = f"{translated}, {background_prompt}".strip()
     payload = {
         "prompt": final_prompt,
-        "image_size": "1024",
-        "width": 1024,
-        "height": 1024,
+        "image_size": "768x1368",
+        "width": 768,
+        "height": 1368,
         "lora_id": lora_id,
         "batch_size": count,
         "model": "flux",
