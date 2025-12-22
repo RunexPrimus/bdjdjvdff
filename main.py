@@ -2661,7 +2661,7 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
         "height": 1368,
         "lora_id": lora_id,
         "batch_size": count,
-        "model": "image_motion",
+        "model": "flux",
         "resolution_model": "9:16",
         "reference_images": [],
         "strength": "0.9"
@@ -2671,7 +2671,7 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
 
     try:
         # --- Digen API chaqiruvi ---
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=120)) as session:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=500)) as session:
             async with session.post(DIGEN_URL, headers=headers, json=payload) as resp:
                 if resp.status != 200:
                     logger.error(f"[DIGEN ERROR] Status {resp.status}, Body: {await resp.text()}")
@@ -2692,10 +2692,10 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
 
         # --- Rasm tayyor bo‘lganligini sinab ko‘rish (30 soniya maks, 5 sek interval) ---
         image_ready = False
-        for attempt in range(30):
+        for attempt in range(350):
             try:
                 # Birinchi rasmni tekshiramiz
-                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as check_session:
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=50)) as check_session:
                     async with check_session.head(urls[0], allow_redirects=True) as head_resp:
                         if head_resp.status == 200:
                             image_ready = True
@@ -2707,8 +2707,8 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
         if not image_ready:
             # HEAD ishlamasa, GET sinab ko'rish (bir marta)
             try:
-                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as check_session:
-                    async with check_session.get(urls[0], timeout=15) as get_resp:
+                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=350)) as check_session:
+                    async with check_session.get(urls[0], timeout=350) as get_resp:
                         if get_resp.status == 200:
                             image_ready = True
                         else:
