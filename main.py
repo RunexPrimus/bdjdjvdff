@@ -2661,7 +2661,7 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
         "height": 1368,
         "lora_id": lora_id,
         "batch_size": count,
-        "model": "zimage",
+        "model": "image_motion",
         "resolution_model": "9:16",
         "reference_images": [],
         "strength": "0.9"
