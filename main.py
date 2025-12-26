@@ -3215,8 +3215,7 @@ def build_app():
     app.add_handler(CallbackQueryHandler(admin_users_list_handler, pattern=r"^admin_users_list_\d+$"))
     app.add_handler(CallbackQueryHandler(admin_user_search_prompt_handler, pattern="^admin_user_search_prompt$"))
     app.add_handler(MessageHandler(
-        filters.TEXT & filters.ChatType.PRIVATE & filters.User(ADMIN_ID),
-        admin_user_search_handler
+        filters.TEXT & filters.ChatType.PRIVATE & filters.User(ADMIN_ID)
     ))
     app.add_handler(CommandHandler("stats", cmd_public_stats))
     app.add_handler(CallbackQueryHandler(settings_menu, pattern="^back_to_settings$"))
