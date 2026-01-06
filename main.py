@@ -1403,7 +1403,62 @@ DIGEN_MODELS = [
     }
 ]
 
-#--------------------------------------------
+#---------------------------------------------
+# Admin qidiruv uchun maxsus handler
+async def admin_user_search_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID or not context.user_data.get("admin_search_mode"):
+        return
+    context.user_data["admin_search_mode"] = False
+    query = update.message.text.strip()
+    user_id = None
+    username = None
+    try:
+        user_id = int(query)
+    except ValueError:
+        if query.startswith("@"):
+            username = query[1:]
+        else:
+            username = query
+
+    pool = context.application.bot_data["db_pool"]
+    async with pool.acquire() as conn:
+        if user_id:
+            user = await conn.fetchrow("SELECT * FROM users WHERE id = $1", user_id)
+        elif username:
+            user = await conn.fetchrow("SELECT * FROM users WHERE username = $1", username)
+        else:
+            user = None
+
+    if not user:
+        await update.message.reply_text("❌ Foydalanuvchi topilmadi.")
+        return
+
+    lang = LANGUAGES.get(user["language_code"], LANGUAGES["uz"])
+    model_title = "Default"
+    for m in DIGEN_MODELS:
+        if m["id"] == user["image_model_id"]:
+            model_title = m["title"]
+            break
+    last_seen = (utc_now() - user["last_seen"]).total_seconds() / 3600 if user["last_seen"] else 0
+    last_str = f"{int(last_seen)} soat oldin" if last_seen < 24 else f"{int(last_seen/24)} kun oldin"
+
+    text = (
+        f"🆔 *ID:* `{user['id']}`\n"
+        f"👤 *Username:* @{user['username'] or '—'}\n"
+        f"🌐 *Til:* {lang['flag']} {lang['name']}\n"
+        f"🎨 *Model:* {model_title}\n"
+        f"🖼 *Rasmlar:* {user['image_count'] if hasattr(user, 'image_count') else 'N/A'}\n"
+        f"🕒 *Oxirgi aktivlik:* {last_str}\n"
+        f"⛔ *Ban:* {'✅ Ha' if user['is_banned'] else '❌ Yo‘q'}"
+    )
+    kb = [
+        [InlineKeyboardButton("🚫 Ban", callback_data=f"admin_ban_{user['id']}"),
+         InlineKeyboardButton("🔓 Unban", callback_data=f"admin_unban_{user['id']}")],
+        [InlineKeyboardButton("📨 Xabar yuborish", callback_data=f"admin_sendmsg_{user['id']}")],
+        [InlineKeyboardButton("📈 Statistika", callback_data=f"admin_user_stats_{user['id']}")],
+        [InlineKeyboardButton("⬅️ Roʻyxatga qaytish", callback_data="admin_users_list_0")]
+    ]
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
 #-------------------------------------------
 async def random_anime_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -2333,6 +2388,11 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="MarkdownV2",
         reply_markup=InlineKeyboardMarkup(kb)
     )
+
+# Private plain text -> prompt + inline buttons yoki AI chat
+# Yangilangan: Tanlov tugmachasi bosilganda flow o'rnatiladi
+# Private plain text -> prompt + inline buttons yoki AI chat
+# Yangilangan: Tanlov tugmachasi bosilganda flow o'rnatiladi
 async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return
@@ -2554,9 +2614,11 @@ async def generate_cb(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = q.from_user
     prompt = context.user_data.get("prompt", "")
     translated = context.user_data.get("translated", prompt)
-    
+
+    # 🔹 Foydalanuvchiga bitta xabar
     await q.edit_message_text("✨ Generating your content... Please hold on a moment.")
 
+    # 🔹 Orqa fonda generatsiya — progress yo‘q
     asyncio.create_task(
         _background_generate(
             context=context,
@@ -3215,7 +3277,8 @@ def build_app():
     app.add_handler(CallbackQueryHandler(admin_users_list_handler, pattern=r"^admin_users_list_\d+$"))
     app.add_handler(CallbackQueryHandler(admin_user_search_prompt_handler, pattern="^admin_user_search_prompt$"))
     app.add_handler(MessageHandler(
-        filters.TEXT & filters.ChatType.PRIVATE & filters.User(ADMIN_ID)
+        filters.TEXT & filters.ChatType.PRIVATE & filters.User(ADMIN_ID),
+        admin_user_search_handler
     ))
     app.add_handler(CommandHandler("stats", cmd_public_stats))
     app.add_handler(CallbackQueryHandler(settings_menu, pattern="^back_to_settings$"))
