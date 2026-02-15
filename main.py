@@ -1778,7 +1778,7 @@ def get_digen_headers():
         "digen-token": key.get("token", ""),
         "digen-sessionid": key.get("session", ""),
         "origin": "https://digen.ai",
-        "referer": "https://digen.ai/create",
+        "referer": "https://digen.ai/image",
     }
 
 
@@ -2661,7 +2661,7 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
         "height": 1368,
         "lora_id": lora_id,
         "batch_size": count,
-        "model": "flux",
+        "model": "flux2-klein",
         "resolution_model": "9:16",
         "reference_images": [],
         "strength": "0.9"
