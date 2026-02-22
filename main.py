@@ -1290,7 +1290,7 @@ except Exception as _e:
 
 # Quota matnlari (kamida uz/en/ru)
 try:
-    LANGUAGES.setdefault("uz", {}).setdefault("generating_content", "✨ Generating...")
+    LANGUAGES.setdefault("uz", {}).setdefault("generating_content", "✨ Yaratilmoqda...")
     LANGUAGES.setdefault("uz", {}).setdefault("quota_reached",
         "⚠️ *Kunlik limit tugadi!*\n\n"
         "• Limit: *{limit}*\n"
@@ -2460,7 +2460,9 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [
         [
             InlineKeyboardButton("1️⃣", callback_data="count_1"),
-            InlineKeyboardButton("2️⃣", callback_data="count_2")
+            InlineKeyboardButton("2️⃣", callback_data="count_2"),
+            InlineKeyboardButton("3️⃣", callback_data="count_3"),
+            InlineKeyboardButton("4️⃣", callback_data="count_4")
         ]
     ]
 
@@ -2635,7 +2637,9 @@ async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DE
     prompt = context.user_data.get("prompt", "")
     kb = [[
         InlineKeyboardButton("1️⃣", callback_data="count_1"),
-        InlineKeyboardButton("2️⃣", callback_data="count_2")
+        InlineKeyboardButton("2️⃣", callback_data="count_2"),
+        InlineKeyboardButton("3️⃣", callback_data="count_3"),
+        InlineKeyboardButton("4️⃣", callback_data="count_4")
     ]]
 
     await q.message.reply_text(
@@ -2971,7 +2975,7 @@ async def buy_pack_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_invoice(
         chat_id=q.message.chat_id,
         title="🎨 Image Pack",
-        description=f"+{credits} ta qo'shimcha rasm limiti",
+        description=f"+{credits} Image Generation",
         payload=payload,
         provider_token="",
         currency="XTR",
