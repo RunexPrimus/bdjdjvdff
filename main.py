@@ -3829,10 +3829,11 @@ def build_app():
     app.add_handler(CallbackQueryHandler(admin_usercard_handler, pattern=r"^admin_usercard_\d+$"))
     app.add_handler(CallbackQueryHandler(admin_ban_inline_handler, pattern=r"^admin_ban_\d+$"))
     app.add_handler(CallbackQueryHandler(admin_unban_inline_handler, pattern=r"^admin_unban_\d+$"))
-    app.add_handler(MessageHandler(
-        filters.TEXT & filters.ChatType.PRIVATE & filters.User(ADMIN_ID),
-        admin_user_search_handler
-    ))
+    app.add_handler(
+    MessageHandler(filters.TEXT & filters.ChatType.PRIVATE & filters.User(ADMIN_ID) & ~filters.COMMAND,
+                   admin_user_search_handler),
+    group=5
+    )
     app.add_handler(CommandHandler("stats", cmd_public_stats))
     app.add_handler(CallbackQueryHandler(settings_menu, pattern="^back_to_settings$"))
     app.add_handler(CallbackQueryHandler(start_handler, pattern="^back_to_main$"))
