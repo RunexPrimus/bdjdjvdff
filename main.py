@@ -2460,9 +2460,7 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = [
         [
             InlineKeyboardButton("1️⃣", callback_data="count_1"),
-            InlineKeyboardButton("2️⃣", callback_data="count_2"),
-            InlineKeyboardButton("3️⃣", callback_data="count_3"),
-            InlineKeyboardButton("4️⃣", callback_data="count_4")
+            InlineKeyboardButton("2️⃣", callback_data="count_2")
         ]
     ]
 
@@ -2637,9 +2635,7 @@ async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DE
     prompt = context.user_data.get("prompt", "")
     kb = [[
         InlineKeyboardButton("1️⃣", callback_data="count_1"),
-        InlineKeyboardButton("2️⃣", callback_data="count_2"),
-        InlineKeyboardButton("3️⃣", callback_data="count_3"),
-        InlineKeyboardButton("4️⃣", callback_data="count_4"),
+        InlineKeyboardButton("2️⃣", callback_data="count_2")
     ]]
 
     await q.message.reply_text(
@@ -2804,7 +2800,7 @@ async def _background_generate(context, user, prompt, translated, count, chat_id
         "height": 1368,
         "lora_id": lora_id,
         "batch_size": count,
-        "model": "flux2-klein",
+        "model": "zimage",
         "resolution_model": "9:16",
         "reference_images": [],
         "strength": "0.9"
