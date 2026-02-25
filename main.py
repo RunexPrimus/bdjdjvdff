@@ -2371,7 +2371,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
         [
             InlineKeyboardButton("📈 Statistika", callback_data="show_stats"),
-            InlineKeyboardButton(lang["settings_menu_title"], callback_data="open_settings"))
+            InlineKeyboardButton(lang["settings_menu_title"], callback_data="open_settings")
         ],
         [
             InlineKeyboardButton("🧪 FakeLab", callback_data="fake_lab_new"),
