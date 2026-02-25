@@ -1998,7 +1998,7 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             current_model_title = m["title"]
             break
 
-    text = "⚙️ **Sozlamalar**"  # caption
+    text = lang["settings_menu_title"]  # caption
     kb = [
         [InlineKeyboardButton(f"🖼 Image Model: {current_model_title}", callback_data="select_image_model")],
         [InlineKeyboardButton(lang["back_to_main_button"], callback_data="back_to_main")]
@@ -2082,7 +2082,7 @@ async def set_image_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
             current_model_title = m["title"]
             break
 
-    text = "⚙️ **Sozlamalar**"
+    text = lang["settings_menu_title"]  # caption
     kb = [
         [InlineKeyboardButton(f"🖼 Image Model: {current_model_title}", callback_data="select_image_model")],
         [InlineKeyboardButton(lang["back_to_main_button"], callback_data="back_to_main")]
@@ -2334,7 +2334,7 @@ async def language_select_handler(update: Update, context: ContextTypes.DEFAULT_
         ],
         [
             InlineKeyboardButton("📈 Statistika", callback_data="show_stats"),
-            InlineKeyboardButton("⚙️ Sozlamalar", callback_data="open_settings")
+            InlineKeyboardButton(lang["settings_menu_title"], callback_data="open_settings")
         ],
         [
             InlineKeyboardButton("🧪 FakeLab", callback_data="fake_lab_new"),
@@ -2371,7 +2371,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ],
         [
             InlineKeyboardButton("📈 Statistika", callback_data="show_stats"),
-            InlineKeyboardButton("⚙️ Sozlamalar", callback_data="open_settings")
+            InlineKeyboardButton(lang["settings_menu_title"], callback_data="open_settings"))
         ],
         [
             InlineKeyboardButton("🧪 FakeLab", callback_data="fake_lab_new"),
@@ -2467,10 +2467,10 @@ async def cmd_get(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     await update.message.reply_text(
-        f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
-        parse_mode="MarkdownV2",
-        reply_markup=InlineKeyboardMarkup(kb)
-    )
+    f"{lang['select_count']}\n{escape_md(lang['your_prompt_label'])}\n{escape_md(prompt)}",
+    parse_mode="MarkdownV2",
+    reply_markup=InlineKeyboardMarkup(kb)
+)
 
 # Private plain text -> prompt + inline buttons yoki AI chat
 # Yangilangan: Tanlov tugmachasi bosilganda flow o'rnatiladi
@@ -2615,9 +2615,10 @@ async def private_text_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             ]
         ]
         await update.message.reply_text(
-            f"{lang['select_count']}\n🖌 Sizning matningiz:\n{escape_md(prompt)}",
-            parse_mode="MarkdownV2",
-            reply_markup=InlineKeyboardMarkup(kb)
+    f"{lang['select_count']}\n{escape_md(lang['your_prompt_label'])}\n{escape_md(prompt)}",
+    parse_mode="MarkdownV2",
+    reply_markup=InlineKeyboardMarkup(kb)
+)
         )
 async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
