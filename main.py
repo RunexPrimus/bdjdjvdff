@@ -1269,7 +1269,7 @@ LANGUAGES = {
         "admin_time": "⏰ *Thời gian \\(UTC\\+5\\):*",
     },
 }
-DEFAULT_LANGUAGE = "uz"
+DEFAULT_LANGUAGE = "en"
 
 # ---------------- i18n helper: missing kalitlar default tilga fallback qiladi ----------------
 def get_lang(lang_code=None):
