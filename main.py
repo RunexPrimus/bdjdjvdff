@@ -2643,7 +2643,7 @@ async def gen_image_from_prompt_handler(update: Update, context: ContextTypes.DE
     ]]
 
     await q.message.reply_text(
-        f"{lang['select_count']}\n{lang.get('your_prompt_label', '🖌 Sizning matningiz:')}\n{escape_md(prompt)}",
+        f"{lang['select_count']}\n{lang.get('your_prompt_label')}\n{escape_md(prompt)}",
         parse_mode="MarkdownV2",
         reply_markup=InlineKeyboardMarkup(kb)
     )
